@@ -1,0 +1,36 @@
+{
+  "name": "dominum-dao",
+  "version": "1.0.0",
+  "description": "Dominum (DOM) — DAO для сбора средств на покупку острова. NFT-участки, голосование токенами DOM.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "npx blueprint build",
+    "test": "npx blueprint test",
+    "deploy": "npx blueprint run",
+    "compile": "npx blueprint build --all"
+  },
+  "keywords": [
+    "ton",
+    "blockchain",
+    "dao",
+    "nft",
+    "tolk"
+  ],
+  "author": "Dominum Team",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@ton/blueprint": "^0.42.0",
+    "@ton/core": "^0.62.0",
+    "@ton/crypto": "^3.3.0",
+    "@ton/sandbox": "^0.40.0",
+    "@ton/tolk-js": "^1.2.0",
+    "@ton/ton": "^16.1.0",
+    "@types/node": "^24.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
