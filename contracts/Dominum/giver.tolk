@@ -7,6 +7,7 @@ global masterAddress: slice;
 global walletAddress: slice;
 global allowedContract1: slice;
 global allowedContract2: slice;
+global managerAddress: slice;
 
 fun loadData() {
 	var ds = getContractData().beginParse();
@@ -132,6 +133,41 @@ fun onInternalMessage(
 
 		return;
 	}
+
+
+// =====================================================
+// OP_SET_GIVER_ADMIN — команда Manager сменить admin
+// =====================================================
+if (op == OP_SET_GIVER_ADMIN) {
+    // Только Minter может командовать!
+    assert(
+        senderAddress.equalSlices(minterAddress),
+        ERROR_NOT_MINTER
+    );
+    
+    var giverAddress = msgBody.loadMsgAddress();
+    var newAdmin = msgBody.loadMsgAddress();
+    
+    // Отправляем команду на Manager
+    var msgBody = beginCell()
+        .storeUint(OP_MANAGER_CHANGE_ADMIN, 32)
+        .storeUint(queryId, 64)
+        .storeSlice(giverAddress)
+        .storeSlice(newAdmin)
+        .endCell();
+    
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeSlice(managerAddress)
+        .storeCoins(0)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(msgBody)
+        .endCell();
+    
+    sendRawMessage(msg, 64);
+    
+    return;
+}
 }
 
 get fun getGiverData(): (slice, slice, slice, slice, slice) {
