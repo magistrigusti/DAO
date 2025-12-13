@@ -7,9 +7,9 @@
 // - Проверяет лимит < 1 млрд
 // =====================================================
 
-import "op_codes.tolk";
-import "errors.tolk";
-import "constants.tolk";
+import "../core/op_codes";
+import "../core/errors";
+import "../core/constants";
 
 // =====================================================
 // STORAGE

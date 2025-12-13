@@ -8,9 +8,9 @@
 // - При минте transfer на 3 гивера через Wallet
 // =====================================================
 
-import "core/op_codes.tolk";
-import "core/errors.tolk";
-import "core/constants.tolk";
+import "../core/op_codes";
+import "../core/errors";
+import "../core/constants";
 
 // =====================================================
 // STORAGE
