@@ -60,11 +60,17 @@ const OP_REPLACE_MANAGER: int = 0x40;
 const OP_CHANGE_MASTER_ADMIN: int = 0x41;
 
 // =====================================================
-// TREASURY ОПЕРАЦИИ (налог)
+// TREASURY ОПЕРАЦИИ
 // =====================================================
 
 // Wallet → Treasury (приём налога)
 const OP_RECEIVE_TAX: int = 0x50;
 
-// Admin Treasury → вывод средств
+// Admin Treasury → вывод TON
 const OP_WITHDRAW: int = 0x51;
+
+// Admin Treasury → вывод жетонов
+const OP_WITHDRAW_JETTONS: int = 0x52;
+
+// Admin → смена admin (общий для многих контрактов)
+const OP_CHANGE_ADMIN: int = 0x60;

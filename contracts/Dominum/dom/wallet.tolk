@@ -11,9 +11,9 @@
 // Получатель получает 100% токенов
 // =====================================================
 
-import "../core/op_codes";
-import "../core/errors";
-import "../core/constants";
+import "../../core/op_codes";
+import "../../core/errors";
+import "../../core/constants";
 
 // =====================================================
 // STORAGE

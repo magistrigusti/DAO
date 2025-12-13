@@ -2,47 +2,58 @@
 // JETTON MASTER — Главный контракт токена DOM
 // =====================================================
 // Стандарт: TEP-74 (Jetton)
-// Роль:
-// - Создаёт токены (увеличивает total_supply)
-// - Создаёт Jetton Wallet
-// - При минте transfer на 3 гивера через Wallet
+// 
+// Роли:
+// - adminAddress (СИД #3) — управляет Master
+// - minterAddress — вызывает mint
+// - managerAddress — можно заменить
+//
+// Функции:
+// - Создаёт токены (mint) → на гиверы
+// - Владеет Manager (может заменить)
 // =====================================================
 
-import "../core/op_codes";
-import "../core/errors";
-import "../core/constants";
+import "../core/op_codes.tolk";
+import "../core/errors.tolk";
+import "../core/constants.tolk";
 
 // =====================================================
 // STORAGE
 // =====================================================
 
-global totalSupply: int;           // сколько токенов создано
-global minterAddress: slice;       // кто может минтить (Minter)
-global treasuryAddress: slice;     // казначейство (50% налога)
-global foundationAddress: slice;   // фонд (50% налога)
+global totalSupply: int;            // сколько токенов создано
+global adminAddress: slice;         // СИД #3 — управляет Master
+global minterAddress: slice;        // Minter контракт
+global managerAddress: slice;       // Manager контракт (можно заменить)
 
-global giver1Address: slice;       // Allodium
-global giver2Address: slice;       // DAO DOM
-global giver3Address: slice;       // Ecosystem
+global domTreasuryAddress: slice;   // DOM Treasury (50% налога)
+global daoTreasuryAddress: slice;   // DAO Treasury (50% налога)
 
-global content: cell;              // metadata токена
-global jettonWalletCode: cell;     // код Jetton Wallet
+global giver1Address: slice;        // Giver Allodium
+global giver2Address: slice;        // Giver DAO DOM
+global giver3Address: slice;        // Giver Ecosystem
+
+global content: cell;               // metadata токена
+global jettonWalletCode: cell;      // код Jetton Wallet
 
 // =====================================================
 // LOAD / SAVE DATA
 // =====================================================
 
-// Загрузка данных из storage
 fun loadData() {
     var ds = getContractData().beginParse();
     
     // Основные данные
     totalSupply = ds.loadCoins();
+    adminAddress = ds.loadMsgAddress();
     minterAddress = ds.loadMsgAddress();
-    treasuryAddress = ds.loadMsgAddress();
-    foundationAddress = ds.loadMsgAddress();
+    managerAddress = ds.loadMsgAddress();
     
-    // Гиверы в отдельной cell (экономия газа)
+    // Казначейства
+    domTreasuryAddress = ds.loadMsgAddress();
+    daoTreasuryAddress = ds.loadMsgAddress();
+    
+    // Гиверы в отдельной cell
     var giversCell = ds.loadRef().beginParse();
     giver1Address = giversCell.loadMsgAddress();
     giver2Address = giversCell.loadMsgAddress();
@@ -53,22 +64,21 @@ fun loadData() {
     jettonWalletCode = ds.loadRef();
 }
 
-// Сохранение данных в storage
 fun saveData() {
-    // Гиверы в отдельную cell
     var giversCell = beginCell()
         .storeSlice(giver1Address)
         .storeSlice(giver2Address)
         .storeSlice(giver3Address)
         .endCell();
     
-    // Собираем основную cell
     setContractData(
         beginCell()
             .storeCoins(totalSupply)
+            .storeSlice(adminAddress)
             .storeSlice(minterAddress)
-            .storeSlice(treasuryAddress)
-            .storeSlice(foundationAddress)
+            .storeSlice(managerAddress)
+            .storeSlice(domTreasuryAddress)
+            .storeSlice(daoTreasuryAddress)
             .storeRef(giversCell)
             .storeRef(content)
             .storeRef(jettonWalletCode)
@@ -80,32 +90,28 @@ fun saveData() {
 // ВЫЧИСЛЕНИЕ АДРЕСА WALLET
 // =====================================================
 
-// Формируем StateInit для Jetton Wallet
 fun calculateWalletStateInit(ownerAddress: slice): cell {
-    // Data для wallet: balance, owner, master, foundation, treasury
     var walletData = beginCell()
-        .storeCoins(0)                      // начальный баланс = 0
-        .storeSlice(ownerAddress)           // владелец wallet
-        .storeSlice(myAddress())            // адрес master (мы)
-        .storeSlice(foundationAddress)      // для налога
-        .storeSlice(treasuryAddress)        // для налога
+        .storeCoins(0)
+        .storeSlice(ownerAddress)
+        .storeSlice(myAddress())
+        .storeSlice(domTreasuryAddress)
+        .storeSlice(daoTreasuryAddress)
         .endCell();
     
-    // StateInit = code + data
     return beginCell()
-        .storeUint(0, 2)                    // split_depth, special
-        .storeMaybeRef(jettonWalletCode)    // code
-        .storeMaybeRef(walletData)          // data
-        .storeUint(0, 1)                    // library
+        .storeUint(0, 2)
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
+        .storeUint(0, 1)
         .endCell();
 }
 
-// Вычисляем адрес wallet по StateInit
 fun calculateWalletAddress(stateInit: cell): slice {
     return beginCell()
-        .storeUint(4, 3)                    // addr_std$10 + anycast = 0
-        .storeInt(0, 8)                     // workchain = 0
-        .storeUint(stateInit.hash(), 256)   // hash of StateInit
+        .storeUint(4, 3)
+        .storeInt(0, 8)
+        .storeUint(stateInit.hash(), 256)
         .endCell()
         .beginParse();
 }
@@ -114,43 +120,38 @@ fun calculateWalletAddress(stateInit: cell): slice {
 // МИНТ ТОКЕНОВ
 // =====================================================
 
-// Отправка токенов на один wallet (internal transfer)
 fun sendToWallet(
     toAddress: slice,
     amount: int,
     queryId: int,
     msgValue: int
 ) {
-    // StateInit для wallet получателя
     var stateInit = calculateWalletStateInit(toAddress);
     var walletAddress = calculateWalletAddress(stateInit);
     
-    // Тело сообщения: internal_transfer
     var msgBody = beginCell()
         .storeUint(OP_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
-        .storeCoins(amount)                  // сколько токенов
-        .storeSlice(myAddress())             // from = master (мы)
-        .storeSlice(toAddress)               // response_destination
-        .storeCoins(0)                       // forward_ton_amount
-        .storeBool(false)                    // forward_payload в slice
+        .storeCoins(amount)
+        .storeSlice(myAddress())
+        .storeSlice(toAddress)
+        .storeCoins(0)
+        .storeBool(false)
         .endCell();
     
-    // Формируем сообщение с StateInit (деплой wallet если нет)
     var msg = beginCell()
-        .storeUint(0x18, 6)                  // флаги: bounce
-        .storeSlice(walletAddress)           // получатель
-        .storeCoins(msgValue)                // TON для gas + налог
+        .storeUint(0x18, 6)
+        .storeSlice(walletAddress)
+        .storeCoins(msgValue)
         .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
-        .storeRef(stateInit)                 // StateInit
-        .storeRef(msgBody)                   // body
+        .storeRef(stateInit)
+        .storeRef(msgBody)
         .endCell();
     
-    sendRawMessage(msg, 1);  // pay fees separately
+    sendRawMessage(msg, 1);
 }
 
-// Минт токенов и распределение на 3 гивера
-fun mintTokens(amount: int, queryId: int, msgValue: int) {
+fun mintJettons(amount: int, queryId: int, msgValue: int) {
     // Проверяем лимит
     assert(
         totalSupply + amount <= MAX_SUPPLY,
@@ -160,14 +161,12 @@ fun mintTokens(amount: int, queryId: int, msgValue: int) {
     // Увеличиваем total_supply
     totalSupply = totalSupply + amount;
     
-    // Делим на 3 равные части
+    // Делим на 3 части
     var amountPerGiver = amount / GIVERS_COUNT;
     var remainder = amount % GIVERS_COUNT;
-    
-    // TON на каждый transfer (gas + налог)
     var tonPerTransfer = msgValue / GIVERS_COUNT;
     
-    // Giver_1: Allodium (+ остаток если не делится)
+    // Giver_1: Allodium (+ остаток)
     sendToWallet(
         giver1Address,
         amountPerGiver + remainder,
@@ -191,7 +190,6 @@ fun mintTokens(amount: int, queryId: int, msgValue: int) {
         tonPerTransfer
     );
     
-    // Сохраняем обновлённый total_supply
     saveData();
 }
 
@@ -205,26 +203,21 @@ fun onInternalMessage(
     msgFull: cell,
     msgBody: slice
 ) {
-    // Пустое сообщение — игнорируем
     if (msgBody.isEndOfSlice()) {
         return;
     }
     
-    // Парсим отправителя
     var cs = msgFull.beginParse();
     var flags = cs.loadUint(4);
     
-    // Bounced сообщения — игнорируем
     if (flags & 1) {
         return;
     }
     
     var senderAddress = cs.loadMsgAddress();
     
-    // Загружаем данные
     loadData();
     
-    // Читаем op-код и query_id
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
     
@@ -232,20 +225,16 @@ fun onInternalMessage(
     // OP_MINT — минт от Minter
     // =====================================================
     if (op == OP_MINT) {
-        // Проверяем что отправитель = Minter
         assert(
             senderAddress.equalSlices(minterAddress),
             ERROR_NOT_MINTER
         );
         
-        // Читаем сколько минтить
         var amount = msgBody.loadCoins();
         
-        // Проверяем что amount > 0
         assert(amount > 0, ERROR_INVALID_AMOUNT);
         
-        // Минтим и распределяем на гиверы
-        mintTokens(amount, queryId, msgValue);
+        mintJettons(amount, queryId, msgValue);
         
         return;
     }
@@ -254,11 +243,9 @@ fun onInternalMessage(
     // OP_BURN_NOTIFICATION — уведомление о сжигании
     // =====================================================
     if (op == OP_BURN_NOTIFICATION) {
-        // Читаем данные
         var burnAmount = msgBody.loadCoins();
         var fromAddress = msgBody.loadMsgAddress();
         
-        // Проверяем что sender = wallet этого from
         var expectedWallet = calculateWalletAddress(
             calculateWalletStateInit(fromAddress)
         );
@@ -268,17 +255,13 @@ fun onInternalMessage(
             ERROR_NOT_VALID_WALLET
         );
         
-        // Уменьшаем total_supply
         totalSupply = totalSupply - burnAmount;
-        
-        // Сохраняем
         saveData();
         
-        // Отправляем excesses обратно
         var responseAddress = msgBody.loadMsgAddress();
         if (~ responseAddress.isAddressNone()) {
             var msg = beginCell()
-                .storeUint(0x10, 6)           // non-bounce
+                .storeUint(0x10, 6)
                 .storeSlice(responseAddress)
                 .storeCoins(0)
                 .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
@@ -286,13 +269,46 @@ fun onInternalMessage(
                 .storeUint(queryId, 64)
                 .endCell();
             
-            sendRawMessage(msg, 64 + 2);  // carry gas, ignore errors
+            sendRawMessage(msg, 64 + 2);
         }
         
         return;
     }
     
-    // Неизвестный op-код — отбиваем
+    // =====================================================
+    // OP_REPLACE_MANAGER — заменить Manager
+    // Только admin (СИД #3)!
+    // =====================================================
+    if (op == OP_REPLACE_MANAGER) {
+        assert(
+            senderAddress.equalSlices(adminAddress),
+            ERROR_NOT_ADMIN
+        );
+        
+        var newManager = msgBody.loadMsgAddress();
+        managerAddress = newManager;
+        saveData();
+        
+        return;
+    }
+    
+    // =====================================================
+    // OP_CHANGE_MASTER_ADMIN — сменить admin Master
+    // Только текущий admin (СИД #3)!
+    // =====================================================
+    if (op == OP_CHANGE_MASTER_ADMIN) {
+        assert(
+            senderAddress.equalSlices(adminAddress),
+            ERROR_NOT_ADMIN
+        );
+        
+        var newAdmin = msgBody.loadMsgAddress();
+        adminAddress = newAdmin;
+        saveData();
+        
+        return;
+    }
+    
     throw(0xffff);
 }
 
@@ -300,23 +316,43 @@ fun onInternalMessage(
 // GETTERS (стандарт TEP-74)
 // =====================================================
 
-// Получить данные токена
 get fun getJettonData(): (int, int, slice, cell, cell) {
     loadData();
     
     return (
-        totalSupply,          // total_supply
-        -1,                   // mintable = true
-        minterAddress,        // admin_address (Minter)
-        content,              // jetton_content
-        jettonWalletCode      // jetton_wallet_code
+        totalSupply,
+        -1,
+        adminAddress,
+        content,
+        jettonWalletCode
     );
 }
 
-// Получить адрес wallet по владельцу
 get fun getWalletAddress(ownerAddress: slice): slice {
     loadData();
     
     var stateInit = calculateWalletStateInit(ownerAddress);
     return calculateWalletAddress(stateInit);
+}
+
+get fun getMasterData(): (slice, slice, slice, slice, slice) {
+    loadData();
+    
+    return (
+        adminAddress,
+        minterAddress,
+        managerAddress,
+        domTreasuryAddress,
+        daoTreasuryAddress
+    );
+}
+
+get fun getGiversData(): (slice, slice, slice) {
+    loadData();
+    
+    return (
+        giver1Address,
+        giver2Address,
+        giver3Address
+    );
 }
