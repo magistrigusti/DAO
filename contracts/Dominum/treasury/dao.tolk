@@ -1,8 +1,8 @@
 // =====================================================
-// DOM TREASURY — Казначейство токена Dominum
+// DAO TREASURY — Казначейство DAO Dominum
 // =====================================================
 // Принимает: налог (0.025 TON)
-// Отправляет: ТОЛЬКО на Bank DOM или DOM Foundation
+// Отправляет: ТОЛЬКО на Bank DAO или DAO Foundation
 // Управляется: СИД-фраза (owner)
 // Whitelist: ЗАХАРДКОЖЕН при деплое!
 // =====================================================
@@ -15,10 +15,10 @@ import "../core/constants.tolk";
 // STORAGE
 // =====================================================
 
-global ownerAddress: slice;           // СИД-фраза
-global walletAddress: slice;          // Jetton Wallet
-global bankDomAddress: slice;         // Whitelist #1
-global domFoundationAddress: slice;   // Whitelist #2
+global ownerAddress: slice;
+global walletAddress: slice;
+global bankDaoAddress: slice;
+global daoFoundationAddress: slice;
 
 // =====================================================
 // LOAD / SAVE DATA
@@ -28,8 +28,8 @@ fun loadData() {
     var ds = getContractData().beginParse();
     ownerAddress = ds.loadMsgAddress();
     walletAddress = ds.loadMsgAddress();
-    bankDomAddress = ds.loadMsgAddress();
-    domFoundationAddress = ds.loadMsgAddress();
+    bankDaoAddress = ds.loadMsgAddress();
+    daoFoundationAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
@@ -37,8 +37,8 @@ fun saveData() {
         beginCell()
             .storeSlice(ownerAddress)
             .storeSlice(walletAddress)
-            .storeSlice(bankDomAddress)
-            .storeSlice(domFoundationAddress)
+            .storeSlice(bankDaoAddress)
+            .storeSlice(daoFoundationAddress)
             .endCell()
     );
 }
@@ -48,10 +48,10 @@ fun saveData() {
 // =====================================================
 
 fun isAllowed(address: slice): int {
-    if (address.equalSlices(bankDomAddress)) {
+    if (address.equalSlices(bankDaoAddress)) {
         return true;
     }
-    if (address.equalSlices(domFoundationAddress)) {
+    if (address.equalSlices(daoFoundationAddress)) {
         return true;
     }
     return false;
@@ -184,8 +184,8 @@ get fun getTreasuryData(): (slice, slice, slice, slice, int) {
     return (
         ownerAddress,
         walletAddress,
-        bankDomAddress,
-        domFoundationAddress,
+        bankDaoAddress,
+        daoFoundationAddress,
         getBalance().0
     );
 }
