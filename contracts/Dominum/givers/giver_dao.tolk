@@ -1,10 +1,10 @@
 // =====================================================
-// DOM TREASURY — Казначейство токена Dominum
+// GIVER DAO — Распределение DOM для системы DAO
 // =====================================================
-// Принимает: налог (0.025 TON)
-// Отправляет: ТОЛЬКО на Bank DOM или DOM Foundation
+// Whitelist:
+// • Bank DAO
+// • DAO Foundation
 // Управляется: СИД-фраза (owner)
-// Whitelist: ЗАХАРДКОЖЕН при деплое!
 // =====================================================
 
 import "../core/op_codes.tolk";
@@ -15,10 +15,11 @@ import "../core/constants.tolk";
 // STORAGE
 // =====================================================
 
-global ownerAddress: slice;           // СИД-фраза
-global walletAddress: slice;          // Jetton Wallet
-global bankDomAddress: slice;         // Whitelist #1
-global domFoundationAddress: slice;   // Whitelist #2
+global ownerAddress: slice;
+global managerAddress: slice;
+global walletAddress: slice;
+global bankDaoAddress: slice;         // Whitelist #1
+global daoFoundationAddress: slice;   // Whitelist #2
 
 // =====================================================
 // LOAD / SAVE DATA
@@ -27,18 +28,20 @@ global domFoundationAddress: slice;   // Whitelist #2
 fun loadData() {
     var ds = getContractData().beginParse();
     ownerAddress = ds.loadMsgAddress();
+    managerAddress = ds.loadMsgAddress();
     walletAddress = ds.loadMsgAddress();
-    bankDomAddress = ds.loadMsgAddress();
-    domFoundationAddress = ds.loadMsgAddress();
+    bankDaoAddress = ds.loadMsgAddress();
+    daoFoundationAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
     setContractData(
         beginCell()
             .storeSlice(ownerAddress)
+            .storeSlice(managerAddress)
             .storeSlice(walletAddress)
-            .storeSlice(bankDomAddress)
-            .storeSlice(domFoundationAddress)
+            .storeSlice(bankDaoAddress)
+            .storeSlice(daoFoundationAddress)
             .endCell()
     );
 }
@@ -48,35 +51,20 @@ fun saveData() {
 // =====================================================
 
 fun isAllowed(address: slice): int {
-    if (address.equalSlices(bankDomAddress)) {
+    if (address.equalSlices(bankDaoAddress)) {
         return true;
     }
-    if (address.equalSlices(domFoundationAddress)) {
+    if (address.equalSlices(daoFoundationAddress)) {
         return true;
     }
     return false;
 }
 
 // =====================================================
-// ВЫВОД TON
+// ОТПРАВКА ЖЕТОНОВ
 // =====================================================
 
-fun withdrawTon(toAddress: slice, amount: int) {
-    var msg = beginCell()
-        .storeUint(0x10, 6)
-        .storeSlice(toAddress)
-        .storeCoins(amount)
-        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .endCell();
-    
-    sendRawMessage(msg, 1);
-}
-
-// =====================================================
-// ВЫВОД ЖЕТОНОВ
-// =====================================================
-
-fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
+fun sendJettons(toAddress: slice, amount: int, queryId: int) {
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -127,13 +115,8 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
     
-    // Приём налога
-    if (op == OP_RECEIVE_TAX) {
-        return;
-    }
-    
-    // Вывод TON
-    if (op == OP_WITHDRAW) {
+    // Отправить жетоны
+    if (op == OP_SEND_JETTONS) {
         assert(
             senderAddress.equalSlices(ownerAddress),
             ERROR_NOT_OWNER
@@ -144,30 +127,27 @@ fun onInternalMessage(
         
         assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
         
-        withdrawTon(toAddress, amount);
-        
-        return;
-    }
-    
-    // Вывод жетонов
-    if (op == OP_WITHDRAW_JETTONS) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
-        
-        var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
-        
-        assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
-        
-        withdrawJettons(toAddress, amount, queryId);
+        sendJettons(toAddress, amount, queryId);
         
         return;
     }
     
     // Получение жетонов
     if (op == OP_TRANSFER_NOTIFICATION) {
+        return;
+    }
+    
+    // Смена owner
+    if (op == OP_CHANGE_GIVER_ADMIN) {
+        assert(
+            senderAddress.equalSlices(managerAddress),
+            ERROR_NOT_MANAGER
+        );
+        
+        var newOwner = msgBody.loadMsgAddress();
+        ownerAddress = newOwner;
+        saveData();
+        
         return;
     }
     
@@ -178,14 +158,13 @@ fun onInternalMessage(
 // GETTERS
 // =====================================================
 
-get fun getTreasuryData(): (slice, slice, slice, slice, int) {
+get fun getGiverData(): (slice, slice, slice, slice, slice) {
     loadData();
-    
     return (
         ownerAddress,
+        managerAddress,
         walletAddress,
-        bankDomAddress,
-        domFoundationAddress,
-        getBalance().0
+        bankDaoAddress,
+        daoFoundationAddress
     );
 }

@@ -1,10 +1,10 @@
 // =====================================================
-// DAO TREASURY — Казначейство DAO Dominum
+// GIVER ALLODIUM — Распределение DOM для экосистемы Allodium
 // =====================================================
-// Принимает: налог (0.025 TON)
-// Отправляет: ТОЛЬКО на Bank DAO или DAO Foundation
+// Whitelist:
+// • FRS Allodium
+// • Allodium Foundation
 // Управляется: СИД-фраза (owner)
-// Whitelist: ЗАХАРДКОЖЕН при деплое!
 // =====================================================
 
 import "../core/op_codes.tolk";
@@ -15,10 +15,11 @@ import "../core/constants.tolk";
 // STORAGE
 // =====================================================
 
-global ownerAddress: slice;
-global walletAddress: slice;
-global bankDaoAddress: slice;
-global daoFoundationAddress: slice;
+global ownerAddress: slice;              // СИД-фраза
+global managerAddress: slice;            // Manager (меняет owner)
+global walletAddress: slice;             // Jetton Wallet
+global frsAllodiumAddress: slice;        // Whitelist #1
+global allodiumFoundationAddress: slice; // Whitelist #2
 
 // =====================================================
 // LOAD / SAVE DATA
@@ -27,18 +28,20 @@ global daoFoundationAddress: slice;
 fun loadData() {
     var ds = getContractData().beginParse();
     ownerAddress = ds.loadMsgAddress();
+    managerAddress = ds.loadMsgAddress();
     walletAddress = ds.loadMsgAddress();
-    bankDaoAddress = ds.loadMsgAddress();
-    daoFoundationAddress = ds.loadMsgAddress();
+    frsAllodiumAddress = ds.loadMsgAddress();
+    allodiumFoundationAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
     setContractData(
         beginCell()
             .storeSlice(ownerAddress)
+            .storeSlice(managerAddress)
             .storeSlice(walletAddress)
-            .storeSlice(bankDaoAddress)
-            .storeSlice(daoFoundationAddress)
+            .storeSlice(frsAllodiumAddress)
+            .storeSlice(allodiumFoundationAddress)
             .endCell()
     );
 }
@@ -48,35 +51,20 @@ fun saveData() {
 // =====================================================
 
 fun isAllowed(address: slice): int {
-    if (address.equalSlices(bankDaoAddress)) {
+    if (address.equalSlices(frsAllodiumAddress)) {
         return true;
     }
-    if (address.equalSlices(daoFoundationAddress)) {
+    if (address.equalSlices(allodiumFoundationAddress)) {
         return true;
     }
     return false;
 }
 
 // =====================================================
-// ВЫВОД TON
+// ОТПРАВКА ЖЕТОНОВ
 // =====================================================
 
-fun withdrawTon(toAddress: slice, amount: int) {
-    var msg = beginCell()
-        .storeUint(0x10, 6)
-        .storeSlice(toAddress)
-        .storeCoins(amount)
-        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .endCell();
-    
-    sendRawMessage(msg, 1);
-}
-
-// =====================================================
-// ВЫВОД ЖЕТОНОВ
-// =====================================================
-
-fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
+fun sendJettons(toAddress: slice, amount: int, queryId: int) {
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -127,13 +115,8 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
     
-    // Приём налога
-    if (op == OP_RECEIVE_TAX) {
-        return;
-    }
-    
-    // Вывод TON
-    if (op == OP_WITHDRAW) {
+    // Отправить жетоны (только owner)
+    if (op == OP_SEND_JETTONS) {
         assert(
             senderAddress.equalSlices(ownerAddress),
             ERROR_NOT_OWNER
@@ -144,30 +127,27 @@ fun onInternalMessage(
         
         assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
         
-        withdrawTon(toAddress, amount);
+        sendJettons(toAddress, amount, queryId);
         
         return;
     }
     
-    // Вывод жетонов
-    if (op == OP_WITHDRAW_JETTONS) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
-        
-        var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
-        
-        assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
-        
-        withdrawJettons(toAddress, amount, queryId);
-        
-        return;
-    }
-    
-    // Получение жетонов
+    // Получение жетонов (от Master)
     if (op == OP_TRANSFER_NOTIFICATION) {
+        return;
+    }
+    
+    // Смена owner (только Manager)
+    if (op == OP_CHANGE_GIVER_ADMIN) {
+        assert(
+            senderAddress.equalSlices(managerAddress),
+            ERROR_NOT_MANAGER
+        );
+        
+        var newOwner = msgBody.loadMsgAddress();
+        ownerAddress = newOwner;
+        saveData();
+        
         return;
     }
     
@@ -178,14 +158,13 @@ fun onInternalMessage(
 // GETTERS
 // =====================================================
 
-get fun getTreasuryData(): (slice, slice, slice, slice, int) {
+get fun getGiverData(): (slice, slice, slice, slice, slice) {
     loadData();
-    
     return (
         ownerAddress,
+        managerAddress,
         walletAddress,
-        bankDaoAddress,
-        daoFoundationAddress,
-        getBalance().0
+        frsAllodiumAddress,
+        allodiumFoundationAddress
     );
 }
