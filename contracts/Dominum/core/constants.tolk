@@ -28,3 +28,10 @@ const TAX_HALF: int = 25000000;
 
 // Минимум для transfer (газ + налог)
 const MIN_TON_FOR_TRANSFER: int = 100000000; // 0.1 TON
+
+// =====================================================
+// FRS — Fractional Reserve System (DOM ↔ ALLOD)
+// =====================================================
+
+// Курс обмена: 1 DOM = 1000 ALLOD
+const EXCHANGE_RATE_DOM_TO_ALLOD: int = 1000;

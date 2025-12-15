@@ -49,6 +49,9 @@ const OP_MANAGER_CHANGE_GIVER_ADMIN: int = 0x30;
 // Master → Manager (смена admin Manager'а)
 const OP_CHANGE_MANAGER_ADMIN: int = 0x31;
 
+// GIVER MANAGER
+const OP_CHANGE_WHITELIST: int = 0x40;  // Смена whitelist на гивере
+
 // =====================================================
 // MASTER ОПЕРАЦИИ
 // =====================================================
@@ -74,3 +77,14 @@ const OP_WITHDRAW_JETTONS: int = 0x52;
 
 // Admin → смена admin (общий для многих контрактов)
 const OP_CHANGE_ADMIN: int = 0x60;
+
+// =====================================================
+// FRS ALLODIUM ↔ ALLOD MASTER
+// =====================================================
+
+// FRS → ALLOD Master (разрешить минт ALLOD)
+const OP_INCREASE_MINT_ALLOWANCE: int = 0x70;
+
+// ALLOD Master → FRS (ALLOD сожжён, разблокировать DOM)
+const OP_ALLOD_BURNED: int = 0x71;
+

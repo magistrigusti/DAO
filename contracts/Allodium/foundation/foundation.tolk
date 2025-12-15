@@ -1,9 +1,8 @@
 // =====================================================
-// GIVER ECOSYSTEM — Распределение DOM для экосистемы Dominum
+// ALLODIUM FOUNDATION — Фонд ликвидности Allodium
 // =====================================================
-// Whitelist:
-// • Bank Dominum (стейкинг)
-// • DualOwnership (двойное управление)
+// Принимает: DOM от Giver Allodium / FRS (при разблокировке)
+// Функция: накапливает DOM для ликвидности Allodium
 // Управляется: СИД-фраза (owner)
 // =====================================================
 
@@ -15,11 +14,8 @@ import "../core/constants.tolk";
 // STORAGE
 // =====================================================
 
-global ownerAddress: slice;
-global managerAddress: slice;
-global walletAddress: slice;
-global bankDominumAddress: slice;     // Whitelist #1
-global dualOwnershipAddress: slice;   // Whitelist #2
+global ownerAddress: slice;       // СИД-фраза
+global walletAddress: slice;      // Jetton Wallet для DOM
 
 // =====================================================
 // LOAD / SAVE DATA
@@ -28,43 +24,38 @@ global dualOwnershipAddress: slice;   // Whitelist #2
 fun loadData() {
     var ds = getContractData().beginParse();
     ownerAddress = ds.loadMsgAddress();
-    managerAddress = ds.loadMsgAddress();
     walletAddress = ds.loadMsgAddress();
-    bankDominumAddress = ds.loadMsgAddress();
-    dualOwnershipAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
     setContractData(
         beginCell()
             .storeSlice(ownerAddress)
-            .storeSlice(managerAddress)
             .storeSlice(walletAddress)
-            .storeSlice(bankDominumAddress)
-            .storeSlice(dualOwnershipAddress)
             .endCell()
     );
 }
 
 // =====================================================
-// ПРОВЕРКА WHITELIST
+// ВЫВОД TON
 // =====================================================
 
-fun isAllowed(address: slice): int {
-    if (address.equalSlices(bankDominumAddress)) {
-        return true;
-    }
-    if (address.equalSlices(dualOwnershipAddress)) {
-        return true;
-    }
-    return false;
+fun withdrawTon(toAddress: slice, amount: int) {
+    var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeSlice(toAddress)
+        .storeCoins(amount)
+        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .endCell();
+    
+    sendRawMessage(msg, 1);
 }
 
 // =====================================================
-// ОТПРАВКА ЖЕТОНОВ
+// ВЫВОД ЖЕТОНОВ DOM
 // =====================================================
 
-fun sendJettons(toAddress: slice, amount: int, queryId: int) {
+fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -115,8 +106,14 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
     
-    // Отправить жетоны
-    if (op == OP_SEND_JETTONS) {
+    // Получение жетонов DOM
+    if (op == OP_TRANSFER_NOTIFICATION) {
+        // Просто принимаем
+        return;
+    }
+    
+    // Вывод TON (только owner)
+    if (op == OP_WITHDRAW) {
         assert(
             senderAddress.equalSlices(ownerAddress),
             ERROR_NOT_OWNER
@@ -125,28 +122,22 @@ fun onInternalMessage(
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadMsgAddress();
         
-        assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
-        
-        sendJettons(toAddress, amount, queryId);
+        withdrawTon(toAddress, amount);
         
         return;
     }
     
-    // Получение жетонов
-    if (op == OP_TRANSFER_NOTIFICATION) {
-        return;
-    }
-    
-    // Смена owner
-    if (op == OP_CHANGE_GIVER_ADMIN) {
+    // Вывод жетонов (только owner)
+    if (op == OP_WITHDRAW_JETTONS) {
         assert(
-            senderAddress.equalSlices(managerAddress),
-            ERROR_NOT_MANAGER
+            senderAddress.equalSlices(ownerAddress),
+            ERROR_NOT_OWNER
         );
         
-        var newOwner = msgBody.loadMsgAddress();
-        ownerAddress = newOwner;
-        saveData();
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadMsgAddress();
+        
+        withdrawJettons(toAddress, amount, queryId);
         
         return;
     }
@@ -158,13 +149,12 @@ fun onInternalMessage(
 // GETTERS
 // =====================================================
 
-get fun getGiverData(): (slice, slice, slice, slice, slice) {
+get fun getFoundationData(): (slice, slice, int) {
     loadData();
+    
     return (
         ownerAddress,
-        managerAddress,
         walletAddress,
-        bankDominumAddress,
-        dualOwnershipAddress
+        getBalance().0
     );
 }
