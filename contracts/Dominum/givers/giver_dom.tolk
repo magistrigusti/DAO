@@ -1,10 +1,10 @@
 // =====================================================
-// GIVER ECOSYSTEM — Распределение DOM для экосистемы Dominum
+// GIVER DOM — Автораспределение DOM для экосистемы
 // =====================================================
-// Whitelist:
-// • Bank Dominum (стейкинг)
-// • DualOwnership (двойное управление)
-// Управляется: СИД-фраза (owner)
+// При получении жетонов — АВТОМАТИЧЕСКИ:
+// • 50% → Bank Dominum (стейкинг)
+// • 50% → DualOwnership (двойное управление)
+// Manager может: ТОЛЬКО менять whitelist
 // =====================================================
 
 import "../core/op_codes.tolk";
@@ -15,11 +15,10 @@ import "../core/constants.tolk";
 // STORAGE
 // =====================================================
 
-global ownerAddress: slice;
 global managerAddress: slice;
 global walletAddress: slice;
-global bankDominumAddress: slice;     // Whitelist #1
-global dualOwnershipAddress: slice;   // Whitelist #2
+global bankDominumAddress: slice;     // Whitelist #1 (50%)
+global dualOwnershipAddress: slice;   // Whitelist #2 (50%)
 
 // =====================================================
 // LOAD / SAVE DATA
@@ -27,7 +26,6 @@ global dualOwnershipAddress: slice;   // Whitelist #2
 
 fun loadData() {
     var ds = getContractData().beginParse();
-    ownerAddress = ds.loadMsgAddress();
     managerAddress = ds.loadMsgAddress();
     walletAddress = ds.loadMsgAddress();
     bankDominumAddress = ds.loadMsgAddress();
@@ -37,7 +35,6 @@ fun loadData() {
 fun saveData() {
     setContractData(
         beginCell()
-            .storeSlice(ownerAddress)
             .storeSlice(managerAddress)
             .storeSlice(walletAddress)
             .storeSlice(bankDominumAddress)
@@ -47,30 +44,20 @@ fun saveData() {
 }
 
 // =====================================================
-// ПРОВЕРКА WHITELIST
-// =====================================================
-
-fun isAllowed(address: slice): int {
-    if (address.equalSlices(bankDominumAddress)) {
-        return true;
-    }
-    if (address.equalSlices(dualOwnershipAddress)) {
-        return true;
-    }
-    return false;
-}
-
-// =====================================================
 // ОТПРАВКА ЖЕТОНОВ
 // =====================================================
 
-fun sendJettons(toAddress: slice, amount: int, queryId: int) {
+fun sendJettons(
+    toAddress: slice,
+    amount: int,
+    queryId: int
+) {
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeSlice(toAddress)
-        .storeSlice(ownerAddress)
+        .storeSlice(toAddress)
         .storeBool(false)
         .storeCoins(0)
         .storeBool(false)
@@ -85,6 +72,21 @@ fun sendJettons(toAddress: slice, amount: int, queryId: int) {
         .endCell();
     
     sendRawMessage(msg, 1);
+}
+
+// =====================================================
+// АВТОРАСПРЕДЕЛЕНИЕ 50/50
+// =====================================================
+
+fun autoDistribute(amount: int, queryId: int) {
+    var half = amount / 2;
+    var remainder = amount - half;
+    
+    // 50% → Bank Dominum
+    sendJettons(bankDominumAddress, half, queryId);
+    
+    // 50% → DualOwnership
+    sendJettons(dualOwnershipAddress, remainder, queryId + 1);
 }
 
 // =====================================================
@@ -115,37 +117,31 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
     
-    // Отправить жетоны
-    if (op == OP_SEND_JETTONS) {
+    // Получили жетоны — автораспределение
+    if (op == OP_TRANSFER_NOTIFICATION) {
         assert(
-            senderAddress.equalSlices(ownerAddress),
+            senderAddress.equalSlices(walletAddress),
             ERROR_NOT_OWNER
         );
         
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
-        
-        assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
-        
-        sendJettons(toAddress, amount, queryId);
+        autoDistribute(amount, queryId);
         
         return;
     }
     
-    // Получение жетонов
-    if (op == OP_TRANSFER_NOTIFICATION) {
-        return;
-    }
-    
-    // Смена owner
-    if (op == OP_CHANGE_GIVER_ADMIN) {
+    // Смена whitelist — только Manager
+    if (op == OP_CHANGE_WHITELIST) {
         assert(
             senderAddress.equalSlices(managerAddress),
             ERROR_NOT_MANAGER
         );
         
-        var newOwner = msgBody.loadMsgAddress();
-        ownerAddress = newOwner;
+        var newAddress1 = msgBody.loadMsgAddress();
+        var newAddress2 = msgBody.loadMsgAddress();
+        
+        bankDominumAddress = newAddress1;
+        dualOwnershipAddress = newAddress2;
         saveData();
         
         return;
@@ -158,10 +154,9 @@ fun onInternalMessage(
 // GETTERS
 // =====================================================
 
-get fun getGiverData(): (slice, slice, slice, slice, slice) {
+get fun getGiverData(): (slice, slice, slice, slice) {
     loadData();
     return (
-        ownerAddress,
         managerAddress,
         walletAddress,
         bankDominumAddress,
