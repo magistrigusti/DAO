@@ -1,21 +1,20 @@
 // =====================================================
-// MANAGER — Контракт управления админами гиверов
+// GIVER MANAGER — Управление whitelist гиверов
 // =====================================================
-// Управляется: СИД-ФРАЗА #2 (внешний кошелёк)
-// Функция: менять admin на гиверах
-// Master может: заменить этот контракт на новый
+// Управляется: СИД-фраза (НЕЗАВИСИМЫЙ)
+// Функция: ТОЛЬКО менять whitelist на гиверах
+// НЕ зависит от Master!
 // =====================================================
 
-import "../core/op_codes";
-import "../core/errors";
-import "../core/constants";
+import "../core/op_codes.tolk";
+import "../core/errors.tolk";
+import "../core/constants.tolk";
 
 // =====================================================
 // STORAGE
 // =====================================================
 
-global adminAddress: slice;   // СИД #2 — кто управляет Manager
-global masterAddress: slice;  // Master — владелец (может заменить)
+global ownerAddress: slice;  // СИД-фраза владельца
 
 // =====================================================
 // LOAD / SAVE DATA
@@ -23,38 +22,38 @@ global masterAddress: slice;  // Master — владелец (может зам�
 
 fun loadData() {
     var ds = getContractData().beginParse();
-    adminAddress = ds.loadMsgAddress();
-    masterAddress = ds.loadMsgAddress();
+    ownerAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
     setContractData(
         beginCell()
-            .storeSlice(adminAddress)
-            .storeSlice(masterAddress)
+            .storeSlice(ownerAddress)
             .endCell()
     );
 }
 
 // =====================================================
-// ОТПРАВКА КОМАНДЫ НА ГИВЕР
+// ОТПРАВКА КОМАНДЫ НА ГИВЕР — СМЕНА WHITELIST
 // =====================================================
 
-fun sendChangeGiverAdmin(
+fun sendChangeWhitelist(
     giverAddress: slice,
-    newAdmin: slice,
+    newAddress1: slice,
+    newAddress2: slice,
     queryId: int
 ) {
     var msgBody = beginCell()
-        .storeUint(OP_CHANGE_GIVER_ADMIN, 32)
+        .storeUint(OP_CHANGE_WHITELIST, 32)
         .storeUint(queryId, 64)
-        .storeSlice(newAdmin)
+        .storeSlice(newAddress1)
+        .storeSlice(newAddress2)
         .endCell();
     
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeSlice(giverAddress)
-        .storeCoins(0)
+        .storeCoins(MIN_TON_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
@@ -91,36 +90,25 @@ fun onInternalMessage(
     var queryId = msgBody.loadUint(64);
     
     // =====================================================
-    // OP_CHANGE_GIVER_ADMIN — сменить admin на гивере
-    // Может только admin (СИД #2)!
+    // OP_CHANGE_WHITELIST — сменить whitelist на гивере
+    // Может ТОЛЬКО owner (СИД-фраза)!
     // =====================================================
-    if (op == OP_CHANGE_GIVER_ADMIN) {
+    if (op == OP_CHANGE_WHITELIST) {
         assert(
-            senderAddress.equalSlices(adminAddress),
-            ERROR_NOT_ADMIN
+            senderAddress.equalSlices(ownerAddress),
+            ERROR_NOT_OWNER
         );
         
         var giverAddress = msgBody.loadMsgAddress();
-        var newAdmin = msgBody.loadMsgAddress();
+        var newAddress1 = msgBody.loadMsgAddress();
+        var newAddress2 = msgBody.loadMsgAddress();
         
-        sendChangeGiverAdmin(giverAddress, newAdmin, queryId);
-        
-        return;
-    }
-    
-    // =====================================================
-    // OP_CHANGE_MANAGER_ADMIN — сменить admin Manager'а
-    // Может только Master!
-    // =====================================================
-    if (op == OP_CHANGE_MANAGER_ADMIN) {
-        assert(
-            senderAddress.equalSlices(masterAddress),
-            ERROR_NOT_MASTER
+        sendChangeWhitelist(
+            giverAddress,
+            newAddress1,
+            newAddress2,
+            queryId
         );
-        
-        var newAdmin = msgBody.loadMsgAddress();
-        adminAddress = newAdmin;
-        saveData();
         
         return;
     }
@@ -132,7 +120,7 @@ fun onInternalMessage(
 // GETTERS
 // =====================================================
 
-get fun getManagerData(): (slice, slice) {
+get fun getManagerData(): slice {
     loadData();
-    return (adminAddress, masterAddress);
+    return ownerAddress;
 }
