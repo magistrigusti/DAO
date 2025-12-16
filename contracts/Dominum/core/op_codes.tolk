@@ -100,3 +100,23 @@ const OP_WITHDRAW: int = 0x62;         // Вывести средства
 
 // NFT
 const OP_MINT_NFT: int = 0x1;          // Минт NFT (стандартный)
+
+// GAS POOL
+const OP_UPDATE_RATE: int = 0x70;       // Обновить курс
+const OP_WITHDRAW_DOM: int = 0x71;      // Вывести DOM из пула
+const OP_ADD_TON_RESERVE: int = 0x72;   // Пополнить TON
+
+// TREASURY MANAGER
+const OP_UPDATE_DOM_TREASURY: int = 0x80;
+const OP_UPDATE_DAO_TREASURY: int = 0x81;
+const OP_UPDATE_GAS_POOL: int = 0x82;
+const OP_UPDATE_POOL_RATE: int = 0x83;
+const OP_WITHDRAW_FROM_POOL: int = 0x84;
+const OP_REFILL_POOL: int = 0x85;
+
+// BANK DOMINUM
+const OP_CHANGE_TREASURY_MANAGER: int = 0x90;
+
+// GAS POOL
+const OP_REQUEST_GAS: int = 0x73;      // Запрос TON для газа
+const OP_REFILL_CONTRACT: int = 0x74;  // Пополнить контракт TON'ом
