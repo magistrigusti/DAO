@@ -6,9 +6,9 @@
 // Управляется: Bank Dominum (через СИД-фразу)
 // =====================================================
 
-import "../core/op_codes.tolk";
-import "../core/errors.tolk";
-import "../core/constants.tolk";
+import "../core/op_codes";
+import "../core/errors";
+import "../core/constants";
 
 // =====================================================
 // STORAGE
@@ -18,7 +18,7 @@ global bankDominumAddress: slice;  // Bank Dominum (владелец!)
 global domWalletAddress: slice;    // Наш Wallet DOM
 global tonReserve: int;            // Резерв TON в пуле
 global domReserve: int;            // Накопленный DOM
-global exchangeRate: int;          // Курс DOM/TON × 1000
+global exchangeRate: int;          
 
 // =====================================================
 // LOAD / SAVE DATA

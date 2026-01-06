@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <title>Dominum / Allodium — визуализация контрактов</title>
+
+    <!--
+      ВАЖНО:
+      - Этот файл сделан как отдельный инструмент (tools/), чтобы не трогать смарт-контракты.
+      - Mermaid подключён через CDN. Нужен интернет.
+    -->
+
+    <style>
+      :root {
+        --bg: #0b0d14;
+        --bg2: #101425;
+        --text: #e8ebff;
+        --muted: #aab0d6;
+        --border: rgba(232, 235, 255, 0.12);
+        --accent: #7c5cff;
+        --accent2: #2ec4ff;
+        --code: #0f1324;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(
+            1200px 600px at 30% -10%,
+            rgba(124, 92, 255, 0.22),
+            rgba(0, 0, 0, 0)
+          ),
+          radial-gradient(
+            1200px 600px at 90% 10%,
+            rgba(46, 196, 255, 0.16),
+            rgba(0, 0, 0, 0)
+          ),
+          var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system,
+          "Segoe UI", Roboto, Arial, "Noto Sans", "Liberation Sans",
+          sans-serif;
+        line-height: 1.45;
+      }
+
+      a {
+        color: var(--accent2);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      code {
+        padding: 0.1rem 0.35rem;
+        border: 1px solid var(--border);
+        border-radius: 0.45rem;
+        background: var(--code);
+        color: var(--text);
+        white-space: nowrap;
+      }
+
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      header {
+        border: 1px solid var(--border);
+        background: linear-gradient(
+          180deg,
+          rgba(16, 20, 37, 0.8),
+          rgba(16, 20, 37, 0.45)
+        );
+        border-radius: 16px;
+        padding: 16px 16px 14px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+
+      .titleRow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 10px 14px;
+        margin-bottom: 8px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: 0.2px;
+      }
+
+      .sub {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .chipRow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .chip {
+        border: 1px solid var(--border);
+        background: rgba(15, 19, 36, 0.55);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      @media (min-width: 980px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        background: rgba(16, 20, 37, 0.55);
+        border-radius: 16px;
+        padding: 14px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+
+      .card h2 {
+        margin: 0 0 6px;
+        font-size: 15px;
+      }
+
+      .card p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .diagram {
+        border: 1px dashed var(--border);
+        background: rgba(15, 19, 36, 0.4);
+        border-radius: 14px;
+        padding: 10px;
+        overflow: auto;
+      }
+
+      .diagram .mermaid {
+        min-width: 780px;
+      }
+
+      .hint {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tableWrap {
+        overflow: auto;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 820px;
+        background: rgba(15, 19, 36, 0.35);
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--text);
+        background: rgba(16, 20, 37, 0.7);
+        position: sticky;
+        top: 0;
+      }
+
+      td {
+        color: var(--muted);
+      }
+
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .k {
+        color: var(--text);
+      }
+
+      .warn {
+        color: #ffd38b;
+      }
+
+      .ok {
+        color: #89ffcf;
+      }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      // Mermaid настройки:
+      // - securityLevel loose, чтобы можно было красиво рендерить labels
+      // - theme dark под тёмную тему проекта
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "dark",
+        securityLevel: "loose",
+        flowchart: {
+          curve: "basis",
+        },
+      });
+    </script>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="titleRow">
+          <h1>Dominum / Allodium — визуализация смарт‑контрактов</h1>
+          <p class="sub">
+            Файл: <code>tools/contracts/index.html</code>
+          </p>
+        </div>
+
+        <p class="sub">
+          Открывай этот файл в браузере (Chrome/Edge). Mermaid грузится
+          через CDN, поэтому нужен интернет.
+        </p>
+
+        <div class="chipRow">
+          <div class="chip">
+            Контракты не трогаем: только визуализация (tools/)
+          </div>
+          <div class="chip">
+            Mermaid: <code>@10</code> через <code>cdn.jsdelivr.net</code>
+          </div>
+          <div class="chip">
+            Обновление схем: правим текст в блоках Mermaid ниже
+          </div>
+        </div>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <h2>1) Общий обзор (все ключевые связи)</h2>
+          <p>
+            Высокоуровневая карта: минт → кошельки → гиверы →
+            распределение, плюс налог/казначейства/газ‑пул и мост
+            Allodium.
+          </p>
+
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart TB
+  %% ===========================================
+  %% Dominum (DOM)
+  %% ===========================================
+  subgraph DOMINUM["Dominum (DOM)"]
+    MINTER["minter_dom"]
+    MASTER["master (Jetton Master)"]
+
+    W_G1["wallet(giver_allodium)"]
+    W_G2["wallet(giver_dao)"]
+    W_G3["wallet(giver_dom)"]
+
+    G1["giver_allodium"]
+    G2["giver_dao"]
+    G3["giver_dom"]
+    GINV["giver_invest (WIP)"]
+
+    GMAN["giver_manager"]
+
+    DTREAS["dom_treasury"]
+    ATREAS["dao_treasury"]
+    GAS["gas_pool"]
+    TMAN["treasury_manager"]
+
+    BANKDOM["bank_dominum (WIP)"]
+    BANKDAO["bank_dao"]
+    DAOF["dao_foundation"]
+  end
+
+  %% ===========================================
+  %% Allodium (ALLOD)
+  %% ===========================================
+  subgraph ALLODIUM["Allodium (ALLOD)"]
+    FRS["frs_allodium"]
+    ALF["allodium_foundation"]
+    AM["ALLOD master (вне репо)"]
+  end
+
+  DUAL["dual_ownership (вне репо)"]
+  DOMF["dom_foundation (вне репо)"]
+
+  %% --- Mint flow ---
+  MINTER -->|"OP_MINT"| MASTER
+  MASTER -->|"mint: OP_INTERNAL_TRANSFER"| W_G1
+  MASTER -->|"mint: OP_INTERNAL_TRANSFER"| W_G2
+  MASTER -->|"mint: OP_INTERNAL_TRANSFER"| W_G3
+
+  W_G1 -->|"OP_TRANSFER_NOTIFICATION"| G1
+  W_G2 -->|"OP_TRANSFER_NOTIFICATION"| G2
+  W_G3 -->|"OP_TRANSFER_NOTIFICATION"| G3
+
+  %% --- Givers distribution ---
+  G1 -->|"50%"| FRS
+  G1 -->|"50%"| ALF
+
+  G2 -->|"50%"| BANKDAO
+  G2 -->|"50%"| DAOF
+
+  G3 -->|"50%"| BANKDOM
+  G3 -->|"50%"| DUAL
+
+  %% --- Whitelist management ---
+  GMAN -->|"OP_CHANGE_WHITELIST"| G1
+  GMAN -->|"OP_CHANGE_WHITELIST"| G2
+  GMAN -->|"OP_CHANGE_WHITELIST"| G3
+  GMAN -.->|"OP_CHANGE_WHITELIST (когда будет готов)"| GINV
+
+  %% --- Tax & treasury (концептуально) ---
+  W_G1 -->|"OP_RECEIVE_TAX"| DTREAS
+  W_G1 -->|"OP_RECEIVE_TAX"| ATREAS
+  W_G1 -.->|"часть комиссии → DOM"| GAS
+
+  %% --- Gas pool control ---
+  BANKDOM -->|"owner"| TMAN
+  BANKDOM -->|"owner"| GAS
+  TMAN -->|"OP_UPDATE_RATE / OP_WITHDRAW_DOM"| GAS
+
+  %% --- Treasuries whitelist ---
+  DTREAS -->|"withdraw whitelist"| BANKDOM
+  DTREAS -->|"withdraw whitelist"| DOMF
+
+  ATREAS -->|"withdraw whitelist"| BANKDAO
+  ATREAS -->|"withdraw whitelist"| DAOF
+
+  %% --- Bridge core ---
+  FRS -->|"OP_INCREASE_MINT_ALLOWANCE"| AM
+  AM -->|"OP_ALLOD_BURNED"| FRS
+  FRS -->|"unlock DOM"| ALF
+            </pre>
+          </div>
+
+          <div class="hint">
+            Подсказка: узлы <span class="warn">WIP</span> — файлы
+            сейчас выглядят незавершёнными, но я их включил, чтобы не
+            потерять из карты.
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>2) Цепочка минта DOM (детально)</h2>
+          <p>
+            От админа минта до трёх кошельков гиверов. Jetton‑wallet
+            создаётся на лету для каждого owner (гивера).
+          </p>
+
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart LR
+  ADMIN["Админ минта (сид #1)"] -->|"OP_MINT"| MINTER["minter_dom"]
+  MINTER -->|"OP_MINT"| MASTER["master"]
+
+  MASTER -->|"OP_INTERNAL_TRANSFER"| W1["wallet(giver_allodium)"]
+  MASTER -->|"OP_INTERNAL_TRANSFER"| W2["wallet(giver_dao)"]
+  MASTER -->|"OP_INTERNAL_TRANSFER"| W3["wallet(giver_dom)"]
+
+  W1 -->|"OP_TRANSFER_NOTIFICATION"| G1["giver_allodium"]
+  W2 -->|"OP_TRANSFER_NOTIFICATION"| G2["giver_dao"]
+  W3 -->|"OP_TRANSFER_NOTIFICATION"| G3["giver_dom"]
+            </pre>
+          </div>
+
+          <div class="hint">
+            Источники в коде:
+            <span class="k">minter_dom</span> шлёт OP_MINT →
+            <span class="k">master</span>, а
+            <span class="k">master</span> делит минт на 3 и шлёт
+            OP_INTERNAL_TRANSFER.
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>3) Автораспределение гиверов</h2>
+          <p>
+            Когда гивер получает жетоны (через свой wallet), он сам
+            отправляет 50/50 по whitelist.
+          </p>
+
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart TB
+  G1["giver_allodium"] -->|"50%"| FRS["frs_allodium"]
+  G1 -->|"50%"| ALF["allodium_foundation"]
+
+  G2["giver_dao"] -->|"50%"| BANKDAO["bank_dao"]
+  G2 -->|"50%"| DAOF["dao_foundation"]
+
+  G3["giver_dom"] -->|"50%"| BANKDOM["bank_dominum (WIP)"]
+  G3 -->|"50%"| DUAL["dual_ownership (вне репо)"]
+
+  GMAN["giver_manager"] -->|"OP_CHANGE_WHITELIST"| G1
+  GMAN -->|"OP_CHANGE_WHITELIST"| G2
+  GMAN -->|"OP_CHANGE_WHITELIST"| G3
+            </pre>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>4) Налог + казначейства + газ‑пул</h2>
+          <p>
+            Концепт: кошелёк отправителя платит TON‑налог в 2
+            казначейства и часть комиссии уходит в Gas Pool (в DOM),
+            который автоматически докидывает TON назад (на газ).
+          </p>
+
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart LR
+  A["Jetton Wallet (отправитель)"] -->|"OP_RECEIVE_TAX"| DT["dom_treasury"]
+  A -->|"OP_RECEIVE_TAX"| AT["dao_treasury"]
+
+  A -.->|"часть комиссии → DOM"| GP["gas_pool"]
+  GP -->|"TON refill (если есть резерв)"| A
+
+  OWNER["Bank Dominum (owner)"] -->|"OP_UPDATE_POOL_RATE"| TM["treasury_manager"]
+  TM -->|"OP_UPDATE_RATE"| GP
+            </pre>
+          </div>
+
+          <div class="hint">
+            Ключ: <span class="k">gas_pool</span> на
+            OP_TRANSFER_NOTIFICATION берёт fromAddress и при наличии
+            TON‑резерва переводит TON обратно этому адресу.
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>5) Мост DOM ↔ ALLOD (FRS Allodium)</h2>
+          <p>
+            FRS принимает DOM только от Giver Allodium, блокирует DOM и
+            выдаёт allowance на ALLOD‑master. При burn ALLOD — FRS
+            разблокирует DOM на Allodium Foundation.
+          </p>
+
+          <div class="diagram">
+            <pre class="mermaid">
+flowchart TB
+  G1["giver_allodium"] -->|"перевод DOM"| WDOM["DOM wallet (giver_allodium)"]
+  WDOM -->|"OP_TRANSFER_NOTIFICATION"| FRS["frs_allodium"]
+
+  FRS -->|"lockedDom += amount"| FRS
+  FRS -->|"OP_INCREASE_MINT_ALLOWANCE"| AM["ALLOD master (вне репо)"]
+
+  AM -->|"OP_ALLOD_BURNED"| FRS
+  FRS -->|"OP_TRANSFER (unlock DOM)"| WFRS["DOM wallet (FRS)"]
+  WFRS -->|"DOM"| ALF["allodium_foundation"]
+            </pre>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>6) Список файлов (.tolk) в репозитории</h2>
+          <p>
+            Это “земная” опора: полный список всех .tolk, которые сейчас
+            лежат в <code>contracts/</code>.
+          </p>
+
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Модуль</th>
+                  <th>Файл</th>
+                  <th>Статус / заметка</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Dominum / management</td>
+                  <td><code>contracts/Dominum/management/minter_dom.tolk</code></td>
+                  <td class="ok">Точка входа минта</td>
+                </tr>
+                <tr>
+                  <td>Dominum / dom</td>
+                  <td><code>contracts/Dominum/dom/master.tolk</code></td>
+                  <td class="ok">Jetton Master (TEP‑74)</td>
+                </tr>
+                <tr>
+                  <td>Dominum / dom</td>
+                  <td><code>contracts/Dominum/dom/wallet.tolk</code></td>
+                  <td class="warn">Есть опечатки/незавершённые места</td>
+                </tr>
+                <tr>
+                  <td>Dominum / givers</td>
+                  <td><code>contracts/Dominum/givers/giver_allodium.tolk</code></td>
+                  <td class="ok">Автораспределение 50/50</td>
+                </tr>
+                <tr>
+                  <td>Dominum / givers</td>
+                  <td><code>contracts/Dominum/givers/giver_dao.tolk</code></td>
+                  <td class="ok">Автораспределение 50/50</td>
+                </tr>
+                <tr>
+                  <td>Dominum / givers</td>
+                  <td><code>contracts/Dominum/givers/giver_dom.tolk</code></td>
+                  <td class="ok">Автораспределение 50/50</td>
+                </tr>
+                <tr>
+                  <td>Dominum / givers</td>
+                  <td><code>contracts/Dominum/givers/giver_invest.tolk</code></td>
+                  <td class="warn">Файл выглядит незавершённым</td>
+                </tr>
+                <tr>
+                  <td>Dominum / management</td>
+                  <td><code>contracts/Dominum/management/giver_manager.tolk</code></td>
+                  <td class="ok">Меняет whitelist на гиверах</td>
+                </tr>
+                <tr>
+                  <td>Dominum / treasury</td>
+                  <td><code>contracts/Dominum/treasury/dom_treasury.tolk</code></td>
+                  <td class="ok">Казначейство DOM (whitelist)</td>
+                </tr>
+                <tr>
+                  <td>Dominum / treasury</td>
+                  <td><code>contracts/Dominum/treasury/dao_treasury.tolk</code></td>
+                  <td class="ok">Казначейство DAO (whitelist)</td>
+                </tr>
+                <tr>
+                  <td>Dominum / treasury</td>
+                  <td><code>contracts/Dominum/treasury/gas_pool.tolk</code></td>
+                  <td class="ok">Gas Pool (DOM → TON)</td>
+                </tr>
+                <tr>
+                  <td>Dominum / management</td>
+                  <td><code>contracts/Dominum/management/treasury_manager.tolk</code></td>
+                  <td class="ok">Управление Treasury + Gas Pool</td>
+                </tr>
+                <tr>
+                  <td>Dominum / dominum</td>
+                  <td><code>contracts/Dominum/dominum/bank_dominum.tolk</code></td>
+                  <td class="warn">Похоже, пока заглушка</td>
+                </tr>
+                <tr>
+                  <td>Dominum / dao</td>
+                  <td><code>contracts/Dominum/dao/bank_dao.tolk</code></td>
+                  <td class="ok">Банк DAO (логика облигаций/NFT)</td>
+                </tr>
+                <tr>
+                  <td>Dominum / dao</td>
+                  <td><code>contracts/Dominum/dao/dao_foundation.tolk</code></td>
+                  <td class="ok">Фонд DAO (shares + profit split)</td>
+                </tr>
+                <tr>
+                  <td>Dominum / core</td>
+                  <td><code>contracts/Dominum/core/constants.tolk</code></td>
+                  <td class="note">Константы (MAX_SUPPLY, TAX и т.д.)</td>
+                </tr>
+                <tr>
+                  <td>Dominum / core</td>
+                  <td><code>contracts/Dominum/core/errors.tolk</code></td>
+                  <td class="note">Коды ошибок</td>
+                </tr>
+                <tr>
+                  <td>Dominum / core</td>
+                  <td><code>contracts/Dominum/core/op_codes.tolk</code></td>
+                  <td class="note">OP‑коды</td>
+                </tr>
+                <tr>
+                  <td>Allodium / foundation</td>
+                  <td><code>contracts/Allodium/foundation/foundation.tolk</code></td>
+                  <td class="ok">Фонд Allodium</td>
+                </tr>
+                <tr>
+                  <td>Allodium / bridge</td>
+                  <td><code>contracts/Allodium/bridge/frs_allodium.tolk</code></td>
+                  <td class="ok">FRS (DOM ↔ ALLOD)</td>
+                </tr>
+                <tr>
+                  <td>Allodium / core</td>
+                  <td><code>contracts/Allodium/core/constants.tolk</code></td>
+                  <td class="note">Константы Allodium</td>
+                </tr>
+                <tr>
+                  <td>Allodium / core</td>
+                  <td><code>contracts/Allodium/core/errors.tolk</code></td>
+                  <td class="note">Коды ошибок Allodium</td>
+                </tr>
+                <tr>
+                  <td>Allodium / core</td>
+                  <td><code>contracts/Allodium/core/op_codes.tolk</code></td>
+                  <td class="note">OP‑коды Allodium</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="hint">
+            Если хочешь — следующей итерацией сделаю “кликабельную”
+            легенду: узел → путь файла + ссылка на блок кода.
+          </p>
+        </section>
+      </div>
+
+      <p class="note" style="margin: 14px 4px 0">
+        Техническая заметка: диаграммы выше — это “честная документация”
+        на текущий момент. Узлы <span class="warn">WIP</span> я оставил
+        специально, чтобы мы не забыли про них, пока ты дописываешь
+        контракты.
+      </p>
+    </div>
+  </body>
+</html>
