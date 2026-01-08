@@ -198,6 +198,127 @@ fun onInternalMessage(
 
   var senderAddress = cs.loadMsgAddress();
   loadData();
+
+  var op = msgBody.loadUint(32);
+  var queryId = msgBody.loadUint(64);
+
+  if (op == OP_MINT) {
+    assert(
+      senderAddress.equalSlices(minterAddress),
+      ERROR_NOT_MINTER
+    );
+
+    var amount = msgBody.loadCoins();
+    assert(amount > 0, ERROR_INVALID_AMOUNT);
+
+    mintJettons(amount, queryId, msgValue);
+    return;
+  }
+
+  if (op == OP_BURN_NOTIFICATION) {
+    var burnAmount = msgBody.loadCoins();
+    var fromAddress = msgBody.loadMsgAddress();
+
+    var expectedWallet = calculateWalletAddress(
+      calculateWalletStateInit(fromAddress)
+    );
+
+    assert(
+      senderAddress.equalSlices(expectedWallet),
+      ERROR_NOT_VALID_WALLET
+    );
+
+    totalSupply = totalSupply - burnAmount;
+    saveData();
+
+    var responseAddress = msgBody.loadMsgAddress();
+
+    if (~responseAddress.isAddressNone()) {
+      var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeSlice(responseAddress)
+        .storeCoins(0)
+        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeUint(OP_EXCESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
+
+      sendRawMessage(msg, 64 + 2);
+    }
+
+    return;
+  }
+
+  if (op == OP_REPLACE_MANAGER) {
+    assert(
+      senderAddress.equalSlices(adminAddress),
+      ERROR_NOT_ADMIN
+    );
+
+    var newManager = msgBody.loadMsgAddress();
+    managerAddress = newManager;
+    savaData();
+
+    return;
+  }
+
+  if (op == OP_CHANGE_ADMIN) {
+    assert(
+      senderAddress.equalSlices(adminAddress),
+      ERROR_NOT_ADMIN
+    );
+
+    var newAdmin = msgBody.loadMsgAddress();
+    adminAddress = newAdmin;
+    saveData();
+
+    return;
+  }
+
+  throw(0xffff);
+}
+
+get fun getJettonData(): (int, int, slice, cell, cell) {
+  loadData();
+
+  return (
+    totalSupply,
+    -1,
+    adminAddress,
+    content,
+    jettonWalletCode
+  );
+}
+
+get fun getWalletAddress(ownerAddress: slice): slice {
+  loadData();
+
+  var stateInit = calculateWalletStateInit(ownerAddress);
+  return calculateWalletAddress(stateInit);
+}
+
+get fun getMasterData(): (slice, slice, slice, slice, slice, slice) {
+  loadData();
+
+  return (
+    adminAddress,
+    minterAddress,
+    managerAddress,
+    domTreasuryAddress,
+    daoTreasuryAddress,
+    gasPoolAddress
+  );
+}
+
+get fun getGiversData(): (slice, slice, slice, slice) {
+  loadData();
+
+  return (
+    giverAllodiumAddress,
+    giverInvestAddress,
+    giverDaoAddress,
+    giverDominumAddres
+  )
 }
 
 
