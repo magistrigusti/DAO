@@ -26,8 +26,11 @@ const TAX_HALF: int = 50000000;
 // МИНИМАЛЬНЫЙ ГАЗ для операций
 // =====================================================
 
-// Минимум для transfer (газ + налог)
-const MIN_TON_FOR_TRANSFER: int = 100000000; // 0.15 TON
+// Минимум для transfer (газ + сообщения)
+const MIN_TON_FOR_TRANSFER: int = 150000000; // 0.15 TON
+
+// Минимум для служебных сообщений/деплоя кошелька
+const MIN_TON_FOR_STORAGE: int = 10000000; // 0.01 TON
 
 // =====================================================
 // FRS — Fractional Reserve System (DOM ↔ ALLOD)
