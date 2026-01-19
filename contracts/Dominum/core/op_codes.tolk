@@ -94,9 +94,9 @@ const OP_PAY_COUPON: int = 0x51;       // Выплатить купон
 const OP_REDEEM_BOND: int = 0x52;      // Погасить облигацию
 
 // DAO FOUNDATION
-const OP_ISSUE_SHARE: int = 0x60;      // Выпустить акцию
+const OP_ISSUE_SHARE: int = 0x60;       // Выпустить акцию
 const OP_DISTRIBUTE_PROFIT: int = 0x61; // Распределить на 5 контрактов
-const OP_WITHDRAW: int = 0x62;         // Вывести средства
+const OP_DAO_WITHDRAW: int = 0x62;      // Вывести средства (DAO Foundation)
 
 // NFT
 const OP_MINT_NFT: int = 0x1;          // Минт NFT (стандартный)
