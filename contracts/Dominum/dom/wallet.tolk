@@ -6,6 +6,7 @@ import "../core/constants.tolk";
 // JETTON WALLET — кошелёк DOM (TEP-74) + комиссия в DOM
 // =====================================================
 // Комиссия в DOM передаётся через custom_payload (off-chain расчёт).
+// Если payload нет — берём минимум TAX_HALF × 3.
 // Wallet делает 4 внутренних отправки:
 // 1) Получателю amount
 // 2) DOM Treasury — domTreasuryFee
@@ -224,18 +225,28 @@ fun onInternalMessage(
         // custom_payload: либо нет, либо ref с нашей структурой
         var hasCustom = msgBody.loadBool();
 
-        var domTreasuryFee: int = 0;
-        var daoTreasuryFee: int = 0;
-        var gasPoolFee: int = 0;
+        var domTreasuryFee: int = TAX_HALF;
+        var daoTreasuryFee: int = TAX_HALF;
+        var gasPoolFee: int = TAX_HALF;
 
         if (hasCustom) {
             var payload = msgBody.loadRef().beginParse();
             var magic = payload.loadUint(32);
 
             if (magic == FEE_MAGIC) {
-                domTreasuryFee = payload.loadCoins();
-                daoTreasuryFee = payload.loadCoins();
-                gasPoolFee = payload.loadCoins();
+                var newDomFee = payload.loadCoins();
+                var newDaoFee = payload.loadCoins();
+                var newGasFee = payload.loadCoins();
+
+                if (newDomFee > domTreasuryFee) {
+                    domTreasuryFee = newDomFee;
+                }
+                if (newDaoFee > daoTreasuryFee) {
+                    daoTreasuryFee = newDaoFee;
+                }
+                if (newGasFee > gasPoolFee) {
+                    gasPoolFee = newGasFee;
+                }
             }
         }
 
