@@ -7,9 +7,9 @@
 // Manager может: ТОЛЬКО менять whitelist (2 адреса)
 // =====================================================
 
-import "../core/op_codes.tolk";
-import "../core/errors.tolk";
-import "../core/constants.tolk";
+import "../core/op_codes";
+import "../core/errors";
+import "../core/constants";
 
 // =====================================================
 // STORAGE
