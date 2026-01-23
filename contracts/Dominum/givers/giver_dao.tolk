@@ -5,11 +5,14 @@
 // • 50% → Bank DAO
 // • 50% → DAO Foundation
 // Manager может: ТОЛЬКО менять whitelist
+// Налог DOM снимается всегда.
 // =====================================================
 
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+
+const FEE_MAGIC: int = 0xDA0FEE01;
 
 // =====================================================
 // STORAGE
@@ -47,18 +50,34 @@ fun saveData() {
 // ОТПРАВКА ЖЕТОНОВ
 // =====================================================
 
+fun buildFeePayload(): cell {
+    return beginCell()
+        .storeUint(FEE_MAGIC, 32)
+        .storeCoins(TAX_HALF)
+        .storeCoins(TAX_HALF)
+        .storeCoins(TAX_HALF)
+        .endCell();
+}
+
 fun sendJettons(
     toAddress: slice,
     amount: int,
     queryId: int
 ) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var payload = buildFeePayload();
+
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeSlice(toAddress)
         .storeSlice(toAddress)
-        .storeBool(false)
+        .storeBool(true)
+        .storeRef(payload)
         .storeCoins(0)
         .storeBool(false)
         .endCell();
@@ -79,14 +98,19 @@ fun sendJettons(
 // =====================================================
 
 fun autoDistribute(amount: int, queryId: int) {
+    var feeTotal = TAX_HALF * 3;
+
     var half = amount / 2;
     var remainder = amount - half;
-    
+
+    assert(half > feeTotal, ERROR_INVALID_AMOUNT);
+    assert(remainder > feeTotal, ERROR_INVALID_AMOUNT);
+
     // 50% → Bank DAO
-    sendJettons(bankDaoAddress, half, queryId);
+    sendJettons(bankDaoAddress, half - feeTotal, queryId);
     
     // 50% → DAO Foundation
-    sendJettons(daoFoundationAddress, remainder, queryId + 1);
+    sendJettons(daoFoundationAddress, remainder - feeTotal, queryId + 1);
 }
 
 // =====================================================

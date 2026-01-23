@@ -2,28 +2,23 @@
 // GIVER INVEST — Автораспределение DOM для инвест-блока
 // =====================================================
 // При получении жетонов — АВТОМАТИЧЕСКИ:
-// • 50% → Invest Bank (обычный контракт-хранилище)
-// • 50% → Invest Dual-Signature (контракт двойной подписи)
+// • 50% → Invest Bank
+// • 50% → Invest Dual-Signature
 // Manager может: ТОЛЬКО менять whitelist (2 адреса)
+// Налог DOM снимается всегда.
 // =====================================================
 
-import "../core/op_codes";
-import "../core/errors";
-import "../core/constants";
+import "../core/op_codes.tolk";
+import "../core/errors.tolk";
+import "../core/constants.tolk";
 
-// =====================================================
-// STORAGE
-// =====================================================
+const FEE_MAGIC: int = 0xDA0FEE01;
 
-global managerAddress: slice;       // Manager (QR/seed)
-global walletAddress: slice;         // Jetton Wallet этого гивера
+global managerAddress: slice;
+global walletAddress: slice;
 
-global investBankAddress: slice;     // Whitelist #1 (50%)
-global investDualAddress: slice;     // Whitelist #2 (50%)
-
-// =====================================================
-// LOAD / SAVE
-// =====================================================
+global defiBandAddress: slice;
+global defiDualAddress: slice;
 
 fun loadData() {
     var ds = getContractData().beginParse();
@@ -31,8 +26,8 @@ fun loadData() {
     managerAddress = ds.loadMsgAddress();
     walletAddress = ds.loadMsgAddress();
 
-    investBankAddress = ds.loadMsgAddress();
-    investDualAddress = ds.loadMsgAddress();
+    defiBankAddress = ds.loadMsgAddress();
+    defiBankAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
@@ -40,30 +35,42 @@ fun saveData() {
         beginCell()
             .storeSlice(managerAddress)
             .storeSlice(walletAddress)
-            .storeSlice(investBankAddress)
-            .storeSlice(investDualAddress)
+            .storeSlice(defiBankAddress)
+            .storeSlice(defiBankAddress)
             .endCell()
     );
 }
 
-// =====================================================
-// SEND JETTONS
-// =====================================================
+fun buildFeePayload(): cell {
+    return beginCell()
+        .storeUint(FEE_MAGIC, 32)
+        .storeCoins(TAX_HALF)
+        .storeCoins(TAX_HALF)
+        .storeCoins(TAX_HALF)
+        .endCell();
+}
 
 fun sendJettons(
     toAddress: slice,
     amount: int,
     queryId: int
 ) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var payload = buildFeePayload();
+
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeSlice(toAddress)
-        .storeSlice(toAddress)   // response_destination
-        .storeBool(false)        // custom_payload = none
-        .storeCoins(0)           // forward_ton_amount
-        .storeBool(false)        // forward_payload (inline пустой)
+        .storeSlice(toAddress)
+        .storeBool(true)
+        .storeRef(payload)
+        .storeCoins(0)
+        .storeBool(false)
         .endCell();
 
     var msg = beginCell()
@@ -77,21 +84,18 @@ fun sendJettons(
     sendRawMessage(msg, 1);
 }
 
-// =====================================================
-// AUTO DISTRIBUTE 50/50
-// =====================================================
-
 fun autoDistribute(amount: int, queryId: int) {
+    var feeTotal = TAX_HALF * 3;
+
     var half = amount / 2;
     var remainder = amount - half;
 
-    sendJettons(investBankAddress, half, queryId);
-    sendJettons(investDualAddress, remainder, queryId + 1);
-}
+    assert(half > feeTotal, ERROR_INVALID_AMOUNT);
+    assert(remainder > feeTotal, ERROR_INVALID_AMOUNT);
 
-// =====================================================
-// MESSAGES
-// =====================================================
+    sendJettons(defiBankAddress, half - freeTotal, queryId);
+    sendJettons(defiDualAddress, remainder - feeTotal, queryId + 1);
+}
 
 fun onInternalMessage(
     myBalance: int,
@@ -117,7 +121,6 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // Получили жетоны — автораспределение
     if (op == OP_TRANSFER_NOTIFICATION) {
         assert(
             senderAddress.equalSlices(walletAddress),
@@ -130,7 +133,6 @@ fun onInternalMessage(
         return;
     }
 
-    // Смена whitelist — только Manager
     if (op == OP_CHANGE_WHITELIST) {
         assert(
             senderAddress.equalSlices(managerAddress),
@@ -140,8 +142,8 @@ fun onInternalMessage(
         var newAddress1 = msgBody.loadMsgAddress();
         var newAddress2 = msgBody.loadMsgAddress();
 
-        investBankAddress = newAddress1;
-        investDualAddress = newAddress2;
+        defiBankAddress = newAddress1;
+        defiDualAddress = newAddress2;
 
         saveData();
 
@@ -151,17 +153,13 @@ fun onInternalMessage(
     throw(0xffff);
 }
 
-// =====================================================
-// GETTERS
-// =====================================================
-
 get fun getGiverData(): (slice, slice, slice, slice) {
     loadData();
 
     return (
         managerAddress,
         walletAddress,
-        investBankAddress,
+        defiBankAddress,
         investDualAddress
-    );
+    )
 }

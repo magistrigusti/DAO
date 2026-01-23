@@ -1,13 +1,31 @@
+// =====================================================
+// GIVER ALLODIUM — Автораспределение DOM для Allodium
+// =====================================================
+// При получении жетонов — АВТОМАТИЧЕСКИ:
+// • 50% → FRS Allodium
+// • 50% → Allodium Foundation
+// Manager может: ТОЛЬКО менять whitelist
+// Налог DOM снимается всегда.
+// =====================================================
+
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
 const FEE_MAGIC: int = 0xDA0FEE01;
 
-global managerAddress: slice;
-global walletAddress: slice;
-global frsAllodiumAddress: slice;
-global allodiumFoundationAddress: slice;
+// =====================================================
+// STORAGE
+// =====================================================
+
+global managerAddress: slice;            // Manager (меняет whitelist)
+global walletAddress: slice;             // Jetton Wallet этого гивера
+global frsAllodiumAddress: slice;        // Whitelist #1 (50%)
+global allodiumFoundationAddress: slice; // Whitelist #2 (50%)
+
+// =====================================================
+// LOAD / SAVE DATA
+// =====================================================
 
 fun loadData() {
     var ds = getContractData().beginParse();
@@ -20,13 +38,17 @@ fun loadData() {
 fun saveData() {
     setContractData(
         beginCell()
-            .storeSlice(manaderAddress)
+            .storeSlice(managerAddress)
             .storeSlice(walletAddress)
             .storeSlice(frsAllodiumAddress)
             .storeSlice(allodiumFoundationAddress)
             .endCell()
     );
 }
+
+// =====================================================
+// ОТПРАВКА ЖЕТОНОВ НА АДРЕС
+// =====================================================
 
 fun buildFeePayload(): cell {
     return beginCell()
@@ -41,7 +63,7 @@ fun sendJettons(
     toAddress: slice,
     amount: int,
     queryId: int
-){
+) {
     if (amount <= 0) {
         return;
     }
@@ -59,7 +81,7 @@ fun sendJettons(
         .storeCoins(0)
         .storeBool(false)
         .endCell();
-
+    
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeSlice(walletAddress)
@@ -71,58 +93,104 @@ fun sendJettons(
     sendRawMessage(msg, 1);
 }
 
+// =====================================================
+// АВТОРАСПРЕДЕЛЕНИЕ 50/50
+// =====================================================
+
 fun autoDistribute(amount: int, queryId: int) {
-    var feeTotal = TAX_HALF * 3
+    var feeTotal = TAX_HALF * 3;
 
     var half = amount / 2;
     var remainder = amount - half;
 
-    assert(half > feeToTal, ERROR_INVALID_AMOUNT);
+    assert(half > feeTotal, ERROR_INVALID_AMOUNT);
     assert(remainder > feeTotal, ERROR_INVALID_AMOUNT);
 
+    // 50% → FRS Allodium
     sendJettons(frsAllodiumAddress, half - feeTotal, queryId);
-
+    
+    // 50% → Allodium Foundation
     sendJettons(allodiumFoundationAddress, remainder - feeTotal, queryId + 1);
 }
+
+// =====================================================
+// ОБРАБОТКА ВХОДЯЩИХ СООБЩЕНИЙ
+// =====================================================
 
 fun onInternalMessage(
     myBalance: int,
     msgValue: int,
     msgFull: cell,
     msgBody: slice
-){
+) {
     if (msgBody.isEndOfSlice()) {
         return;
     }
-
+    
     var cs = msgFull.beginParse();
     var flags = cs.loadUint(4);
-
+    
     if (flags & 1) {
         return;
     }
-
+    
     var senderAddress = cs.loadMsgAddress();
-
+    
     loadData();
-
+    
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
-
+    
+    // =====================================================
+    // OP_TRANSFER_NOTIFICATION — получили жетоны
+    // АВТОМАТИЧЕСКИ распределяем 50/50!
+    // =====================================================
     if (op == OP_TRANSFER_NOTIFICATION) {
         assert(
             senderAddress.equalSlices(walletAddress),
             ERROR_NOT_OWNER
         );
-
+        
         var amount = msgBody.loadCoins();
-
+        
         autoDistribute(amount, queryId);
-
+        
         return;
     }
-
+    
+    // =====================================================
+    // OP_CHANGE_WHITELIST — смена адресов whitelist
+    // Может ТОЛЬКО Manager!
+    // =====================================================
     if (op == OP_CHANGE_WHITELIST) {
+        assert(
+            senderAddress.equalSlices(managerAddress),
+            ERROR_NOT_MANAGER
+        );
         
+        var newAddress1 = msgBody.loadMsgAddress();
+        var newAddress2 = msgBody.loadMsgAddress();
+        
+        frsAllodiumAddress = newAddress1;
+        allodiumFoundationAddress = newAddress2;
+        saveData();
+        
+        return;
     }
+    
+    throw(0xffff);
+}
+
+// =====================================================
+// GETTERS
+// =====================================================
+
+get fun getGiverData(): (slice, slice, slice, slice) {
+    loadData();
+    return (
+        managerAddress,
+        walletAddress,
+        frsAllodiumAddress,
+        allodiumFoundationAddress
+    );
 }
