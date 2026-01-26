@@ -3,10 +3,11 @@ import "../core/errors.tolk";
 import "../core/constants.tolk";
 
 // =====================================================
-// BANK INVEST — банк инвест-блока Dominum
+// BANK DeFi — банк инвест-блока Dominum
 // =====================================================
 // Принимает: DOM и TON
 // Управляется: СИД-фраза (owner)
+// Владельца не меняем.
 // =====================================================
 
 // =====================================================
@@ -14,7 +15,7 @@ import "../core/constants.tolk";
 // =====================================================
 
 global ownerAddress: slice;
-global walletAddress: slice;
+global domWalletAddress: slice;
 
 // =====================================================
 // LOAD / SAVE
@@ -23,20 +24,24 @@ global walletAddress: slice;
 fun loadData() {
     var ds = getContractData().beginParse();
     ownerAddress = ds.loadMsgAddress();
-    walletAddress = ds.loadMsgAddress();
+    domWalletAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
     setContractData(
         beginCell()
             .storeSlice(ownerAddress)
-            .storeSlice(walletAddress)
+            .storeSlice(domWalletAddress)
             .endCell()
     );
 }
 
+fun requireOwner(sender: slice) {
+    assert(sender.equalSlices(ownerAddress), ERROR_NOT_OWNER);
+}
+
 // =====================================================
-// ВЫВОД TON
+// WITHDRAW TON
 // =====================================================
 
 fun withdrawTon(toAddress: slice, amount: int) {
@@ -51,10 +56,10 @@ fun withdrawTon(toAddress: slice, amount: int) {
 }
 
 // =====================================================
-// ВЫВОД ЖЕТОНОВ DOM
+// WITHDRAW DOM JETTONS
 // =====================================================
 
-fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
+fun withdrawDomJettons(toAddress: slice, amount: int, queryId: int) {
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -68,7 +73,7 @@ fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeSlice(domWalletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
@@ -78,7 +83,7 @@ fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
 }
 
 // =====================================================
-// ОБРАБОТКА ВХОДЯЩИХ СООБЩЕНИЙ
+// MESSAGES
 // =====================================================
 
 fun onInternalMessage(
@@ -112,10 +117,7 @@ fun onInternalMessage(
 
     // Вывод TON
     if (op == OP_WITHDRAW) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadMsgAddress();
@@ -128,17 +130,14 @@ fun onInternalMessage(
 
     // Вывод жетонов
     if (op == OP_WITHDRAW_JETTONS) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadMsgAddress();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
 
-        withdrawJettons(toAddress, amount, queryId);
+        withdrawDomJettons(toAddress, amount, queryId);
         return;
     }
 
@@ -154,7 +153,7 @@ get fun getInvestBankData(): (slice, slice, int) {
 
     return (
         ownerAddress,
-        walletAddress,
+        domWalletAddress,
         getBalance().0
     );
 }
