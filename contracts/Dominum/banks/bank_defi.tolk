@@ -3,23 +3,15 @@ import "../core/errors.tolk";
 import "../core/constants.tolk";
 
 // =====================================================
-// BANK DeFi — банк инвест-блока Dominum
+// BANK DEFI — банк DeFi-блока Dominum
 // =====================================================
 // Принимает: DOM и TON
 // Управляется: СИД-фраза (owner)
 // Владельца не меняем.
 // =====================================================
 
-// =====================================================
-// STORAGE
-// =====================================================
-
 global ownerAddress: slice;
 global domWalletAddress: slice;
-
-// =====================================================
-// LOAD / SAVE
-// =====================================================
 
 fun loadData() {
     var ds = getContractData().beginParse();
@@ -40,10 +32,6 @@ fun requireOwner(sender: slice) {
     assert(sender.equalSlices(ownerAddress), ERROR_NOT_OWNER);
 }
 
-// =====================================================
-// WITHDRAW TON
-// =====================================================
-
 fun withdrawTon(toAddress: slice, amount: int) {
     var msg = beginCell()
         .storeUint(0x10, 6)
@@ -54,10 +42,6 @@ fun withdrawTon(toAddress: slice, amount: int) {
 
     sendRawMessage(msg, 1);
 }
-
-// =====================================================
-// WITHDRAW DOM JETTONS
-// =====================================================
 
 fun withdrawDomJettons(toAddress: slice, amount: int, queryId: int) {
     var msgBody = beginCell()
@@ -81,10 +65,6 @@ fun withdrawDomJettons(toAddress: slice, amount: int, queryId: int) {
 
     sendRawMessage(msg, 1);
 }
-
-// =====================================================
-// MESSAGES
-// =====================================================
 
 fun onInternalMessage(
     myBalance: int,
@@ -144,11 +124,7 @@ fun onInternalMessage(
     throw(0xffff);
 }
 
-// =====================================================
-// GETTERS
-// =====================================================
-
-get fun getInvestBankData(): (slice, slice, int) {
+get fun getDefiBankData(): (slice, slice, int) {
     loadData();
 
     return (

@@ -1,9 +1,9 @@
 // =====================================================
-// GIVER INVEST — Автораспределение DOM для инвест-блока
+// GIVER DEFI — Автораспределение DOM для DeFi-блока
 // =====================================================
 // При получении жетонов — АВТОМАТИЧЕСКИ:
-// • 50% → Invest Bank
-// • 50% → Invest Dual-Signature
+// • 50% → DeFi Bank
+// • 50% → DeFi Dual-Signature
 // Manager может: ТОЛЬКО менять whitelist (2 адреса)
 // Налог DOM снимается всегда.
 // =====================================================
@@ -17,7 +17,7 @@ const FEE_MAGIC: int = 0xDA0FEE01;
 global managerAddress: slice;
 global walletAddress: slice;
 
-global defiBandAddress: slice;
+global defiBankAddress: slice;
 global defiDualAddress: slice;
 
 fun loadData() {
@@ -27,7 +27,7 @@ fun loadData() {
     walletAddress = ds.loadMsgAddress();
 
     defiBankAddress = ds.loadMsgAddress();
-    defiBankAddress = ds.loadMsgAddress();
+    defiDualAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
@@ -36,7 +36,7 @@ fun saveData() {
             .storeSlice(managerAddress)
             .storeSlice(walletAddress)
             .storeSlice(defiBankAddress)
-            .storeSlice(defiBankAddress)
+            .storeSlice(defiDualAddress)
             .endCell()
     );
 }
@@ -93,7 +93,7 @@ fun autoDistribute(amount: int, queryId: int) {
     assert(half > feeTotal, ERROR_INVALID_AMOUNT);
     assert(remainder > feeTotal, ERROR_INVALID_AMOUNT);
 
-    sendJettons(defiBankAddress, half - freeTotal, queryId);
+    sendJettons(defiBankAddress, half - feeTotal, queryId);
     sendJettons(defiDualAddress, remainder - feeTotal, queryId + 1);
 }
 
@@ -146,7 +146,6 @@ fun onInternalMessage(
         defiDualAddress = newAddress2;
 
         saveData();
-
         return;
     }
 
@@ -160,6 +159,6 @@ get fun getGiverData(): (slice, slice, slice, slice) {
         managerAddress,
         walletAddress,
         defiBankAddress,
-        investDualAddress
-    )
+        defiDualAddress
+    );
 }
