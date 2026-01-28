@@ -1,88 +1,93 @@
-import "../core/op_codes.tolk";
-import "../core/errors.tolk";
-import "../core/constants.tolk";
+import "../core/op_codes";
+import "../core/errors";
+import "../core/constants";
 
-const FEE_MAGIC: int = 0xDA0FEE01;
+// =====================================================
+// BANK DOMINUM — главный банк экосистемы DOM
+// =====================================================
+// Управляется: ownerAddress (сид/QR)
+// Функции:
+// - управляет Gas Pool напрямую (курс/вывод/пополнение)
+// - может выводить TON и (опционально) DOM со своего jetton wallet
+// Владельца не меняем.
+// =====================================================
 
-global managerAddress: slice;
-global walletAddress: slice;
-global bankDominumAddress: slice;
-global dominumFoundationAddress: slice;
+// =====================================================
+// STORAGE
+// =====================================================
+
+global ownerAddress: slice;     // СИД-фраза владельца
+global gasPoolAddress: slice;   // Адрес Gas Pool
+global domWalletAddress: slice; // Jetton Wallet банка
+
+// =====================================================
+// LOAD / SAVE
+// =====================================================
 
 fun loadData() {
     var ds = getContractData().beginParse();
-    managerAddress = ds.loadMsgAddress();
-    walletAddress = ds.loadMsgAddress();
-    bankDominumAddress = ds.loadMsgAddress();
-    dominumFoundationAddress = ds.loadMsgAddress();
+
+    ownerAddress = ds.loadMsgAddress();
+    gasPoolAddress = ds.loadMsgAddress();
+    domWalletAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
     setContractData(
         beginCell()
-            .storeSlice(managerAddress)
-            .storeSlice(walletAddress)
-            .storeSlice(bankDominumAddress)
-            .storeSlice(dominumFoundationAddress)
+            .storeSlice(ownerAddress)
+            .storeSlice(gasPoolAddress)
+            .storeSlice(domWalletAddress)
             .endCell()
     );
 }
 
-fun buildFeePayload(): cell {
-    return beginCell()
-        .storeUint(FEE_MAGIC, 32)
-        .storeCoins(TAX_HALF)
-        .storeCoins(TAX_HALF)
-        .storeCoins(TAX_HALF)
-        .endCell();
+// =====================================================
+// HELPERS
+// =====================================================
+
+fun requireOwner(sender: slice) {
+    assert(sender.equalSlices(ownerAddress), ERROR_NOT_OWNER);
 }
 
-fun sendJettons(
-    toAddress: slice,
-    amount: int,
-    queryId: int
-) {
-    if (amount <= 0) {
-        return;
-    }
+fun sendTon(toAddress: slice, amount: int) {
+    var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeSlice(toAddress)
+        .storeCoins(amount)
+        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .endCell();
 
-    var payload = buildFeePayload();
+    sendRawMessage(msg, 1);
+}
 
-    var msgBody = beginCell()
+// Вывод DOM со своего Jetton Wallet (если нужно банку)
+fun withdrawDomJettons(toAddress: slice, amount: int, queryId: int) {
+    var transferBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeSlice(toAddress)
-        .storeSlice(toAddress)
-        .storeBool(true)
-        .storeRef(payload)
+        .storeSlice(ownerAddress) // response_destination
+        .storeBool(false)
         .storeCoins(0)
         .storeBool(false)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeSlice(domWalletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(msgBody)
+        .storeRef(transferBody)
         .endCell();
 
     sendRawMessage(msg, 1);
 }
 
-fun autoDistribute(amount: int, queryId: int) {
-    var feeTotal = TAX_HALF * 3;
-
-    var half = amount / 2;
-    var remainder = amount - half;
-
-    assert(half > feeTotal, ERROR_INVALID_AMOUNT);
-    assert(remainder > feeTotal, ERROR_INVALID_AMOUNT);
-
-    sendJettons(bankDominumAddress, half - feeTotal, queryId);
-    sendJettons(dominumFoundationAddress, remainder - feeTotal, queryId + 1);
-}
+// =====================================================
+// MESSAGES
+// =====================================================
 
 fun onInternalMessage(
     myBalance: int,
@@ -90,6 +95,7 @@ fun onInternalMessage(
     msgFull: cell,
     msgBody: slice
 ) {
+    // Пустое сообщение — просто принимаем TON на баланс банка
     if (msgBody.isEndOfSlice()) {
         return;
     }
@@ -108,43 +114,138 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    if (op == OP_TRANSFER_NOTIFICATION) {
-        assert(
-            senderAddress.equalSlices(walletAddress),
-            ERROR_NOT_OWNER
-        );
+    // =====================================================
+    // Админка банка (только owner)
+    // =====================================================
 
-        var amount = msgBody.loadCoins();
-        autoDistribute(amount, queryId);
+    // Смена адреса Gas Pool
+    if (op == OP_UPDATE_GAS_POOL) {
+        requireOwner(senderAddress);
+
+        var newGasPool = msgBody.loadMsgAddress();
+        gasPoolAddress = newGasPool;
+        saveData();
 
         return;
     }
 
-    if (op == OP_CHANGE_WHITELIST) {
-        assert(
-            senderAddress.equalSlices(managerAddress),
-            ERROR_NOT_MANAGER
-        );
+    // Вывод TON с банка
+    if (op == OP_WITHDRAW) {
+        requireOwner(senderAddress);
 
-        var newAddress1 = msgBody.loadMsgAddress();
-        var newAddress2 = msgBody.loadMsgAddress();
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadMsgAddress();
 
-        bankDominumAddress = newAddress1;
-        dominumFoundationAddress = newAddress2;
+        sendTon(toAddress, amount);
 
-        saveData();
+        return;
+    }
+
+    // Вывод DOM (jetton) с банка
+    if (op == OP_WITHDRAW_JETTONS) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadMsgAddress();
+
+        withdrawDomJettons(toAddress, amount, queryId);
+
+        return;
+    }
+
+    // =====================================================
+    // Управление Gas Pool напрямую
+    // =====================================================
+
+    // Обновить курс в Gas Pool
+    if (op == OP_UPDATE_POOL_RATE) {
+        requireOwner(senderAddress);
+
+        var newRate = msgBody.loadUint(32);
+
+        var body = beginCell()
+            .storeUint(OP_UPDATE_RATE, 32)
+            .storeUint(queryId, 64)
+            .storeUint(newRate, 32)
+            .endCell();
+
+        var msg = beginCell()
+            .storeUint(0x18, 6)
+            .storeSlice(gasPoolAddress)
+            .storeCoins(MIN_TON_FOR_STORAGE)
+            .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .storeRef(body)
+            .endCell();
+
+        sendRawMessage(msg, 1);
+
+        return;
+    }
+
+    // Вывести DOM из Gas Pool
+    if (op == OP_WITHDRAW_FROM_POOL) {
+        requireOwner(senderAddress);
+
+        var toAddress = msgBody.loadMsgAddress();
+        var amount = msgBody.loadCoins();
+
+        var body = beginCell()
+            .storeUint(OP_WITHDRAW_DOM, 32)
+            .storeUint(queryId, 64)
+            .storeSlice(toAddress)
+            .storeCoins(amount)
+            .endCell();
+
+        var msg = beginCell()
+            .storeUint(0x18, 6)
+            .storeSlice(gasPoolAddress)
+            .storeCoins(MIN_TON_FOR_STORAGE)
+            .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .storeRef(body)
+            .endCell();
+
+        sendRawMessage(msg, 1);
+
+        return;
+    }
+
+    // Пополнить TON в Gas Pool
+    if (op == OP_REFILL_POOL) {
+        requireOwner(senderAddress);
+
+        var tonAmount = msgBody.loadCoins();
+
+        var msg = beginCell()
+            .storeUint(0x18, 6)
+            .storeSlice(gasPoolAddress)
+            .storeCoins(tonAmount)
+            .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .endCell();
+
+        sendRawMessage(msg, 1);
+
+        return;
+    }
+
+    // Уведомления о получении DOM — игнорируем
+    if (op == OP_TRANSFER_NOTIFICATION) {
         return;
     }
 
     throw(0xffff);
 }
 
-get fun getGiverData(): (slice, slice, slice, slice) {
+// =====================================================
+// GETTERS
+// =====================================================
+
+get fun getBankDominumData(): (slice, slice, slice, int) {
     loadData();
+
     return (
-        managerAddress,
-        walletAddress,
-        bankDominumAddress,
-        dominumFoundationAddress
+        ownerAddress,
+        gasPoolAddress,
+        domWalletAddress,
+        getBalance().0
     );
 }
