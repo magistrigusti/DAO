@@ -120,3 +120,8 @@ const OP_CHANGE_TREASURY_MANAGER: int = 0x90;
 // GAS POOL
 const OP_REQUEST_GAS: int = 0x73;      // Запрос TON для газа
 const OP_REFILL_CONTRACT: int = 0x74;  // Пополнить контракт TON'ом
+const OP_GAS_POOL_EXECUTE: int = 0x70;  // выполнить transfer через пул
+const OP_TOP_UP: int = 0x71;            // пополнить TON
+const OP_WITHDRAW_DOM: int = 0x72;      // вывести DOM
+const OP_WITHDRAW_TON: int = 0x73;      // вывести TON
+const OP_SET_RESERVE: int = 0x74;       // установить резерв
