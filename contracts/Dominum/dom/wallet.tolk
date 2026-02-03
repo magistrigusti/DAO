@@ -6,9 +6,9 @@ import "../core/constants.tolk";
 // JETTON WALLET — кошелёк DOM (TEP-74)
 // =====================================================
 // При transfer отправляет ОДНО сообщение на Gas Pool.
-// Gas Pool сам распределяет: получателю, DOM Treasury, DAO Treasury.
-// Пользователь платит ~0.01 TON + DOM комиссия.
-// Gas Pool возвращает TON пользователю.
+// Gas Pool сам распределяет: получателю + DOM Treasury.
+// Пользователь платит ~0.01 TON + DOM (налог + комиссия).
+// Возврата TON нет — это "входной билет".
 // =====================================================
 
 const FEE_MAGIC: int = 0xDA0FEE01;
@@ -180,6 +180,7 @@ fun onInternalMessage(
     
     // =====================================================
     // OP_TRANSFER — отправка токенов (только owner)
+    // Одно сообщение на Gas Pool!
     // =====================================================
     if (op == OP_TRANSFER) {
         assert(
@@ -196,8 +197,9 @@ fun onInternalMessage(
         // Читаем комиссии из custom_payload
         var hasCustom = msgBody.loadBool();
         
-        var domTreasuryFee: int = TAX_HALF;
-        var daoTreasuryFee: int = TAX_HALF;
+        // Единый налог в DOM Treasury
+        var treasuryFee: int = TAX_AMOUNT;
+        // Комиссия Gas Pool
         var gasPoolFee: int = TAX_HALF;
         
         if (hasCustom) {
@@ -205,15 +207,12 @@ fun onInternalMessage(
             var magic = payload.loadUint(32);
             
             if (magic == FEE_MAGIC) {
-                var newDomFee = payload.loadCoins();
-                var newDaoFee = payload.loadCoins();
+                var newTreasuryFee = payload.loadCoins();
                 var newGasFee = payload.loadCoins();
                 
-                if (newDomFee > domTreasuryFee) {
-                    domTreasuryFee = newDomFee;
-                }
-                if (newDaoFee > daoTreasuryFee) {
-                    daoTreasuryFee = newDaoFee;
+                // Не меньше минимума
+                if (newTreasuryFee > treasuryFee) {
+                    treasuryFee = newTreasuryFee;
                 }
                 if (newGasFee > gasPoolFee) {
                     gasPoolFee = newGasFee;
@@ -221,7 +220,7 @@ fun onInternalMessage(
             }
         }
         
-        var totalFee = domTreasuryFee + daoTreasuryFee + gasPoolFee;
+        var totalFee = treasuryFee + gasPoolFee;
         var totalSpend = jettonAmount + totalFee;
         
         assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
@@ -232,24 +231,24 @@ fun onInternalMessage(
         
         // =====================================================
         // ОДНО СООБЩЕНИЕ НА GAS POOL
-        // Gas Pool сделает всё остальное
+        // Передаём: сумму, получателя, налог, комиссию
+        // Gas Pool сделает 2 сообщения из СВОЕГО TON
         // =====================================================
         
         var gasPoolBody = beginCell()
             .storeUint(OP_GAS_POOL_EXECUTE, 32)
             .storeUint(queryId, 64)
-            .storeCoins(jettonAmount)           // сколько получателю
-            .storeSlice(toOwner)                // кому
-            .storeSlice(ownerAddress)           // от кого (для возврата TON)
-            .storeCoins(domTreasuryFee)         // налог DOM Treasury
-            .storeCoins(daoTreasuryFee)         // налог DAO Treasury
-            .storeCoins(gasPoolFee)             // комиссия Gas Pool
+            .storeCoins(jettonAmount)       // сколько получателю
+            .storeSlice(toOwner)            // кому
+            .storeSlice(ownerAddress)       // от кого
+            .storeCoins(treasuryFee)        // налог в DOM Treasury
+            .storeCoins(gasPoolFee)         // комиссия Gas Pool
             .endCell();
         
         var msg = beginCell()
             .storeUint(0x18, 6)
             .storeSlice(gasPoolAddress)
-            .storeCoins(msgValue)               // весь TON на Gas Pool
+            .storeCoins(msgValue)           // ~0.01 TON (входной билет)
             .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .storeRef(gasPoolBody)
             .endCell();
