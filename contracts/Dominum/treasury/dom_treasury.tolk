@@ -1,82 +1,68 @@
-// =====================================================
-// DOM TREASURY — Казначейство токена Dominum
-// =====================================================
-// Принимает: налог (0.025 TON)
-// Отправляет: ТОЛЬКО на Bank DOM или DOM Foundation
-// Управляется: СИД-фраза (owner)
-// Whitelist: ЗАХАРДКОЖЕН при деплое!
-// =====================================================
+import "../core/op_codes.tolk";
+import "../core/errors.tolk";
+import "../core/constants.tolk";
 
-import "../core/op_codes";
-import "../core/errors";
-import "../core/constants";
+global ownerAddress: slice;
+global jettonWalletAddress: slice;
 
-// =====================================================
-// STORAGE
-// =====================================================
-
-global ownerAddress: slice;           // СИД-фраза
-global walletAddress: slice;          // Jetton Wallet
-global bankDomAddress: slice;         // Whitelist #1
-global domFoundationAddress: slice;   // Whitelist #2
-
-// =====================================================
-// LOAD / SAVE DATA
-// =====================================================
+global bankDaoAddress: slice;
+global bankDefiAddress: slice;
+global bankDominumAddress: slice;
 
 fun loadData() {
     var ds = getContractData().beginParse();
+
     ownerAddress = ds.loadMsgAddress();
-    walletAddress = ds.loadMsgAddress();
-    bankDomAddress = ds.loadMsgAddress();
-    domFoundationAddress = ds.loadMsgAddress();
+    jettonWalletAddress = ds.loadMsgAddress();
+
+    bankDaoAddress = ds.loadMsgAddress();
+    bankDefiAddress = ds.loadMsgAddress();
+    bankDominumAddress = ds.loadMsgAddress();
 }
 
 fun saveData() {
     setContractData(
         beginCell()
             .storeSlice(ownerAddress)
-            .storeSlice(walletAddress)
-            .storeSlice(bankDomAddress)
-            .storeSlice(domFoundationAddress)
+            .storeSlice(jettonWalletAddress)
+            .storeSlice(bankDaoAddress)
+            .storeSlice(bankDefiAddress)
+            .storeSlice(bankDominumAddress)
             .endCell()
     );
 }
 
-// =====================================================
-// ПРОВЕРКА WHITELIST
-// =====================================================
-
-fun isAllowed(address: slice): int {
-    if (address.equalSlices(bankDomAddress)) {
+fun isWitelisted(address: slice): int {
+    if (address.equalsSlices(bankDominumAddress)) {
         return true;
     }
-    if (address.equalSlices(domFoundationAddress)) {
+    if (address.equalSlices(bankDefiAddresss)) {
+        return true;
+    }
+    if (address.equalSlices(bankDominumAddress)) {
         return true;
     }
     return false;
 }
 
-// =====================================================
-// ВЫВОД TON
-// =====================================================
+fun withdrawTon(toAddress: slice, amount: int, queryId: int) {
+    var body = beginCell()
+        .storeUint(OP_EXESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
 
-fun withdrawTon(toAddress: slice, amount: int) {
     var msg = beginCell()
         .storeUint(0x10, 6)
         .storeSlice(toAddress)
         .storeCoins(amount)
-        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
         .endCell();
-    
+
     sendRawMessage(msg, 1);
 }
 
-// =====================================================
-// ВЫВОД ЖЕТОНОВ
-// =====================================================
-
-fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
+fun withdrawDom(toAddress: slice, amount: int, queryId: int) {
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -87,23 +73,19 @@ fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
         .storeCoins(0)
         .storeBool(false)
         .endCell();
-    
+
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeSlice(jettonWalletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
-    
+
     sendRawMessage(msg, 1);
 }
 
-// =====================================================
-// ОБРАБОТКА ВХОДЯЩИХ СООБЩЕНИЙ
-// =====================================================
-
-fun onInternalMessage(
+fun onInternalMesage(
     myBalance: int,
     msgValue: int,
     msgFull: cell,
@@ -112,80 +94,74 @@ fun onInternalMessage(
     if (msgBody.isEndOfSlice()) {
         return;
     }
-    
+
     var cs = msgFull.beginParse();
     var flags = cs.loadUint(4);
-    
+
     if (flags & 1) {
         return;
     }
-    
+
     var senderAddress = cs.loadMsgAddress();
-    
+
     loadData();
-    
+
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
-    
-    // Приём налога
-    if (op == OP_RECEIVE_TAX) {
+
+    if (op == OP_TRANSFER_NOTIFICATION) {
         return;
     }
-    
-    // Вывод TON
+
     if (op == OP_WITHDRAW) {
         assert(
             senderAddress.equalSlices(ownerAddress),
             ERROR_NOT_OWNER
         );
-        
+
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadMsgAddress();
-        
-        assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
-        
-        withdrawTon(toAddress, amount);
-        
+
+        assert(isWhitelisted(toAddress), ERROR_NOT_IN_WHITELIST);
+
+        withdrawTon(toAddress, amount, queryId);
+
         return;
     }
-    
-    // Вывод жетонов
+
     if (op == OP_WITHDRAW_JETTONS) {
         assert(
             senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
+            EROR_NOT_OWNER
         );
-        
+
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadMsgAddress();
-        
-        assert(isAllowed(toAddress), ERROR_NOT_IN_WHITELIST);
-        
-        withdrawJettons(toAddress, amount, queryId);
-        
+
+        assert(isWhitelisted(toAddress), ERROR_NOT_IN_WHITELIST);
+
+        withdrawDom(toAddress, amount, queryId);
+
         return;
     }
-    
-    // Получение жетонов
-    if (op == OP_TRANSFER_NOTIFICATION) {
-        return;
-    }
-    
+
     throw(0xffff);
 }
 
-// =====================================================
-// GETTERS
-// =====================================================
-
-get fun getTreasuryData(): (slice, slice, slice, slice, int) {
+get fun getTresuryData(): (slice, slice, slice, slice, slice, int) {
     loadData();
-    
+
     return (
         ownerAddress,
-        walletAddress,
-        bankDomAddress,
-        domFoundationAddress,
+        jettonWalletAddress,
+        bankDaoAddress,
+        bankDefiAddress,
+        bankDominumAddress,
         getBalance().0
     );
+}
+
+get fun isAddressWhitelisted(address: slice): int {
+    loadData();
+    return isWhitelisted(address);
 }
