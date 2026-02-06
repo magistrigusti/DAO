@@ -9,7 +9,7 @@ const DECIMALS: int = 6;
 const MAX_SUPPLY: int = 100000000000;
 
 // Количество гиверов
-const GIVERS_COUNT: int = 4;
+const GIVERS_COUNT: int = 5;
 
 // =====================================================
 // КОМИССИЯ / НАЛОГ (в TON, ориентирами)

@@ -5,7 +5,7 @@
 // • 50% → DeFi Bank
 // • 50% → DeFi Dual-Signature
 // Manager может: ТОЛЬКО менять whitelist (2 адреса)
-// Налог DOM снимается всегда.
+// Налог DOM + комиссия Gas Pool снимаются всегда.
 // =====================================================
 
 import "../core/op_codes.tolk";
@@ -44,9 +44,8 @@ fun saveData() {
 fun buildFeePayload(): cell {
     return beginCell()
         .storeUint(FEE_MAGIC, 32)
-        .storeCoins(TAX_HALF)
-        .storeCoins(TAX_HALF)
-        .storeCoins(TAX_HALF)
+        .storeCoins(TAX_AMOUNT)  // единый налог в DOM Treasury
+        .storeCoins(TAX_HALF)    // комиссия Gas Pool
         .endCell();
 }
 
@@ -85,7 +84,7 @@ fun sendJettons(
 }
 
 fun autoDistribute(amount: int, queryId: int) {
-    var feeTotal = TAX_HALF * 3;
+    var feeTotal = TAX_AMOUNT + TAX_HALF;
 
     var half = amount / 2;
     var remainder = amount - half;

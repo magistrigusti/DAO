@@ -5,29 +5,42 @@ import "../core/constants.tolk";
 // =====================================================
 // JETTON MASTER — Главный контракт токена DOM (TEP-74)
 // =====================================================
-// Минт: только от minterAddress
-// Распределение минта (4 гивера):
-// - 30% Allodium
-// - 20% Invest
-// - 25% DAO
-// - 25% Dominum   (раньше называли Ecosystem)
+// Минт: только от minterAddress (жёстко при деплое!)
+// Админа НЕТ — контракт неизменяем!
 //
-// Wallet storage включает jettonWalletCode (ref),
-// чтобы кошелёк мог вычислять адреса других кошельков.
+// Распределение минта (5 гиверов):
+// - 30% Allodium
+// - 10% DeFi
+// - 10% Market
+// - 25% DAO
+// - 25% Dominum
+//
+// Wallet storage:
+// (balance, owner, master, gasPool, walletCode)
 // =====================================================
+
+// Доли минта
+const SHARE_ALLODIUM: int = 30;
+const SHARE_DEFI: int = 10;
+const SHARE_MARKET: int = 10;
+const SHARE_DAO: int = 25;
+const SHARE_DOMINUM: int = 25;
+
+const SHARE_TOTAL: int =
+    SHARE_ALLODIUM
+    + SHARE_DEFI
+    + SHARE_MARKET
+    + SHARE_DAO
+    + SHARE_DOMINUM;
 
 global totalSupply: int;
 
-global adminAddress: slice;
 global minterAddress: slice;
-global managerAddress: slice;
-
-global domTreasuryAddress: slice;
-global daoTreasuryAddress: slice;
 global gasPoolAddress: slice;
 
 global giverAllodiumAddress: slice;
-global giverInvestAddress: slice;
+global giverDefiAddress: slice;
+global giverMarketAddress: slice;
 global giverDaoAddress: slice;
 global giverDominumAddress: slice;
 
@@ -43,18 +56,14 @@ fun loadData() {
 
     totalSupply = ds.loadCoins();
 
-    adminAddress = ds.loadMsgAddress();
     minterAddress = ds.loadMsgAddress();
-    managerAddress = ds.loadMsgAddress();
-
-    domTreasuryAddress = ds.loadMsgAddress();
-    daoTreasuryAddress = ds.loadMsgAddress();
     gasPoolAddress = ds.loadMsgAddress();
 
     var givers = ds.loadRef().beginParse();
 
     giverAllodiumAddress = givers.loadMsgAddress();
-    giverInvestAddress = givers.loadMsgAddress();
+    giverDefiAddress = givers.loadMsgAddress();
+    giverMarketAddress = givers.loadMsgAddress();
     giverDaoAddress = givers.loadMsgAddress();
     giverDominumAddress = givers.loadMsgAddress();
 
@@ -65,7 +74,8 @@ fun loadData() {
 fun saveData() {
     var givers = beginCell()
         .storeSlice(giverAllodiumAddress)
-        .storeSlice(giverInvestAddress)
+        .storeSlice(giverDefiAddress)
+        .storeSlice(giverMarketAddress)
         .storeSlice(giverDaoAddress)
         .storeSlice(giverDominumAddress)
         .endCell();
@@ -73,11 +83,7 @@ fun saveData() {
     setContractData(
         beginCell()
             .storeCoins(totalSupply)
-            .storeSlice(adminAddress)
             .storeSlice(minterAddress)
-            .storeSlice(managerAddress)
-            .storeSlice(domTreasuryAddress)
-            .storeSlice(daoTreasuryAddress)
             .storeSlice(gasPoolAddress)
             .storeRef(givers)
             .storeRef(content)
@@ -92,13 +98,11 @@ fun saveData() {
 
 fun calculateWalletData(owner: slice): cell {
     return beginCell()
-        .storeCoins(0)                     // balance
-        .storeSlice(owner)                 // ownerAddress
-        .storeSlice(myAddress())           // masterAddress
-        .storeSlice(domTreasuryAddress)    // domTreasuryAddress
-        .storeSlice(daoTreasuryAddress)    // daoTreasuryAddress
-        .storeSlice(gasPoolAddress)        // gasPoolAddress
-        .storeRef(jettonWalletCode)        // jettonWalletCode
+        .storeCoins(0)
+        .storeSlice(owner)
+        .storeSlice(myAddress())
+        .storeSlice(gasPoolAddress)
+        .storeRef(jettonWalletCode)
         .endCell();
 }
 
@@ -107,8 +111,8 @@ fun calculateWalletStateInit(owner: slice): cell {
 
     return beginCell()
         .storeUint(0, 2)
-        .storeMaybeRef(jettonWalletCode)  // code
-        .storeMaybeRef(walletData)        // data
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
         .storeUint(0, 1)
         .endCell();
 }
@@ -139,10 +143,10 @@ fun sendToWallet(
         .storeUint(OP_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(jettonAmount)
-        .storeSlice(myAddress())          // from
-        .storeSlice(toOwner)              // response_destination
-        .storeCoins(0)                    // forward_ton_amount
-        .storeBool(false)                 // forward_payload (empty)
+        .storeSlice(myAddress())
+        .storeSlice(toOwner)
+        .storeCoins(0)
+        .storeBool(false)
         .endCell();
 
     var msg = beginCell()
@@ -163,21 +167,23 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
         ERROR_LIMIT_EXCEEDED
     );
 
+    assert(SHARE_TOTAL == 100, ERROR_INVALID_AMOUNT);
+
     totalSupply = totalSupply + amount;
 
-    // 30 / 20 / 25 / 25
-    var amountAllodium = amount * 30 / 100;
-    var amountInvest = amount * 20 / 100;
-    var amountDao = amount * 25 / 100;
+    var amountAllodium = amount * SHARE_ALLODIUM / 100;
+    var amountDefi = amount * SHARE_DEFI / 100;
+    var amountMarket = amount * SHARE_MARKET / 100;
+    var amountDao = amount * SHARE_DAO / 100;
 
     var amountDominum = amount
         - amountAllodium
-        - amountInvest
+        - amountDefi
+        - amountMarket
         - amountDao;
 
-    // TON делим поровну, остаток добавляем в первую отправку
-    var tonPer = msgValue / 4;
-    var tonRemainder = msgValue - tonPer * 4;
+    var tonPer = msgValue / 5;
+    var tonRemainder = msgValue - tonPer * 5;
 
     sendToWallet(
         giverAllodiumAddress,
@@ -187,23 +193,30 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
     );
 
     sendToWallet(
-        giverInvestAddress,
-        amountInvest,
+        giverDefiAddress,
+        amountDefi,
         queryId + 1,
+        tonPer
+    );
+
+    sendToWallet(
+        giverMarketAddress,
+        amountMarket,
+        queryId + 2,
         tonPer
     );
 
     sendToWallet(
         giverDaoAddress,
         amountDao,
-        queryId + 2,
+        queryId + 3,
         tonPer
     );
 
     sendToWallet(
         giverDominumAddress,
         amountDominum,
-        queryId + 3,
+        queryId + 4,
         tonPer
     );
 
@@ -238,7 +251,9 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // OP_MINT — только от Minter
+    // =====================================================
+    // OP_MINT — только от Minter (жёстко!)
+    // =====================================================
     if (op == OP_MINT) {
         assert(
             senderAddress.equalSlices(minterAddress),
@@ -252,7 +267,9 @@ fun onInternalMessage(
         return;
     }
 
+    // =====================================================
     // OP_BURN_NOTIFICATION — уменьшение totalSupply
+    // =====================================================
     if (op == OP_BURN_NOTIFICATION) {
         var burnAmount = msgBody.loadCoins();
         var fromOwner = msgBody.loadMsgAddress();
@@ -287,34 +304,6 @@ fun onInternalMessage(
         return;
     }
 
-    // OP_REPLACE_MANAGER — только admin
-    if (op == OP_REPLACE_MANAGER) {
-        assert(
-            senderAddress.equalSlices(adminAddress),
-            ERROR_NOT_ADMIN
-        );
-
-        var newManager = msgBody.loadMsgAddress();
-        managerAddress = newManager;
-        saveData();
-
-        return;
-    }
-
-    // OP_CHANGE_MASTER_ADMIN — только admin
-    if (op == OP_CHANGE_MASTER_ADMIN) {
-        assert(
-            senderAddress.equalSlices(adminAddress),
-            ERROR_NOT_ADMIN
-        );
-
-        var newAdmin = msgBody.loadMsgAddress();
-        adminAddress = newAdmin;
-        saveData();
-
-        return;
-    }
-
     throw(0xffff);
 }
 
@@ -328,7 +317,7 @@ get fun getJettonData(): (int, int, slice, cell, cell) {
     return (
         totalSupply,
         -1,
-        adminAddress,
+        minterAddress,
         content,
         jettonWalletCode
     );
@@ -341,25 +330,22 @@ get fun getWalletAddress(ownerAddress: slice): slice {
     return calculateWalletAddress(stateInit);
 }
 
-get fun getMasterData(): (slice, slice, slice, slice, slice, slice) {
+get fun getMasterData(): (slice, slice) {
     loadData();
 
     return (
-        adminAddress,
         minterAddress,
-        managerAddress,
-        domTreasuryAddress,
-        daoTreasuryAddress,
         gasPoolAddress
     );
 }
 
-get fun getGiversData(): (slice, slice, slice, slice) {
+get fun getGiversData(): (slice, slice, slice, slice, slice) {
     loadData();
 
     return (
         giverAllodiumAddress,
-        giverInvestAddress,
+        giverDefiAddress,
+        giverMarketAddress,
         giverDaoAddress,
         giverDominumAddress
     );
