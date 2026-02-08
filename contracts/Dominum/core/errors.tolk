@@ -20,3 +20,10 @@ const ERROR_NOT_IN_WHITELIST: int = 86;
 
 // Ошибки газа
 const ERROR_INSUFFICIENT_GAS: int = 90;
+
+// Ошибки времени
+const ERROR_TOO_EARLY: int = 91;
+
+// Ошибки Proxy
+const ERROR_NO_PENDING: int = 92;
+const ERROR_NOT_ENOUGH_BALANCE: int = 93;
