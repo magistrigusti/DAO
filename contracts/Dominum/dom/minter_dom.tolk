@@ -14,8 +14,8 @@ import "../core/constants";
 //   5) Master проверяет MAX_SUPPLY
 // =====================================================
 
-// 5 гиверов в Master
-const MINT_TRANSFERS: int = 5;
+// 4 гивера в Master
+const MINT_TRANSFERS: int = 4;
 
 // Сколько минтить за раз: 10 млн DOM (с 6 decimals)
 const MINT_AMOUNT: int = 10000000000000;

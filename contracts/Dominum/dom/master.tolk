@@ -8,28 +8,25 @@ import "../core/constants.tolk";
 // Минт: только от minterAddress (жёстко при деплое!)
 // Админа НЕТ — контракт неизменяем!
 //
-// Распределение минта (5 гиверов):
-// - 30% Allodium
-// - 10% DeFi
-// - 10% Market
-// - 25% DAO
-// - 25% Dominum
+// Распределение минта (4 гивера):
+// - 30% Allodium  → FRS + Foundation
+// - 20% DeFi     → Foundry + Market Maker
+// - 25% DAO      → Bank DAO + DAO Foundation
+// - 25% Dominum  → Bank Dominum + Dominum Foundation
 //
 // Wallet storage:
-// (balance, owner, master, gasPool, walletCode)
+// (balance, owner, master, gasProxy, walletCode)
 // =====================================================
 
 // Доли минта
 const SHARE_ALLODIUM: int = 30;
-const SHARE_DEFI: int = 10;
-const SHARE_MARKET: int = 10;
+const SHARE_DEFI: int = 20;
 const SHARE_DAO: int = 25;
 const SHARE_DOMINUM: int = 25;
 
 const SHARE_TOTAL: int =
     SHARE_ALLODIUM
     + SHARE_DEFI
-    + SHARE_MARKET
     + SHARE_DAO
     + SHARE_DOMINUM;
 
@@ -40,7 +37,6 @@ global gasPoolAddress: slice;
 
 global giverAllodiumAddress: slice;
 global giverDefiAddress: slice;
-global giverMarketAddress: slice;
 global giverDaoAddress: slice;
 global giverDominumAddress: slice;
 
@@ -63,7 +59,6 @@ fun loadData() {
 
     giverAllodiumAddress = givers.loadMsgAddress();
     giverDefiAddress = givers.loadMsgAddress();
-    giverMarketAddress = givers.loadMsgAddress();
     giverDaoAddress = givers.loadMsgAddress();
     giverDominumAddress = givers.loadMsgAddress();
 
@@ -75,7 +70,6 @@ fun saveData() {
     var givers = beginCell()
         .storeSlice(giverAllodiumAddress)
         .storeSlice(giverDefiAddress)
-        .storeSlice(giverMarketAddress)
         .storeSlice(giverDaoAddress)
         .storeSlice(giverDominumAddress)
         .endCell();
@@ -173,17 +167,16 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
 
     var amountAllodium = amount * SHARE_ALLODIUM / 100;
     var amountDefi = amount * SHARE_DEFI / 100;
-    var amountMarket = amount * SHARE_MARKET / 100;
     var amountDao = amount * SHARE_DAO / 100;
 
     var amountDominum = amount
         - amountAllodium
         - amountDefi
-        - amountMarket
         - amountDao;
 
-    var tonPer = msgValue / 5;
-    var tonRemainder = msgValue - tonPer * 5;
+    // TON делим на 4 отправки
+    var tonPer = msgValue / 4;
+    var tonRemainder = msgValue - tonPer * 4;
 
     sendToWallet(
         giverAllodiumAddress,
@@ -200,23 +193,16 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
     );
 
     sendToWallet(
-        giverMarketAddress,
-        amountMarket,
-        queryId + 2,
-        tonPer
-    );
-
-    sendToWallet(
         giverDaoAddress,
         amountDao,
-        queryId + 3,
+        queryId + 2,
         tonPer
     );
 
     sendToWallet(
         giverDominumAddress,
         amountDominum,
-        queryId + 4,
+        queryId + 3,
         tonPer
     );
 
@@ -339,13 +325,12 @@ get fun getMasterData(): (slice, slice) {
     );
 }
 
-get fun getGiversData(): (slice, slice, slice, slice, slice) {
+get fun getGiversData(): (slice, slice, slice, slice) {
     loadData();
 
     return (
         giverAllodiumAddress,
         giverDefiAddress,
-        giverMarketAddress,
         giverDaoAddress,
         giverDominumAddress
     );

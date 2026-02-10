@@ -80,3 +80,10 @@ const OP_DAO_WITHDRAW: int = 0xD2;
 // =====================================================
 
 const OP_MINT_NFT: int = 0x1;
+
+// =====================================================
+// MARKET MAKER ОПЕРАЦИИ
+// =====================================================
+
+const OP_ADD_WHITELIST: int = 0xE0;
+const OP_REMOVE_WHITELIST: int = 0xE1;
