@@ -6,13 +6,8 @@ import "../core/constants.tolk";
 // GAS POOL — пул газа
 // =====================================================
 // Принимает: OP_GAS_POOL_EXECUTE от Proxy
-// Делает: 2 сообщения из СВОЕГО TON
-//   1) Получателю — основная сумма DOM
-//   2) DOM Treasury — налог DOM
-// Накапливает: комиссию (gasPoolFee) в domBalance
-// Пополняется: TON через Bank Dominum
-//
-// domTreasuryAddress можно менять через timelock (48ч)
+// Делает: 2 команды в Proxy на internal transfers
+// Накапливает: domBalance (комиссия gasPoolFee)
 // =====================================================
 
 // 48 часов в секундах
@@ -21,8 +16,6 @@ const TIMELOCK_PERIOD: int = 172800;
 global adminAddress: slice;
 global proxyAddress: slice;
 global domTreasuryAddress: slice;
-global masterAddress: slice;
-global jettonWalletCode: cell;
 
 global domBalance: int;
 global tonReserve: int;
@@ -35,15 +28,12 @@ global hasPendingTreasury: int;
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
-
 fun loadData() {
     var ds = getContractData().beginParse();
 
     adminAddress = ds.loadMsgAddress();
     proxyAddress = ds.loadMsgAddress();
     domTreasuryAddress = ds.loadMsgAddress();
-    masterAddress = ds.loadMsgAddress();
-    jettonWalletCode = ds.loadRef();
 
     domBalance = ds.loadCoins();
     tonReserve = ds.loadCoins();
@@ -61,8 +51,6 @@ fun saveData() {
         .storeSlice(adminAddress)
         .storeSlice(proxyAddress)
         .storeSlice(domTreasuryAddress)
-        .storeSlice(masterAddress)
-        .storeRef(jettonWalletCode)
         .storeCoins(domBalance)
         .storeCoins(tonReserve)
         .storeBool(hasPendingTreasury);
@@ -76,43 +64,8 @@ fun saveData() {
 }
 
 // -----------------------------------------------------
-// WALLET ADDRESS HELPERS
+// SEND INTERNAL TRANSFER VIA PROXY
 // -----------------------------------------------------
-
-fun buildWalletData(owner: slice): cell {
-    return beginCell()
-        .storeCoins(0)
-        .storeSlice(owner)
-        .storeSlice(masterAddress)
-        .storeSlice(proxyAddress)
-        .storeRef(jettonWalletCode)
-        .endCell();
-}
-
-fun buildWalletStateInit(owner: slice): cell {
-    var walletData = buildWalletData(owner);
-
-    return beginCell()
-        .storeUint(0, 2)
-        .storeMaybeRef(jettonWalletCode)
-        .storeMaybeRef(walletData)
-        .storeUint(0, 1)
-        .endCell();
-}
-
-fun buildWalletAddress(stateInit: cell): slice {
-    return beginCell()
-        .storeUint(4, 3)
-        .storeInt(0, 8)
-        .storeUint(stateInit.hash(), 256)
-        .endCell()
-        .beginParse();
-}
-
-// -----------------------------------------------------
-// SEND INTERNAL TRANSFER
-// -----------------------------------------------------
-
 fun sendInternalTransfer(
     toOwner: slice,
     jettonAmount: int,
@@ -125,25 +78,20 @@ fun sendInternalTransfer(
         return;
     }
 
-    var stateInit = buildWalletStateInit(toOwner);
-    var toWallet = buildWalletAddress(stateInit);
-
     var body = beginCell()
-        .storeUint(OP_INTERNAL_TRANSFER, 32)
+        .storeUint(OP_PROXY_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(jettonAmount)
+        .storeSlice(toOwner)
         .storeSlice(fromOwner)
         .storeSlice(responseDestination)
-        .storeCoins(0)
-        .storeBool(false)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(toWallet)
+        .storeSlice(proxyAddress)
         .storeCoins(msgValue)
-        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
-        .storeRef(stateInit)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
 
@@ -153,7 +101,6 @@ fun sendInternalTransfer(
 // -----------------------------------------------------
 // SEND TON
 // -----------------------------------------------------
-
 fun sendTon(to: slice, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
@@ -178,7 +125,6 @@ fun sendTon(to: slice, amount: int, queryId: int) {
 // -----------------------------------------------------
 // MAIN
 // -----------------------------------------------------
-
 fun onInternalMessage(
     myBalance: int,
     msgValue: int,
@@ -218,8 +164,13 @@ fun onInternalMessage(
         var treasuryFee = msgBody.loadCoins();
         var gasPoolFee = msgBody.loadCoins();
 
+        assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(treasuryFee >= TAX_AMOUNT, ERROR_INVALID_AMOUNT);
+        assert(gasPoolFee >= TAX_HALF, ERROR_INVALID_AMOUNT);
+
         var tonForTransfers = MIN_TON_FOR_STORAGE * 2;
         var availableTon = myBalance - tonReserve;
+
         assert(
             availableTon >= tonForTransfers,
             ERROR_INSUFFICIENT_GAS
@@ -317,7 +268,6 @@ fun onInternalMessage(
         );
 
         sendTon(to, amount, queryId);
-
         return;
     }
 
@@ -338,7 +288,6 @@ fun onInternalMessage(
 
     // =====================================================
     // OP_CHANGE_TREASURY — смена Treasury (timelock 48ч)
-    // Только admin.
     // subOp: 1=запрос, 2=подтверждение, 3=отмена
     // =====================================================
     if (op == OP_CHANGE_TREASURY) {
@@ -388,7 +337,6 @@ fun onInternalMessage(
 // -----------------------------------------------------
 // GETTERS
 // -----------------------------------------------------
-
 get fun getPoolData(): (
     slice, slice, slice, int, int, int
 ) {

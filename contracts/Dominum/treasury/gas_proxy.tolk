@@ -7,6 +7,8 @@ import "../core/constants.tolk";
 // =====================================================
 // Вечный контракт. Wallet ссылается на него навсегда.
 // Пересылает OP_GAS_POOL_EXECUTE на реальный Gas Pool.
+// И принимает обратную команду от реального Gas Pool,
+// после чего делает OP_INTERNAL_TRANSFER в wallet.
 // Админ может менять realGasPoolAddress через timelock.
 //
 // Timelock: 48 часов между запросом и подтверждением.
@@ -20,6 +22,8 @@ const TIMELOCK_PERIOD: int = 172800;
 
 global adminAddress: slice;
 global realGasPoolAddress: slice;
+global masterAddress: slice;
+global jettonWalletCode: cell;
 
 // Timelock
 global pendingAddress: slice;
@@ -35,6 +39,8 @@ fun loadData() {
 
     adminAddress = ds.loadMsgAddress();
     realGasPoolAddress = ds.loadMsgAddress();
+    masterAddress = ds.loadMsgAddress();
+    jettonWalletCode = ds.loadRef();
     hasPending = ds.loadBool();
 
     if (hasPending) {
@@ -47,6 +53,8 @@ fun saveData() {
     var b = beginCell()
         .storeSlice(adminAddress)
         .storeSlice(realGasPoolAddress)
+        .storeSlice(masterAddress)
+        .storeRef(jettonWalletCode)
         .storeBool(hasPending);
 
     if (hasPending) {
@@ -55,6 +63,76 @@ fun saveData() {
     }
 
     setContractData(b.endCell());
+}
+
+// -----------------------------------------------------
+// WALLET ADDRESS HELPERS
+// -----------------------------------------------------
+
+fun buildWalletData(owner: slice): cell {
+    return beginCell()
+        .storeCoins(0)
+        .storeSlice(owner)
+        .storeSlice(masterAddress)
+        .storeSlice(myAddress())
+        .storeRef(jettonWalletCode)
+        .endCell();
+}
+
+fun buildWalletStateInit(owner: slice): cell {
+    var walletData = buildWalletData(owner);
+
+    return beginCell()
+        .storeUint(0, 2)
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
+        .storeUint(0, 1)
+        .endCell();
+}
+
+fun buildWalletAddress(stateInit: cell): slice {
+    return beginCell()
+        .storeUint(4, 3)
+        .storeInt(0, 8)
+        .storeUint(stateInit.hash(), 256)
+        .endCell()
+        .beginParse();
+}
+
+fun sendInternalTransfer(
+    toOwner: slice,
+    jettonAmount: int,
+    fromOwner: slice,
+    responseDestination: slice,
+    queryId: int
+) {
+    if (jettonAmount <= 0) {
+        return;
+    }
+
+    var stateInit = buildWalletStateInit(toOwner);
+    var toWallet = buildWalletAddress(stateInit);
+
+    var body = beginCell()
+        .storeUint(OP_INTERNAL_TRANSFER, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(jettonAmount)
+        .storeSlice(fromOwner)
+        .storeSlice(responseDestination)
+        .storeCoins(0)
+        .storeBool(false)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeSlice(toWallet)
+        .storeCoins(0)
+        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+        .storeRef(stateInit)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 64);
 }
 
 // -----------------------------------------------------
@@ -89,9 +167,34 @@ fun onInternalMessage(
     // Пересылаем на реальный Gas Pool
     // =====================================================
     if (op == OP_GAS_POOL_EXECUTE) {
+        var queryId = msgBody.loadUint(64);
+        var jettonAmount = msgBody.loadCoins();
+        var toOwner = msgBody.loadMsgAddress();
+        var fromOwner = msgBody.loadMsgAddress();
+        var treasuryFee = msgBody.loadCoins();
+        var gasPoolFee = msgBody.loadCoins();
+
+        var expectedWallet = buildWalletAddress(
+            buildWalletStateInit(fromOwner)
+        );
+
+        assert(
+            senderAddress.equalSlices(expectedWallet),
+            ERROR_NOT_VALID_WALLET
+        );
+
+        assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(treasuryFee >= TAX_AMOUNT, ERROR_INVALID_AMOUNT);
+        assert(gasPoolFee >= TAX_HALF, ERROR_INVALID_AMOUNT);
+
         var fullBody = beginCell()
             .storeUint(OP_GAS_POOL_EXECUTE, 32)
-            .storeSlice(msgBody)
+            .storeUint(queryId, 64)
+            .storeCoins(jettonAmount)
+            .storeSlice(toOwner)
+            .storeSlice(fromOwner)
+            .storeCoins(treasuryFee)
+            .storeCoins(gasPoolFee)
             .endCell();
 
         var msg = beginCell()
@@ -103,6 +206,36 @@ fun onInternalMessage(
             .endCell();
 
         sendRawMessage(msg, 64);
+
+        return;
+    }
+
+    // =====================================================
+    // OP_PROXY_INTERNAL_TRANSFER — от реального Gas Pool
+    // Прокси делает OP_INTERNAL_TRANSFER в нужный wallet
+    // =====================================================
+    if (op == OP_PROXY_INTERNAL_TRANSFER) {
+        assert(
+            senderAddress.equalSlices(realGasPoolAddress),
+            ERROR_NOT_ADMIN
+        );
+
+        var queryId = msgBody.loadUint(64);
+        var jettonAmount = msgBody.loadCoins();
+        var toOwner = msgBody.loadMsgAddress();
+        var fromOwner = msgBody.loadMsgAddress();
+        var responseDestination = msgBody.loadMsgAddress();
+
+        assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+
+        sendInternalTransfer(
+            toOwner,
+            jettonAmount,
+            fromOwner,
+            responseDestination,
+            queryId
+        );
 
         return;
     }

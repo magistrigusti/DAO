@@ -51,6 +51,7 @@ const OP_CHANGE_TREASURY: int = 0xA5;
 const OP_REQUEST_CHANGE_POOL: int = 0xB0;
 const OP_CONFIRM_CHANGE_POOL: int = 0xB1;
 const OP_CANCEL_CHANGE_POOL: int = 0xB2;
+const OP_PROXY_INTERNAL_TRANSFER: int = 0xB3;
 
 // =====================================================
 // FRS ALLODIUM
