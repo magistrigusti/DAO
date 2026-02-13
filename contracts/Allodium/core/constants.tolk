@@ -14,8 +14,8 @@ const EXCHANGE_RATE_DOM_TO_ALLOD: int = 100;
 // 10^(DOM_DECIMALS - ALLOD_DECIMALS) = 10^(6 - 4) = 100
 const EXCHANGE_DECIMALS_FACTOR: int = 100;
 
-// Налог на transfer ALLOD: 0.05 TON
-const TAX_ALLOD_TON: int = 50000000;
+// Налог на transfer ALLOD: 0.03 TON
+const TAX_ALLOD_TON: int = 30000000;
 
 // TON на служебные сообщения
 const MIN_TON_FOR_TRANSFER: int = 150000000; // 0.15 TON
