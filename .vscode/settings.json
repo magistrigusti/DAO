@@ -1,3 +1,4 @@
 {
-  "workbench.colorTheme": "Solarized Light"
+  "workbench.colorTheme": "Default Dark+",
+  "workbench.preferredHighContrastLightColorTheme": "Cursor Dark Midnight"
 }
