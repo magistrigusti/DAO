@@ -1,3 +1,14 @@
+// =====================================================
+// GIVER DOMINUM — Автораспределение DOM для Dominum
+// =====================================================
+// При получении жетонов:
+// • 50% -> Bank Dominum
+// • 50% -> Dominum Foundation
+// Manager может:
+// • менять whitelist
+// • выставлять walletAddress
+// =====================================================
+
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
@@ -31,12 +42,16 @@ fun saveData() {
 fun buildFeePayload(): cell {
     return beginCell()
         .storeUint(FEE_MAGIC, 32)
-        .storeCoins(TAX_AMOUNT)  // единый налог в DOM Treasury
-        .storeCoins(TAX_HALF)    // комиссия Gas Pool
+        .storeCoins(TAX_AMOUNT)
+        .storeCoins(TAX_HALF)
         .endCell();
 }
 
-fun sendJettons(toAddress: slice, amount: int, queryId: int) {
+fun sendJettons(
+    toAddress: slice,
+    amount: int,
+    queryId: int
+) {
     if (amount <= 0) {
         return;
     }
@@ -104,16 +119,41 @@ fun onInternalMessage(
     var queryId = msgBody.loadUint(64);
 
     if (op == OP_TRANSFER_NOTIFICATION) {
-        assert(senderAddress.equalSlices(walletAddress), ERROR_NOT_OWNER);
+        assert(
+            senderAddress.equalSlices(walletAddress),
+            ERROR_NOT_OWNER
+        );
+
         var amount = msgBody.loadCoins();
         autoDistribute(amount, queryId);
         return;
     }
 
+    // =====================================================
+    // OP_SET_WALLET — только Manager
+    // payload: walletAddress
+    // =====================================================
+    if (op == OP_SET_WALLET) {
+        assert(
+            senderAddress.equalSlices(managerAddress),
+            ERROR_NOT_MANAGER
+        );
+
+        var newWalletAddress = msgBody.loadMsgAddress();
+        walletAddress = newWalletAddress;
+        saveData();
+        return;
+    }
+
     if (op == OP_CHANGE_WHITELIST) {
-        assert(senderAddress.equalSlices(managerAddress), ERROR_NOT_MANAGER);
+        assert(
+            senderAddress.equalSlices(managerAddress),
+            ERROR_NOT_MANAGER
+        );
+
         var newAddress1 = msgBody.loadMsgAddress();
         var newAddress2 = msgBody.loadMsgAddress();
+
         bankDominumAddress = newAddress1;
         dominumFoundationAddress = newAddress2;
         saveData();

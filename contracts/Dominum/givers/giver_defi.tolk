@@ -1,11 +1,12 @@
 // =====================================================
 // GIVER DEFI — Автораспределение DOM для DeFi-блока
 // =====================================================
-// При получении жетонов — АВТОМАТИЧЕСКИ:
-// • 50% → Foundry (Dual-Sign контракт)
-// • 50% → Market Maker (биржевые операции)
-// Manager может: ТОЛЬКО менять whitelist (2 адреса)
-// Налог DOM + комиссия Gas Pool снимаются всегда.
+// При получении жетонов:
+// • 50% -> DeFi Bank
+// • 50% -> Dual/Foundry
+// Manager может:
+// • менять whitelist
+// • выставлять walletAddress
 // =====================================================
 
 import "../core/op_codes.tolk";
@@ -16,7 +17,6 @@ const FEE_MAGIC: int = 0xDA0FEE01;
 
 global managerAddress: slice;
 global walletAddress: slice;
-
 global defiBankAddress: slice;
 global defiDualAddress: slice;
 
@@ -25,7 +25,6 @@ fun loadData() {
 
     managerAddress = ds.loadMsgAddress();
     walletAddress = ds.loadMsgAddress();
-
     defiBankAddress = ds.loadMsgAddress();
     defiDualAddress = ds.loadMsgAddress();
 }
@@ -44,8 +43,8 @@ fun saveData() {
 fun buildFeePayload(): cell {
     return beginCell()
         .storeUint(FEE_MAGIC, 32)
-        .storeCoins(TAX_AMOUNT)  // единый налог в DOM Treasury
-        .storeCoins(TAX_HALF)    // комиссия Gas Pool
+        .storeCoins(TAX_AMOUNT)
+        .storeCoins(TAX_HALF)
         .endCell();
 }
 
@@ -129,6 +128,22 @@ fun onInternalMessage(
         var amount = msgBody.loadCoins();
         autoDistribute(amount, queryId);
 
+        return;
+    }
+
+    // =====================================================
+    // OP_SET_WALLET — только Manager
+    // payload: walletAddress
+    // =====================================================
+    if (op == OP_SET_WALLET) {
+        assert(
+            senderAddress.equalSlices(managerAddress),
+            ERROR_NOT_MANAGER
+        );
+
+        var newWalletAddress = msgBody.loadMsgAddress();
+        walletAddress = newWalletAddress;
+        saveData();
         return;
     }
 
