@@ -7,7 +7,7 @@ import "../core/constants";
 // =====================================================
 // Управляется: ownerAddress (сид/QR)
 // Функции:
-// - управляет Gas Pool напрямую (курс/вывод/пополнение)
+// - управляет Gas Pool напрямую (вывод/пополнение)
 // - может выводить TON и (опционально) DOM со своего jetton wallet
 // Владельца не меняем.
 // =====================================================
@@ -114,28 +114,6 @@ fun onInternalMessage(
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadMsgAddress();
         withdrawDomJettons(toAddress, amount, queryId);
-        return;
-    }
-
-    if (op == OP_UPDATE_POOL_RATE) {
-        requireOwner(senderAddress);
-        var newRate = msgBody.loadUint(32);
-
-        var body = beginCell()
-            .storeUint(OP_UPDATE_RATE, 32)
-            .storeUint(queryId, 64)
-            .storeUint(newRate, 32)
-            .endCell();
-
-        var msg = beginCell()
-            .storeUint(0x18, 6)
-            .storeSlice(gasPoolAddress)
-            .storeCoins(MIN_TON_FOR_STORAGE)
-            .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-            .storeRef(body)
-            .endCell();
-
-        sendRawMessage(msg, 1);
         return;
     }
 

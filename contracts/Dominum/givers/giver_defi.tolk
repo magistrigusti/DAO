@@ -13,8 +13,6 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-const FEE_MAGIC: int = 0xDA0FEE01;
-
 global managerAddress: slice;
 global walletAddress: slice;
 global defiBankAddress: slice;
@@ -40,14 +38,6 @@ fun saveData() {
     );
 }
 
-fun buildFeePayload(): cell {
-    return beginCell()
-        .storeUint(FEE_MAGIC, 32)
-        .storeCoins(TAX_AMOUNT)
-        .storeCoins(TAX_HALF)
-        .endCell();
-}
-
 fun sendJettons(
     toAddress: slice,
     amount: int,
@@ -57,16 +47,13 @@ fun sendJettons(
         return;
     }
 
-    var payload = buildFeePayload();
-
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeSlice(toAddress)
         .storeSlice(toAddress)
-        .storeBool(true)
-        .storeRef(payload)
+        .storeBool(false)
         .storeCoins(0)
         .storeBool(false)
         .endCell();

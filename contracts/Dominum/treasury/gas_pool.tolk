@@ -165,8 +165,10 @@ fun onInternalMessage(
         var gasPoolFee = msgBody.loadCoins();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-        assert(treasuryFee >= TAX_AMOUNT, ERROR_INVALID_AMOUNT);
-        assert(gasPoolFee >= TAX_HALF, ERROR_INVALID_AMOUNT);
+
+        // Фиксированные комиссии без курса.
+        assert(treasuryFee == TAX_AMOUNT, ERROR_INVALID_AMOUNT);
+        assert(gasPoolFee == TAX_HALF, ERROR_INVALID_AMOUNT);
 
         var tonForTransfers = MIN_TON_FOR_STORAGE * 2;
         var availableTon = myBalance - tonReserve;

@@ -22,6 +22,11 @@ const TIMELOCK_PERIOD: int = 172800;
 
 global adminAddress: slice;
 global realGasPoolAddress: slice;
+
+// Одноразовая конфигурация для проверки sender Wallet.
+// Это нужно, чтобы разорвать циклическую зависимость
+// на этапе деплоя (master <-> gas_proxy).
+global walletConfigReady: int;
 global masterAddress: slice;
 global jettonWalletCode: cell;
 
@@ -34,13 +39,28 @@ global hasPending: int;
 // LOAD / SAVE
 // -----------------------------------------------------
 
+fun getNullAddress(): slice {
+    return beginCell()
+        .storeUint(0, 2)
+        .endCell()
+        .beginParse();
+}
+
 fun loadData() {
     var ds = getContractData().beginParse();
 
     adminAddress = ds.loadMsgAddress();
     realGasPoolAddress = ds.loadMsgAddress();
-    masterAddress = ds.loadMsgAddress();
-    jettonWalletCode = ds.loadRef();
+    walletConfigReady = ds.loadBool();
+
+    if (walletConfigReady) {
+        masterAddress = ds.loadMsgAddress();
+        jettonWalletCode = ds.loadRef();
+    } else {
+        masterAddress = getNullAddress();
+        jettonWalletCode = beginCell().endCell();
+    }
+
     hasPending = ds.loadBool();
 
     if (hasPending) {
@@ -53,9 +73,14 @@ fun saveData() {
     var b = beginCell()
         .storeSlice(adminAddress)
         .storeSlice(realGasPoolAddress)
-        .storeSlice(masterAddress)
-        .storeRef(jettonWalletCode)
-        .storeBool(hasPending);
+        .storeBool(walletConfigReady);
+
+    if (walletConfigReady) {
+        b = b.storeSlice(masterAddress)
+             .storeRef(jettonWalletCode);
+    }
+
+    b = b.storeBool(hasPending);
 
     if (hasPending) {
         b = b.storeSlice(pendingAddress)
@@ -69,7 +94,13 @@ fun saveData() {
 // WALLET ADDRESS HELPERS
 // -----------------------------------------------------
 
+fun assertWalletConfigReady() {
+    assert(walletConfigReady, ERROR_PROXY_NOT_CONFIGURED);
+}
+
 fun buildWalletData(owner: slice): cell {
+    assertWalletConfigReady();
+
     return beginCell()
         .storeCoins(0)
         .storeSlice(owner)
@@ -163,6 +194,27 @@ fun onInternalMessage(
     var op = msgBody.loadUint(32);
 
     // =====================================================
+    // OP_SET_PROXY_WALLET_CONFIG — одноразовая настройка
+    // Только admin. После первого вызова изменить нельзя.
+    // Формат body: op | queryId | masterAddress | walletCodeRef
+    // =====================================================
+    if (op == OP_SET_PROXY_WALLET_CONFIG) {
+        assert(
+            senderAddress.equalSlices(adminAddress),
+            ERROR_NOT_ADMIN
+        );
+        assert(!walletConfigReady, ERROR_ALREADY_INITIALIZED);
+
+        msgBody.loadUint(64);
+        masterAddress = msgBody.loadMsgAddress();
+        jettonWalletCode = msgBody.loadRef();
+        walletConfigReady = true;
+        saveData();
+
+        return;
+    }
+
+    // =====================================================
     // OP_GAS_POOL_EXECUTE — от Wallet
     // Пересылаем на реальный Gas Pool
     // =====================================================
@@ -174,6 +226,8 @@ fun onInternalMessage(
         var treasuryFee = msgBody.loadCoins();
         var gasPoolFee = msgBody.loadCoins();
 
+        assertWalletConfigReady();
+
         var expectedWallet = buildWalletAddress(
             buildWalletStateInit(fromOwner)
         );
@@ -184,8 +238,10 @@ fun onInternalMessage(
         );
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-        assert(treasuryFee >= TAX_AMOUNT, ERROR_INVALID_AMOUNT);
-        assert(gasPoolFee >= TAX_HALF, ERROR_INVALID_AMOUNT);
+
+        // Фиксированные комиссии без курса.
+        assert(treasuryFee == TAX_AMOUNT, ERROR_INVALID_AMOUNT);
+        assert(gasPoolFee == TAX_HALF, ERROR_INVALID_AMOUNT);
 
         var fullBody = beginCell()
             .storeUint(OP_GAS_POOL_EXECUTE, 32)
@@ -228,6 +284,7 @@ fun onInternalMessage(
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
         assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assertWalletConfigReady();
 
         sendInternalTransfer(
             toOwner,
@@ -310,6 +367,22 @@ get fun getProxyData(): (slice, slice, int) {
         adminAddress,
         realGasPoolAddress,
         hasPending
+    );
+}
+
+get fun getWalletConfig(): (int, slice) {
+    loadData();
+
+    if (!walletConfigReady) {
+        return (
+            false,
+            getNullAddress()
+        );
+    }
+
+    return (
+        true,
+        masterAddress
     );
 }
 

@@ -34,8 +34,6 @@ const OP_WITHDRAW_JETTONS: int = 0x52;
 const OP_UPDATE_GAS_POOL: int = 0x53;
 const OP_WITHDRAW_FROM_POOL: int = 0x54;
 const OP_REFILL_POOL: int = 0x55;
-const OP_UPDATE_POOL_RATE: int = 0x56;
-const OP_UPDATE_RATE: int = 0x57;
 
 // =====================================================
 // GAS POOL ОПЕРАЦИИ
@@ -54,6 +52,7 @@ const OP_REQUEST_CHANGE_POOL: int = 0xB0;
 const OP_CONFIRM_CHANGE_POOL: int = 0xB1;
 const OP_CANCEL_CHANGE_POOL: int = 0xB2;
 const OP_PROXY_INTERNAL_TRANSFER: int = 0xB3;
+const OP_SET_PROXY_WALLET_CONFIG: int = 0xB4;
 
 // =====================================================
 // FRS ALLODIUM

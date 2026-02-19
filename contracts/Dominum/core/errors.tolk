@@ -27,3 +27,5 @@ const ERROR_TOO_EARLY: int = 91;
 // Ошибки Proxy
 const ERROR_NO_PENDING: int = 92;
 const ERROR_NOT_ENOUGH_BALANCE: int = 93;
+const ERROR_ALREADY_INITIALIZED: int = 94;
+const ERROR_PROXY_NOT_CONFIGURED: int = 95;

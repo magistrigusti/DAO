@@ -11,8 +11,6 @@ import "../core/constants.tolk";
 // Возврата TON нет — это "входной билет".
 // =====================================================
 
-const FEE_MAGIC: int = 0xDA0FEE01;
-
 global balance: int;
 global ownerAddress: slice;
 global masterAddress: slice;
@@ -193,32 +191,11 @@ fun onInternalMessage(
         var responseDestination = msgBody.loadMsgAddress();
         
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-        
-        // Читаем комиссии из custom_payload
-        var hasCustom = msgBody.loadBool();
-        
-        // Единый налог в DOM Treasury
+
+        // Фиксированная модель без курса:
+        // комиссии всегда равны константам.
         var treasuryFee: int = TAX_AMOUNT;
-        // Комиссия Gas Pool
         var gasPoolFee: int = TAX_HALF;
-        
-        if (hasCustom) {
-            var payload = msgBody.loadRef().beginParse();
-            var magic = payload.loadUint(32);
-            
-            if (magic == FEE_MAGIC) {
-                var newTreasuryFee = payload.loadCoins();
-                var newGasFee = payload.loadCoins();
-                
-                // Не меньше минимума
-                if (newTreasuryFee > treasuryFee) {
-                    treasuryFee = newTreasuryFee;
-                }
-                if (newGasFee > gasPoolFee) {
-                    gasPoolFee = newGasFee;
-                }
-            }
-        }
         
         var totalFee = treasuryFee + gasPoolFee;
         var totalSpend = jettonAmount + totalFee;

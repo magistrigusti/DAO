@@ -8,7 +8,8 @@
   },
   "scripts": {
     "build": "npx blueprint build",
-    "test": "npx blueprint test",
+    "test": "node --test --require ts-node/register \"tests/**/*.test.ts\"",
+    "test:blueprint": "npx blueprint test",
     "deploy": "npx blueprint run",
     "compile": "npx blueprint build --all"
   },
