@@ -2,6 +2,12 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
+// ========== TOLK MIGRATION v1.2 ==========
+// Контракт переписан с legacy API на новый Tolk API.
+// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
+// Статус: migrated
+// =========================================
+
 // =====================================================
 // JETTON MASTER — Главный контракт токена DOM (TEP-74)
 // =====================================================
@@ -10,9 +16,9 @@ import "../core/constants.tolk";
 //
 // Распределение минта (4 гивера):
 // - 30% Allodium  → FRS + Foundation
-// - 20% DeFi     → Foundry + Market Maker
-// - 25% DAO      → Bank DAO + DAO Foundation
-// - 25% Dominum  → Bank Dominum + Dominum Foundation
+// - 20% DeFi      → Foundry + Market Maker
+// - 25% DAO       → Bank DAO + DAO Foundation
+// - 25% Dominum   → Bank Dominum + Dominum Foundation
 //
 // Wallet storage:
 // (balance, owner, master, gasProxy, walletCode)
@@ -32,13 +38,13 @@ const SHARE_TOTAL: int =
 
 global totalSupply: int;
 
-global minterAddress: slice;
-global gasPoolAddress: slice;
+global minterAddress: address;
+global gasPoolAddress: address;
 
-global giverAllodiumAddress: slice;
-global giverDefiAddress: slice;
-global giverDaoAddress: slice;
-global giverDominumAddress: slice;
+global giverAllodiumAddress: address;
+global giverDefiAddress: address;
+global giverDaoAddress: address;
+global giverDominumAddress: address;
 
 global content: cell;
 global jettonWalletCode: cell;
@@ -48,19 +54,19 @@ global jettonWalletCode: cell;
 // -----------------------------------------------------
 
 fun loadData() {
-    var ds = getContractData().beginParse();
+    var ds = contract.getData().beginParse();
 
     totalSupply = ds.loadCoins();
 
-    minterAddress = ds.loadMsgAddress();
-    gasPoolAddress = ds.loadMsgAddress();
+    minterAddress = ds.loadAddress();
+    gasPoolAddress = ds.loadAddress();
 
     var givers = ds.loadRef().beginParse();
 
-    giverAllodiumAddress = givers.loadMsgAddress();
-    giverDefiAddress = givers.loadMsgAddress();
-    giverDaoAddress = givers.loadMsgAddress();
-    giverDominumAddress = givers.loadMsgAddress();
+    giverAllodiumAddress = givers.loadAddress();
+    giverDefiAddress = givers.loadAddress();
+    giverDaoAddress = givers.loadAddress();
+    giverDominumAddress = givers.loadAddress();
 
     content = ds.loadRef();
     jettonWalletCode = ds.loadRef();
@@ -68,17 +74,17 @@ fun loadData() {
 
 fun saveData() {
     var givers = beginCell()
-        .storeSlice(giverAllodiumAddress)
-        .storeSlice(giverDefiAddress)
-        .storeSlice(giverDaoAddress)
-        .storeSlice(giverDominumAddress)
+        .storeAddress(giverAllodiumAddress)
+        .storeAddress(giverDefiAddress)
+        .storeAddress(giverDaoAddress)
+        .storeAddress(giverDominumAddress)
         .endCell();
 
-    setContractData(
+    contract.setData(
         beginCell()
             .storeCoins(totalSupply)
-            .storeSlice(minterAddress)
-            .storeSlice(gasPoolAddress)
+            .storeAddress(minterAddress)
+            .storeAddress(gasPoolAddress)
             .storeRef(givers)
             .storeRef(content)
             .storeRef(jettonWalletCode)
@@ -90,17 +96,17 @@ fun saveData() {
 // WALLET ADDRESS
 // -----------------------------------------------------
 
-fun calculateWalletData(owner: slice): cell {
+fun calculateWalletData(owner: address): cell {
     return beginCell()
         .storeCoins(0)
-        .storeSlice(owner)
-        .storeSlice(myAddress())
-        .storeSlice(gasPoolAddress)
+        .storeAddress(owner)
+        .storeAddress(contract.getAddress())
+        .storeAddress(gasPoolAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
 
-fun calculateWalletStateInit(owner: slice): cell {
+fun calculateWalletStateInit(owner: address): cell {
     var walletData = calculateWalletData(owner);
 
     return beginCell()
@@ -111,13 +117,9 @@ fun calculateWalletStateInit(owner: slice): cell {
         .endCell();
 }
 
-fun calculateWalletAddress(stateInit: cell): slice {
-    return beginCell()
-        .storeUint(4, 3)
-        .storeInt(0, 8)
-        .storeUint(stateInit.hash(), 256)
-        .endCell()
-        .beginParse();
+fun calculateWalletAddress(stateInit: cell): address {
+    var wc = contract.getAddress().getWorkchain();
+    return address.fromWorkchainAndHash(wc, stateInit.hash());
 }
 
 // -----------------------------------------------------
@@ -125,7 +127,7 @@ fun calculateWalletAddress(stateInit: cell): slice {
 // -----------------------------------------------------
 
 fun sendToWallet(
-    toOwner: slice,
+    toOwner: address,
     jettonAmount: int,
     queryId: int,
     msgValue: int
@@ -137,15 +139,15 @@ fun sendToWallet(
         .storeUint(OP_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(jettonAmount)
-        .storeSlice(myAddress())
-        .storeSlice(toOwner)
+        .storeAddress(contract.getAddress())
+        .storeAddress(toOwner)
         .storeCoins(0)
         .storeBool(false)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeAddress(walletAddress)
         .storeCoins(msgValue)
         .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
         .storeRef(stateInit)
@@ -213,24 +215,15 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
 // MESSAGES
 // -----------------------------------------------------
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
     if (msgBody.isEndOfSlice()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
-        return;
-    }
-
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
+    var msgValue = in.valueCoins;
 
     loadData();
 
@@ -242,7 +235,7 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_MINT) {
         assert(
-            senderAddress.equalSlices(minterAddress),
+            senderAddress == minterAddress,
             ERROR_NOT_MINTER
         );
 
@@ -258,26 +251,26 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_BURN_NOTIFICATION) {
         var burnAmount = msgBody.loadCoins();
-        var fromOwner = msgBody.loadMsgAddress();
+        var fromOwner = msgBody.loadAddress();
 
         var expectedWallet = calculateWalletAddress(
             calculateWalletStateInit(fromOwner)
         );
 
         assert(
-            senderAddress.equalSlices(expectedWallet),
+            senderAddress == expectedWallet,
             ERROR_NOT_VALID_WALLET
         );
 
         totalSupply = totalSupply - burnAmount;
         saveData();
 
-        var responseAddress = msgBody.loadMsgAddress();
+        var responseAddress = msgBody.loadAddressOpt();
 
-        if (~responseAddress.isAddressNone()) {
+        if (responseAddress != null) {
             var msg = beginCell()
                 .storeUint(0x10, 6)
-                .storeSlice(responseAddress)
+                .storeAddress(responseAddress)
                 .storeCoins(0)
                 .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                 .storeUint(OP_EXCESSES, 32)
@@ -297,7 +290,7 @@ fun onInternalMessage(
 // GETTERS
 // -----------------------------------------------------
 
-get fun getJettonData(): (int, int, slice, cell, cell) {
+get fun getJettonData(): (int, int, address, cell, cell) {
     loadData();
 
     return (
@@ -309,14 +302,14 @@ get fun getJettonData(): (int, int, slice, cell, cell) {
     );
 }
 
-get fun getWalletAddress(ownerAddress: slice): slice {
+get fun getWalletAddress(ownerAddress: address): address {
     loadData();
 
     var stateInit = calculateWalletStateInit(ownerAddress);
     return calculateWalletAddress(stateInit);
 }
 
-get fun getMasterData(): (slice, slice) {
+get fun getMasterData(): (address, address) {
     loadData();
 
     return (
@@ -325,7 +318,7 @@ get fun getMasterData(): (slice, slice) {
     );
 }
 
-get fun getGiversData(): (slice, slice, slice, slice) {
+get fun getGiversData(): (address, address, address, address) {
     loadData();
 
     return (
