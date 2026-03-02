@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import { resolve } from 'node:path';
+
+import { config as loadEnv } from 'dotenv';
 
 import { loadMonitorConfig } from './config/env.config.js';
 import { TonProvider } from './providers/ton.provider.js';
@@ -6,9 +8,22 @@ import { PoolMetricsService } from './services/metrics/pool-metrics.service.js';
 import { SnapshotWriterService } from './services/output/snapshot-writer.service.js';
 import { GasPoolReaderService } from './services/pools/gas-pool-reader.service.js';
 import { MarketMakerReaderService } from './services/pools/market-maker-reader.service.js';
-import type { MonitorSnapshot } from './types/monitor.types.js';
+import type {
+    GasPoolView,
+    MarketMakerView,
+    MonitorSnapshot,
+} from './types/monitor.types.js';
 
 const ERROR_RETRY_DELAY_MS = 5000;
+
+// ========== ЗАГРУЗКА ENV ==========
+loadEnv({
+    path: resolve(process.cwd(), '.env'),
+});
+
+loadEnv({
+    path: resolve(process.cwd(), '.env.example'),
+});
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
@@ -31,23 +46,97 @@ function printCycleResult(
     const gasPool = snapshot.pools.gasPool;
     const marketMaker = snapshot.pools.marketMaker;
 
-    console.log(
-        `[monitor-node] ${snapshot.generatedAt} ` +
-        `price TON/DOM=${gasPool.priceTonPerDom} ` +
-        `DOM delta=${gasPool.volumes.domDelta} ` +
-        `TON delta=${gasPool.volumes.tonDelta}`
-    );
-
-    if (marketMaker) {
+    if (gasPool.status === 'ok') {
         console.log(
-            `[monitor-node] market-maker ` +
-            `DOM delta=${marketMaker.volumes.domDelta} ` +
-            `TON delta=${marketMaker.volumes.tonDelta} ` +
-            `whitelist=${marketMaker.whitelistCount}`
+            `[monitor-node] ${snapshot.generatedAt} ` +
+            `price TON/DOM=${gasPool.priceTonPerDom} ` +
+            `DOM delta=${gasPool.volumes.domDelta} ` +
+            `TON delta=${gasPool.volumes.tonDelta}`
+        );
+    } else {
+        console.log(
+            `[monitor-node] ${snapshot.generatedAt} ` +
+            `gas-pool read failed: ${gasPool.error ?? 'Unknown error'}`
         );
     }
 
+    if (marketMaker) {
+        if (marketMaker.status === 'ok') {
+            console.log(
+                `[monitor-node] market-maker ` +
+                `DOM delta=${marketMaker.volumes.domDelta} ` +
+                `TON delta=${marketMaker.volumes.tonDelta} ` +
+                `whitelist=${marketMaker.whitelistCount}`
+            );
+        } else {
+            console.log(
+                `[monitor-node] market-maker read failed: ` +
+                `${marketMaker.error ?? 'Unknown error'}`
+            );
+        }
+    }
+
     console.log(`[monitor-node] snapshot saved: ${outputFilePath}`);
+}
+
+function buildGasPoolErrorView(
+    address: string,
+    error: string
+): GasPoolView {
+    return {
+        status: 'error',
+        error,
+        readAt: new Date().toISOString(),
+        address,
+        adminAddress: '',
+        proxyAddress: '',
+        domTreasuryAddress: '',
+        priceTonPerDom: '0',
+        balances: {
+            dom: '0',
+            tonReserve: '0',
+            tonAvailable: '0',
+        },
+        raw: {
+            domBalanceNano: '0',
+            tonReserveNano: '0',
+            availableTonNano: '0',
+        },
+        volumes: {
+            domDelta: '0',
+            tonDelta: '0',
+            intervalMs: null,
+        },
+    };
+}
+
+function buildMarketMakerErrorView(
+    address: string,
+    error: string
+): MarketMakerView {
+    return {
+        status: 'error',
+        error,
+        readAt: new Date().toISOString(),
+        address,
+        ownerAddress: '',
+        walletAddress: '',
+        walletGasPoolAddress: '',
+        whitelistCount: 0,
+        balances: {
+            dom: '0',
+            ton: '0',
+        },
+        raw: {
+            domBalanceNano: '0',
+            tonBalanceNano: '0',
+        },
+        volumes: {
+            domDelta: '0',
+            tonDelta: '0',
+            intervalMs: null,
+        },
+    };
 }
 
 // ========== ГЛАВНЫЙ ЦИКЛ НОДЫ ==========
@@ -88,14 +177,35 @@ async function run(): Promise<void> {
 
     while (true) {
         try {
-            const gasPoolRaw = await gasPoolReader.readState();
-            const gasPoolView = metrics.toGasPoolView(gasPoolRaw);
+            let gasPoolView: GasPoolView;
 
-            const marketMakerView = marketMakerReader
-                ? metrics.toMarketMakerView(
-                      await marketMakerReader.readState()
-                  )
-                : undefined;
+            try {
+                const gasPoolRaw = await gasPoolReader.readState();
+                gasPoolView = metrics.toGasPoolView(gasPoolRaw);
+            } catch (error) {
+                gasPoolView = buildGasPoolErrorView(
+                    config.gasPoolAddress,
+                    getErrorMessage(error)
+                );
+            }
+
+            let marketMakerView: MarketMakerView | undefined;
+
+            if (marketMakerReader && config.marketMakerAddress) {
+                try {
+                    const marketMakerRaw =
+                        await marketMakerReader.readState();
+
+                    marketMakerView = metrics.toMarketMakerView(
+                        marketMakerRaw
+                    );
+                } catch (error) {
+                    marketMakerView = buildMarketMakerErrorView(
+                        config.marketMakerAddress,
+                        getErrorMessage(error)
+                    );
+                }
+            }
 
             const snapshot: MonitorSnapshot = {
                 generatedAt: new Date().toISOString(),

@@ -26,9 +26,12 @@ export type DomMasterConfig = {
 export function domMasterConfigToCell(
     config: DomMasterConfig
 ): Cell {
-    const giversCell = beginCell()
+    const giversFirstCell = beginCell()
         .storeAddress(config.giverAllodiumAddress)
         .storeAddress(config.giverDefiAddress)
+        .endCell();
+
+    const giversSecondCell = beginCell()
         .storeAddress(config.giverDaoAddress)
         .storeAddress(config.giverDominumAddress)
         .endCell();
@@ -37,7 +40,8 @@ export function domMasterConfigToCell(
         .storeCoins(config.totalSupply)
         .storeAddress(config.minterAddress)
         .storeAddress(config.gasPoolAddress)
-        .storeRef(giversCell)
+        .storeRef(giversFirstCell)
+        .storeRef(giversSecondCell)
         .storeRef(config.content)
         .storeRef(config.jettonWalletCode)
         .endCell();

@@ -166,4 +166,27 @@ export class GasProxy implements Contract {
             masterAddress: result.stack.readAddressOpt(),
         };
     }
+
+    async getProxyData(provider: ContractProvider) {
+        const result = await provider.get('getProxyData', []);
+
+        return {
+            adminAddress: result.stack.readAddress(),
+            realGasPoolAddress: result.stack.readAddress(),
+            hasPending: result.stack.readBoolean(),
+        };
+    }
+
+    async getPendingChange(provider: ContractProvider) {
+        const result = await provider.get(
+            'getPendingChange',
+            []
+        );
+
+        return {
+            hasPending: result.stack.readBoolean(),
+            pendingAddress: result.stack.readAddressOpt(),
+            pendingTime: result.stack.readBigNumber(),
+        };
+    }
 }

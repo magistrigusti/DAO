@@ -1,0 +1,305 @@
+"Asm.fif" include
+// automatically generated from giver_allodium.tolk, op_codes.tolk, errors.tolk, constants.tolk
+PROGRAM{
+  DECLPROC sendJettons()
+  0 DECLMETHOD onInternalMessage()
+  82953 DECLMETHOD getGiverData()
+  // 3 functions inlined in-place:
+  // - loadData (2 calls)
+  // - saveData (2 calls)
+  // - autoDistribute (1 call)
+  DECLGLOBVAR $managerAddress
+  DECLGLOBVAR $walletAddress
+  DECLGLOBVAR $frsAllodiumAddress
+  DECLGLOBVAR $allodiumFoundationAddress
+  // contracts/Dominum/givers/giver_allodium.tolk:59
+  sendJettons() PROC:<{       	//  toAddress amount queryId
+    // 64: if (amount <= 0)
+    OVER                    	//  toAddress amount queryId amount
+    1 LESSINT               	//  toAddress amount queryId '4
+    IFJMP:<{                	//  toAddress amount queryId
+      3 BLKDROP             	// 
+    }>                      	//  toAddress amount queryId
+    // 68: assert(walletAddress != null, ERROR_NOT_VALID_WALLET)
+    $walletAddress GETGLOB  	//  toAddress amount queryId g_walletAddress
+    ISNULL                  	//  toAddress amount queryId '7
+    85 THROWIF              	//  toAddress amount queryId
+    // 70: var currentWalletAddress = walletAddress!
+    $walletAddress GETGLOB  	//  toAddress amount queryId currentWalletAddress
+    // 72: var msgBody = beginCell()
+    NEWC                    	//  toAddress amount queryId currentWalletAddress '12
+    // 73: .storeUint(OP_TRANSFER, 32)
+    x{0f8a7ea5} STSLICECONST	//  toAddress amount queryId currentWalletAddress '12
+    // 74: .storeUint(queryId, 64)
+    s1 s2 XCHG              	//  toAddress amount currentWalletAddress queryId '12
+    64 STU                  	//  toAddress amount currentWalletAddress '12
+    ROT                     	//  toAddress currentWalletAddress '12 amount
+    // 75: .storeCoins(amount)
+    STGRAMS                 	//  toAddress currentWalletAddress '12
+    s2 s(-1) PUXC           	//  toAddress currentWalletAddress toAddress '12
+    // 76: .storeAddress(toAddress)
+    STSTDADDR               	//  toAddress currentWalletAddress '12
+    // 77: .storeAddress(toAddress)
+    s1 s2 XCHG              	//  currentWalletAddress toAddress '12
+    STSTDADDR               	//  currentWalletAddress '12
+    // 78: .storeBool(false)
+    b{000000} STSLICECONST  	//  currentWalletAddress '12
+    // 81: .endCell()
+    ENDC                    	//  currentWalletAddress msgBody
+    // 83: var msg = beginCell()
+    NEWC                    	//  currentWalletAddress msgBody '29
+    // 84: .storeUint(0x18, 6)
+    b{011000} STSLICECONST  	//  currentWalletAddress msgBody '29
+    // 85: .storeAddress(currentWalletAddress)
+    s1 s2 XCHG              	//  msgBody currentWalletAddress '29
+    STSTDADDR               	//  msgBody '29
+    // 86: .storeCoins(MIN_TON_FOR_TRANSFER)
+    150000000 PUSHINT       	//  msgBody '29 '33=150000000
+    // 83: var msg = beginCell()
+    // ...86: .storeCoins(MIN_TON_FOR_TRANSFER)
+    STGRAMS                 	//  msgBody '29
+    // 87: .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    1 PUSHINT
+    107 STUR                	//  msgBody '29
+    // 88: .storeRef(msgBody)
+    STREF                   	//  '29
+    // 89: .endCell()
+    ENDC                    	//  msg
+    // 91: sendRawMessage(msg, 1)
+    1 PUSHINT               	//  msg '52=1
+    SENDRAWMSG              	// 
+  }>
+  // contracts/Dominum/givers/giver_allodium.tolk:110
+  onInternalMessage() PROC:<{ 	//  in.body
+    // 110: fun onInternalMessage(in: InMessage)
+    INMSG_BOUNCED           	//  in.body '1
+    0 THROWIF               	//  msgBody
+    // 113: if (msgBody.isEmpty())
+    DUP                     	//  msgBody msgBody
+    SEMPTY                  	//  msgBody '5
+    IFJMP:<{                	//  msgBody
+      // 114: return
+      DROP                  	// 
+    }>                      	//  msgBody
+    // 117: var senderAddress = in.senderAddress
+    INMSG_SRC               	//  msgBody senderAddress
+    // 34: var ds = contract.getData().beginParse()
+    c4 PUSH                 	//  msgBody senderAddress '10
+    CTOS                    	//  msgBody senderAddress ds
+    // 36: managerAddress = ds.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress '12 ds
+    SWAP                    	//  msgBody senderAddress ds '12
+    $managerAddress SETGLOB 	//  msgBody senderAddress ds
+    // 37: walletAddress = ds.loadAddressOpt()
+    LDOPTSTDADDR            	//  msgBody senderAddress '16 ds
+    SWAP                    	//  msgBody senderAddress ds '16
+    $walletAddress SETGLOB  	//  msgBody senderAddress ds
+    // 39: var targets = ds.loadRef().beginParse()
+    PLDREF                  	//  msgBody senderAddress '23
+    CTOS                    	//  msgBody senderAddress targets
+    // 40: frsAllodiumAddress = targets.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress '25 targets
+    SWAP                    	//  msgBody senderAddress targets '25
+    $frsAllodiumAddress SETGLOB	//  msgBody senderAddress targets
+    // 41: allodiumFoundationAddress = targets.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress '31 '30
+    DROP                    	//  msgBody senderAddress '29
+    $allodiumFoundationAddress SETGLOB	//  msgBody senderAddress
+    // 121: var op = msgBody.loadUint(32)
+    SWAP                    	//  senderAddress msgBody
+    32 LDU                  	//  senderAddress op msgBody
+    // 122: var queryId = msgBody.loadUint(64)
+    64 LDU                  	//  senderAddress op queryId msgBody
+    // 124: if (op == OP_TRANSFER_NOTIFICATION)
+    s2 PUSH
+    1935855772 PUSHINT      	//  senderAddress op queryId msgBody op '43=1935855772
+    EQUAL                   	//  senderAddress op queryId msgBody '44
+    IFJMP:<{                	//  senderAddress op queryId msgBody
+      // 127: ERROR_NOT_VALID_WALLET
+      s2 POP                	//  senderAddress msgBody queryId
+      // 126: walletAddress != null
+      $walletAddress GETGLOB	//  senderAddress msgBody queryId g_walletAddress
+      ISNULL                	//  senderAddress msgBody queryId '47
+      85 THROWIF            	//  senderAddress msgBody queryId
+      // 131: senderAddress == walletAddress!
+      $walletAddress GETGLOB	//  senderAddress msgBody queryId g_walletAddress
+      s1 s3 XCHG            	//  queryId msgBody senderAddress g_walletAddress
+      SDEQ                  	//  queryId msgBody '50
+      // 130: assert(
+      75 THROWIFNOT         	//  queryId msgBody
+      // 135: var amount = msgBody.loadCoins()
+      LDGRAMS               	//  queryId '53 '52
+      DROP                  	//  queryId amount
+      // 95: var feeTotal = TAX_AMOUNT + TAX_HALF
+      150000000 PUSHINT     	//  queryId amount feeTotal
+      // 97: var half = amount / 2
+      OVER                  	//  queryId amount feeTotal amount
+      1 RSHIFT#             	//  queryId amount feeTotal half
+      s2 s2 XCPU            	//  queryId half feeTotal amount half
+      // 98: var remainder = amount - half
+      SUB                   	//  queryId half feeTotal remainder
+      s2 s1 PUSH2           	//  queryId half feeTotal remainder half feeTotal
+      // 100: assert(half > feeTotal, ERROR_INVALID_AMOUNT)
+      GREATER               	//  queryId half feeTotal remainder '68
+      81 THROWIFNOT         	//  queryId half feeTotal remainder
+      s0 s1 PUSH2           	//  queryId half feeTotal remainder remainder feeTotal
+      // 101: assert(remainder > feeTotal, ERROR_INVALID_AMOUNT)
+      GREATER               	//  queryId half feeTotal remainder '70
+      81 THROWIFNOT         	//  queryId half feeTotal remainder
+      // 103: sendJettons(frsAllodiumAddress, half - feeTotal, queryId)
+      $frsAllodiumAddress GETGLOB	//  queryId half feeTotal remainder g_frsAllodiumAddress
+      s3 s2 XCPU            	//  queryId g_frsAllodiumAddress feeTotal remainder half feeTotal
+      SUB                   	//  queryId g_frsAllodiumAddress feeTotal remainder '72
+      s3 s0 s4 XC2PU        	//  queryId remainder feeTotal g_frsAllodiumAddress '72 queryId
+      sendJettons() CALLDICT	//  queryId remainder feeTotal
+      // 104: sendJettons(allodiumFoundationAddress, remainder - feeTotal, queryId + 1)
+      $allodiumFoundationAddress GETGLOB	//  queryId remainder feeTotal g_allodiumFoundationAddress
+      s0 s2 XCHG
+      SUBR                  	//  queryId g_allodiumFoundationAddress '74
+      s0 s2 XCHG            	//  '74 g_allodiumFoundationAddress queryId
+      INC                   	//  '74 g_allodiumFoundationAddress '76
+      s1 s2 XCHG            	//  g_allodiumFoundationAddress '74 '76
+      sendJettons() CALLDICT	// 
+    }>                      	//  senderAddress op queryId msgBody
+    // 145: if (op == OP_SET_WALLET)
+    NIP                     	//  senderAddress op msgBody
+    OVER                    	//  senderAddress op msgBody op
+    65 EQINT                	//  senderAddress op msgBody '78
+    IFJMP:<{                	//  senderAddress op msgBody
+      // 148: ERROR_NOT_MANAGER
+      NIP                   	//  senderAddress msgBody
+      // 147: senderAddress == managerAddress
+      $managerAddress GETGLOB	//  senderAddress msgBody g_managerAddress
+      s1 s2 XCHG            	//  msgBody senderAddress g_managerAddress
+      SDEQ                  	//  msgBody '81
+      // 146: assert(
+      77 THROWIFNOT         	//  msgBody
+      // 151: var newWalletAddress = msgBody.loadAddress()
+      LDSTDADDR             	//  '84 '83
+      DROP                  	//  '86
+      // 152: walletAddress = newWalletAddress
+      $walletAddress SETGLOB	// 
+      // 46: .storeAddress(frsAllodiumAddress)
+      $frsAllodiumAddress GETGLOB	//  g_frsAllodiumAddress
+      // 45: var targets = beginCell()
+      NEWC                  	//  g_frsAllodiumAddress '89
+      // 46: .storeAddress(frsAllodiumAddress)
+      STSTDADDR             	//  '89
+      // 47: .storeAddress(allodiumFoundationAddress)
+      $allodiumFoundationAddress GETGLOB	//  '89 g_allodiumFoundationAddress
+      // 45: var targets = beginCell()
+      // ...47: .storeAddress(allodiumFoundationAddress)
+      SWAP                  	//  g_allodiumFoundationAddress '89
+      STSTDADDR             	//  '89
+      // 48: .endCell()
+      ENDC                  	//  targets
+      // 52: .storeAddress(managerAddress)
+      $managerAddress GETGLOB	//  targets g_managerAddress
+      // 51: beginCell()
+      NEWC                  	//  targets g_managerAddress '95
+      // 52: .storeAddress(managerAddress)
+      STSTDADDR             	//  targets '95
+      // 53: .storeAddressOpt(walletAddress)
+      $walletAddress GETGLOB	//  targets '95 g_walletAddress
+      // 51: beginCell()
+      // ...53: .storeAddressOpt(walletAddress)
+      SWAP                  	//  targets g_walletAddress '95
+      STOPTSTDADDR          	//  targets '95
+      // 54: .storeRef(targets)
+      STREF                 	//  '95
+      // 55: .endCell()
+      ENDC                  	//  '100
+      // 50: contract.setData(
+      c4 POP                	// 
+    }>                      	//  senderAddress op msgBody
+    // 157: if (op == OP_CHANGE_WHITELIST)
+    SWAP                    	//  senderAddress msgBody op
+    64 EQINT                	//  senderAddress msgBody '102
+    IFJMP:<{                	//  senderAddress msgBody
+      // 159: senderAddress == managerAddress
+      $managerAddress GETGLOB	//  senderAddress msgBody g_managerAddress
+      s1 s2 XCHG            	//  msgBody senderAddress g_managerAddress
+      SDEQ                  	//  msgBody '105
+      // 158: assert(
+      77 THROWIFNOT         	//  msgBody
+      // 163: var newAddress1 = msgBody.loadAddress()
+      LDSTDADDR             	//  newAddress1 msgBody
+      // 164: var newAddress2 = msgBody.loadAddress()
+      LDSTDADDR             	//  newAddress1 '112 '111
+      DROP                  	//  '114 newAddress2
+      // 166: frsAllodiumAddress = newAddress1
+      SWAP                  	//  newAddress2 '114
+      $frsAllodiumAddress SETGLOB	//  '115
+      // 167: allodiumFoundationAddress = newAddress2
+      $allodiumFoundationAddress SETGLOB	// 
+      // 46: .storeAddress(frsAllodiumAddress)
+      $frsAllodiumAddress GETGLOB	//  g_frsAllodiumAddress
+      // 45: var targets = beginCell()
+      NEWC                  	//  g_frsAllodiumAddress '118
+      // 46: .storeAddress(frsAllodiumAddress)
+      STSTDADDR             	//  '118
+      // 47: .storeAddress(allodiumFoundationAddress)
+      $allodiumFoundationAddress GETGLOB	//  '118 g_allodiumFoundationAddress
+      // 45: var targets = beginCell()
+      // ...47: .storeAddress(allodiumFoundationAddress)
+      SWAP                  	//  g_allodiumFoundationAddress '118
+      STSTDADDR             	//  '118
+      // 48: .endCell()
+      ENDC                  	//  targets
+      // 52: .storeAddress(managerAddress)
+      $managerAddress GETGLOB	//  targets g_managerAddress
+      // 51: beginCell()
+      NEWC                  	//  targets g_managerAddress '124
+      // 52: .storeAddress(managerAddress)
+      STSTDADDR             	//  targets '124
+      // 53: .storeAddressOpt(walletAddress)
+      $walletAddress GETGLOB	//  targets '124 g_walletAddress
+      // 51: beginCell()
+      // ...53: .storeAddressOpt(walletAddress)
+      SWAP                  	//  targets g_walletAddress '124
+      STOPTSTDADDR          	//  targets '124
+      // 54: .storeRef(targets)
+      STREF                 	//  '124
+      // 55: .endCell()
+      ENDC                  	//  '129
+      // 50: contract.setData(
+      c4 POP                	// 
+    }>                      	//  senderAddress msgBody
+    // 173: throw(0xffff)
+    16 PUSHPOW2DEC
+    THROWANY
+  }>
+  // contracts/Dominum/givers/giver_allodium.tolk:179
+  getGiverData() PROC:<{      	// 
+    // 34: var ds = contract.getData().beginParse()
+    c4 PUSH                 	//  '1
+    CTOS                    	//  ds
+    // 36: managerAddress = ds.loadAddress()
+    LDSTDADDR               	//  '3 ds
+    SWAP                    	//  ds '3
+    $managerAddress SETGLOB 	//  ds
+    // 37: walletAddress = ds.loadAddressOpt()
+    LDOPTSTDADDR            	//  '7 ds
+    SWAP                    	//  ds '7
+    $walletAddress SETGLOB  	//  ds
+    // 39: var targets = ds.loadRef().beginParse()
+    PLDREF                  	//  '14
+    CTOS                    	//  targets
+    // 40: frsAllodiumAddress = targets.loadAddress()
+    LDSTDADDR               	//  '16 targets
+    SWAP                    	//  targets '16
+    $frsAllodiumAddress SETGLOB	//  targets
+    // 41: allodiumFoundationAddress = targets.loadAddress()
+    LDSTDADDR               	//  '22 '21
+    DROP                    	//  '20
+    $allodiumFoundationAddress SETGLOB	// 
+    // 182: managerAddress
+    $managerAddress GETGLOB 	//  g_managerAddress
+    // 183: walletAddress
+    $walletAddress GETGLOB  	//  g_managerAddress g_walletAddress
+    // 184: frsAllodiumAddress
+    $frsAllodiumAddress GETGLOB	//  g_managerAddress g_walletAddress g_frsAllodiumAddress
+    // 185: allodiumFoundationAddress
+    $allodiumFoundationAddress GETGLOB	//  g_managerAddress g_walletAddress g_frsAllodiumAddress g_allodiumFoundationAddress
+  }>
+}END>c

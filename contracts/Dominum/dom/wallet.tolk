@@ -8,11 +8,24 @@ import "../core/constants.tolk";
 // Статус: migrated
 // =========================================
 
+// =====================================================
+// JETTON WALLET — кошелёк DOM (TEP-74)
+// =====================================================
+// При transfer отправляет ОДНО сообщение на Gas Pool.
+// Gas Pool сам распределяет: получателю + DOM Treasury.
+// Пользователь платит ~0.01 TON + DOM (налог + комиссия).
+// Возврата TON нет — это "входной билет".
+// =====================================================
+
 global balance: int;
 global ownerAddress: address;
 global masterAddress: address;
 global gasPoolAddress: address;
 global jettonWalletCode: cell;
+
+// -----------------------------------------------------
+// LOAD / SAVE
+// -----------------------------------------------------
 
 fun loadData() {
     var ds = contract.getData().beginParse();
@@ -36,7 +49,11 @@ fun saveData() {
     );
 }
 
-func buildWalletData(owner: address): cell {
+// -----------------------------------------------------
+// WALLET ADDRESS
+// -----------------------------------------------------
+
+fun buildWalletData(owner: address): cell {
     return beginCell()
         .storeCoins(0)
         .storeAddress(owner)
@@ -62,18 +79,25 @@ fun buildWalletAddress(stateInit: cell): address {
     return address.fromWorkchainAndHash(wc, stateInit.hash());
 }
 
+// -----------------------------------------------------
+// ВАЛИДАЦИЯ ВНУТРЕННЕГО ОТПРАВИТЕЛЯ
+// -----------------------------------------------------
+
 fun requireInternalSender(
     senderAddress: address,
     fromOwner: address
 ) {
+    // От Master — всегда ок (mint)
     if (senderAddress == masterAddress) {
         return;
     }
 
+    // От Gas Pool — всегда ок (он делает transfers)
     if (senderAddress == gasPoolAddress) {
         return;
     }
 
+    // Иначе — проверяем что это wallet отправителя
     var expectedWallet = buildWalletAddress(
         buildWalletStateInit(fromOwner)
     );
@@ -83,6 +107,10 @@ fun requireInternalSender(
         ERROR_NOT_VALID_WALLET
     );
 }
+
+// -----------------------------------------------------
+// NOTIFY OWNER (transfer_notification)
+// -----------------------------------------------------
 
 fun notifyOwner(amount: int, fromOwner: address, queryId: int) {
     var body = beginCell()
@@ -103,10 +131,14 @@ fun notifyOwner(amount: int, fromOwner: address, queryId: int) {
     sendRawMessage(msg, 64);
 }
 
+// -----------------------------------------------------
+// MAIN
+// -----------------------------------------------------
+
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
-    if (msgBody.isEndOfSlice()) {
+    if (msgBody.isEmpty()) {
         return;
     }
 
@@ -118,10 +150,13 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
+    // =====================================================
+    // OP_INTERNAL_TRANSFER — получили токены
+    // =====================================================
     if (op == OP_INTERNAL_TRANSFER) {
         var amount = msgBody.loadCoins();
         var fromOwner = msgBody.loadAddress();
-        var responseDestination = msgBody.loadAddressAny();
+        var responseDestination = msgBody.loadAddressOpt();
 
         requireInternalSender(senderAddress, fromOwner);
 
@@ -133,18 +168,24 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
+    // =====================================================
+    // OP_TRANSFER — отправка токенов (только owner)
+    // Одно сообщение на Gas Pool!
+    // =====================================================
     if (op == OP_TRANSFER) {
         assert(
-            senderAddress = ownerAddress,
+            senderAddress == ownerAddress,
             ERROR_NOT_OWNER
         );
 
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
-        var responseDestination = msgBody.loadAddressAny();
+        var responseDestination = msgBody.loadAddressOpt();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
 
+        // Фиксированная модель без курса:
+        // комиссии всегда равны константам.
         var treasuryFee: int = TAX_AMOUNT;
         var gasPoolFee: int = TAX_HALF;
 
@@ -152,9 +193,92 @@ fun onInternalMessage(in: InMessage) {
         var totalSpend = jettonAmount + totalFee;
 
         assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
-        assert(msgValue >= MINT_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
 
         balance -= totalSpend;
         saveData();
+
+        // =====================================================
+        // ОДНО СООБЩЕНИЕ НА GAS POOL
+        // Передаём: сумму, получателя, налог, комиссию
+        // Gas Pool сделает 2 сообщения из СВОЕГО TON
+        // =====================================================
+        var gasPoolBody = beginCell()
+            .storeUint(OP_GAS_POOL_EXECUTE, 32)
+            .storeUint(queryId, 64)
+            .storeCoins(jettonAmount)
+            .storeAddress(toOwner)
+            .storeAddress(ownerAddress)
+            .storeCoins(treasuryFee)
+            .storeCoins(gasPoolFee)
+            .endCell();
+
+        var msg = beginCell()
+            .storeUint(0x18, 6)
+            .storeAddress(gasPoolAddress)
+            .storeCoins(msgValue)
+            .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .storeRef(gasPoolBody)
+            .endCell();
+
+        sendRawMessage(msg, 1);
+
+        return;
     }
+
+    // =====================================================
+    // OP_BURN — сжечь токены (только owner)
+    // =====================================================
+    if (op == OP_BURN) {
+        assert(
+            senderAddress == ownerAddress,
+            ERROR_NOT_OWNER
+        );
+
+        var burnAmount = msgBody.loadCoins();
+        var responseDestination = msgBody.loadAddressOpt();
+
+        assert(burnAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(balance >= burnAmount, ERROR_INSUFFICIENT_BALANCE);
+
+        balance -= burnAmount;
+        saveData();
+
+        var body = beginCell()
+            .storeUint(OP_BURN_NOTIFICATION, 32)
+            .storeUint(queryId, 64)
+            .storeCoins(burnAmount)
+            .storeAddress(ownerAddress)
+            .storeAddressOpt(responseDestination)
+            .endCell();
+
+        var msg = beginCell()
+            .storeUint(0x18, 6)
+            .storeAddress(masterAddress)
+            .storeCoins(msgValue)
+            .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .storeRef(body)
+            .endCell();
+
+        sendRawMessage(msg, 1);
+
+        return;
+    }
+
+    throw(0xffff);
+}
+
+// -----------------------------------------------------
+// GETTERS
+// -----------------------------------------------------
+
+get fun getWalletData(): (int, address, address, address) {
+    loadData();
+
+    return (
+        balance,
+        ownerAddress,
+        masterAddress,
+        gasPoolAddress
+    );
 }

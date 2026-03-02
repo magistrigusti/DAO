@@ -61,21 +61,25 @@ fun loadData() {
     minterAddress = ds.loadAddress();
     gasPoolAddress = ds.loadAddress();
 
-    var givers = ds.loadRef().beginParse();
+    var giversFirst = ds.loadRef().beginParse();
+    var giversSecond = ds.loadRef().beginParse();
 
-    giverAllodiumAddress = givers.loadAddress();
-    giverDefiAddress = givers.loadAddress();
-    giverDaoAddress = givers.loadAddress();
-    giverDominumAddress = givers.loadAddress();
+    giverAllodiumAddress = giversFirst.loadAddress();
+    giverDefiAddress = giversFirst.loadAddress();
+    giverDaoAddress = giversSecond.loadAddress();
+    giverDominumAddress = giversSecond.loadAddress();
 
     content = ds.loadRef();
     jettonWalletCode = ds.loadRef();
 }
 
 fun saveData() {
-    var givers = beginCell()
+    var giversFirst = beginCell()
         .storeAddress(giverAllodiumAddress)
         .storeAddress(giverDefiAddress)
+        .endCell();
+
+    var giversSecond = beginCell()
         .storeAddress(giverDaoAddress)
         .storeAddress(giverDominumAddress)
         .endCell();
@@ -85,7 +89,8 @@ fun saveData() {
             .storeCoins(totalSupply)
             .storeAddress(minterAddress)
             .storeAddress(gasPoolAddress)
-            .storeRef(givers)
+            .storeRef(giversFirst)
+            .storeRef(giversSecond)
             .storeRef(content)
             .storeRef(jettonWalletCode)
             .endCell()
@@ -218,7 +223,7 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
-    if (msgBody.isEndOfSlice()) {
+    if (msgBody.isEmpty()) {
         return;
     }
 

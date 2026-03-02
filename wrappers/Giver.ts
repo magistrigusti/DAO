@@ -17,11 +17,15 @@ export type GiverConfig = {
 };
 
 export function giverConfigToCell(config: GiverConfig): Cell {
+    const targetsCell = beginCell()
+        .storeAddress(config.firstTargetAddress)
+        .storeAddress(config.secondTargetAddress)
+        .endCell();
+
     return beginCell()
         .storeAddress(config.managerAddress)
         .storeAddress(config.walletAddress)
-        .storeAddress(config.firstTargetAddress)
-        .storeAddress(config.secondTargetAddress)
+        .storeRef(targetsCell)
         .endCell();
 }
 

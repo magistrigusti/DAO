@@ -2,6 +2,12 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
+// ========== TOLK MIGRATION v1.2 ==========
+// Контракт переписан с legacy API на новый Tolk API.
+// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
+// Статус: migrated
+// =========================================
+
 // =====================================================
 // GAS POOL — пул газа
 // =====================================================
@@ -13,27 +19,27 @@ import "../core/constants.tolk";
 // 48 часов в секундах
 const TIMELOCK_PERIOD: int = 172800;
 
-global adminAddress: slice;
-global proxyAddress: slice;
-global domTreasuryAddress: slice;
+global adminAddress: address;
+global proxyAddress: address;
+global domTreasuryAddress: address;
 
 global domBalance: int;
 global tonReserve: int;
 
 // Timelock для смены treasury
-global pendingTreasury: slice;
+global pendingTreasury: address;
 global pendingTreasuryTime: int;
-global hasPendingTreasury: int;
+global hasPendingTreasury: bool;
 
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
 fun loadData() {
-    var ds = getContractData().beginParse();
+    var ds = contract.getData().beginParse();
 
-    adminAddress = ds.loadMsgAddress();
-    proxyAddress = ds.loadMsgAddress();
-    domTreasuryAddress = ds.loadMsgAddress();
+    adminAddress = ds.loadAddress();
+    proxyAddress = ds.loadAddress();
+    domTreasuryAddress = ds.loadAddress();
 
     domBalance = ds.loadCoins();
     tonReserve = ds.loadCoins();
@@ -41,36 +47,39 @@ fun loadData() {
     hasPendingTreasury = ds.loadBool();
 
     if (hasPendingTreasury) {
-        pendingTreasury = ds.loadMsgAddress();
+        pendingTreasury = ds.loadAddress();
         pendingTreasuryTime = ds.loadUint(64);
+    } else {
+        pendingTreasury = domTreasuryAddress;
+        pendingTreasuryTime = 0;
     }
 }
 
 fun saveData() {
     var b = beginCell()
-        .storeSlice(adminAddress)
-        .storeSlice(proxyAddress)
-        .storeSlice(domTreasuryAddress)
+        .storeAddress(adminAddress)
+        .storeAddress(proxyAddress)
+        .storeAddress(domTreasuryAddress)
         .storeCoins(domBalance)
         .storeCoins(tonReserve)
         .storeBool(hasPendingTreasury);
 
     if (hasPendingTreasury) {
-        b = b.storeSlice(pendingTreasury)
+        b = b.storeAddress(pendingTreasury)
              .storeUint(pendingTreasuryTime, 64);
     }
 
-    setContractData(b.endCell());
+    contract.setData(b.endCell());
 }
 
 // -----------------------------------------------------
 // SEND INTERNAL TRANSFER VIA PROXY
 // -----------------------------------------------------
 fun sendInternalTransfer(
-    toOwner: slice,
+    toOwner: address,
     jettonAmount: int,
-    fromOwner: slice,
-    responseDestination: slice,
+    fromOwner: address,
+    responseDestination: address,
     queryId: int,
     msgValue: int
 ) {
@@ -82,14 +91,14 @@ fun sendInternalTransfer(
         .storeUint(OP_PROXY_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(jettonAmount)
-        .storeSlice(toOwner)
-        .storeSlice(fromOwner)
-        .storeSlice(responseDestination)
+        .storeAddress(toOwner)
+        .storeAddress(fromOwner)
+        .storeAddress(responseDestination)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(proxyAddress)
+        .storeAddress(proxyAddress)
         .storeCoins(msgValue)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
@@ -101,7 +110,7 @@ fun sendInternalTransfer(
 // -----------------------------------------------------
 // SEND TON
 // -----------------------------------------------------
-fun sendTon(to: slice, amount: int, queryId: int) {
+fun sendTon(to: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
@@ -113,7 +122,7 @@ fun sendTon(to: slice, amount: int, queryId: int) {
 
     var msg = beginCell()
         .storeUint(0x10, 6)
-        .storeSlice(to)
+        .storeAddress(to)
         .storeCoins(amount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
@@ -125,24 +134,16 @@ fun sendTon(to: slice, amount: int, queryId: int) {
 // -----------------------------------------------------
 // MAIN
 // -----------------------------------------------------
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
-        return;
-    }
-
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
+    var msgValue = in.valueCoins;
+    var myBalance = contract.getOriginalBalance();
 
     loadData();
 
@@ -154,13 +155,13 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_GAS_POOL_EXECUTE) {
         assert(
-            senderAddress.equalSlices(proxyAddress),
+            senderAddress == proxyAddress,
             ERROR_NOT_ADMIN
         );
 
         var jettonAmount = msgBody.loadCoins();
-        var toOwner = msgBody.loadMsgAddress();
-        var fromOwner = msgBody.loadMsgAddress();
+        var toOwner = msgBody.loadAddress();
+        var fromOwner = msgBody.loadAddress();
         var treasuryFee = msgBody.loadCoins();
         var gasPoolFee = msgBody.loadCoins();
 
@@ -209,7 +210,7 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_TOP_UP) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
@@ -221,12 +222,12 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_WITHDRAW_DOM) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
         var amount = msgBody.loadCoins();
-        var toOwner = msgBody.loadMsgAddress();
+        var toOwner = msgBody.loadAddress();
 
         assert(
             amount <= domBalance,
@@ -239,7 +240,7 @@ fun onInternalMessage(
         sendInternalTransfer(
             toOwner,
             amount,
-            myAddress(),
+            contract.getAddress(),
             adminAddress,
             queryId,
             MIN_TON_FOR_STORAGE
@@ -253,12 +254,12 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_WITHDRAW_TON) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
         var amount = msgBody.loadCoins();
-        var to = msgBody.loadMsgAddress();
+        var to = msgBody.loadAddress();
 
         var availableTon = myBalance
             - tonReserve
@@ -278,7 +279,7 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_SET_RESERVE) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
@@ -294,7 +295,7 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_CHANGE_TREASURY) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
@@ -302,8 +303,8 @@ fun onInternalMessage(
 
         // Запрос смены
         if (subOp == 1) {
-            pendingTreasury = msgBody.loadMsgAddress();
-            pendingTreasuryTime = now() + TIMELOCK_PERIOD;
+            pendingTreasury = msgBody.loadAddress();
+            pendingTreasuryTime = blockchain.now() + TIMELOCK_PERIOD;
             hasPendingTreasury = true;
             saveData();
             return;
@@ -313,7 +314,7 @@ fun onInternalMessage(
         if (subOp == 2) {
             assert(hasPendingTreasury, ERROR_NO_PENDING);
             assert(
-                now() >= pendingTreasuryTime,
+                blockchain.now() >= pendingTreasuryTime,
                 ERROR_TOO_EARLY
             );
 
@@ -340,11 +341,11 @@ fun onInternalMessage(
 // GETTERS
 // -----------------------------------------------------
 get fun getPoolData(): (
-    slice, slice, slice, int, int, int
+    address, address, address, int, int, int
 ) {
     loadData();
 
-    var availableTon = getContractBalance()
+    var availableTon = contract.getOriginalBalance()
         - tonReserve;
 
     return (
@@ -357,16 +358,13 @@ get fun getPoolData(): (
     );
 }
 
-get fun getPendingTreasury(): (int, slice, int) {
+get fun getPendingTreasury(): (bool, address?, int) {
     loadData();
 
     if (!hasPendingTreasury) {
         return (
             false,
-            beginCell()
-                .storeUint(0, 2)
-                .endCell()
-                .beginParse(),
+            null,
             0
         );
     }

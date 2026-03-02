@@ -1,0 +1,542 @@
+"Asm.fif" include
+// automatically generated from gas_pool.tolk, op_codes.tolk, errors.tolk, constants.tolk
+PROGRAM{
+  DECLPROC loadData()
+  DECLPROC saveData()
+  DECLPROC sendInternalTransfer()
+  DECLPROC sendTon()
+  0 DECLMETHOD onInternalMessage()
+  78614 DECLMETHOD getPoolData()
+  119385 DECLMETHOD getPendingTreasury()
+  DECLGLOBVAR $adminAddress
+  DECLGLOBVAR $proxyAddress
+  DECLGLOBVAR $domTreasuryAddress
+  DECLGLOBVAR $domBalance
+  DECLGLOBVAR $tonReserve
+  DECLGLOBVAR $pendingTreasury
+  DECLGLOBVAR $pendingTreasuryTime
+  DECLGLOBVAR $hasPendingTreasury
+  // contracts/Dominum/treasury/gas_pool.tolk:37
+  loadData() PROC:<{          	// 
+    // 38: var ds = contract.getData().beginParse()
+    c4 PUSH                 	//  '1
+    CTOS                    	//  ds
+    // 40: adminAddress = ds.loadAddress()
+    LDSTDADDR               	//  '3 ds
+    SWAP                    	//  ds '3
+    $adminAddress SETGLOB   	//  ds
+    // 41: proxyAddress = ds.loadAddress()
+    LDSTDADDR               	//  '7 ds
+    SWAP                    	//  ds '7
+    $proxyAddress SETGLOB   	//  ds
+    // 42: domTreasuryAddress = ds.loadAddress()
+    LDSTDADDR               	//  '11 ds
+    SWAP                    	//  ds '11
+    $domTreasuryAddress SETGLOB	//  ds
+    // 44: domBalance = ds.loadCoins()
+    LDGRAMS                 	//  '15 ds
+    SWAP                    	//  ds '15
+    $domBalance SETGLOB     	//  ds
+    // 45: tonReserve = ds.loadCoins()
+    LDGRAMS                 	//  '19 ds
+    SWAP                    	//  ds '19
+    $tonReserve SETGLOB     	//  ds
+    // 47: hasPendingTreasury = ds.loadBool()
+    1 LDI                   	//  '23 ds
+    SWAP                    	//  ds '23
+    $hasPendingTreasury SETGLOB	//  ds
+    // 49: if (hasPendingTreasury)
+    $hasPendingTreasury GETGLOB	//  ds g_hasPendingTreasury
+    IFJMP:<{                	//  ds
+      // 50: pendingTreasury = ds.loadAddress()
+      LDSTDADDR             	//  '28 ds
+      SWAP                  	//  ds '28
+      $pendingTreasury SETGLOB	//  ds
+      // 51: pendingTreasuryTime = ds.loadUint(64)
+      64 PLDU               	//  '32
+      $pendingTreasuryTime SETGLOB	// 
+    }>                      	//  ds
+    // 53: pendingTreasury = domTreasuryAddress
+    DROP                    	// 
+    $domTreasuryAddress GETGLOB	//  '37
+    $pendingTreasury SETGLOB	// 
+    // 54: pendingTreasuryTime = 0
+    0 PUSHINT               	//  '39=0
+    $pendingTreasuryTime SETGLOB	// 
+  }>
+  // contracts/Dominum/treasury/gas_pool.tolk:58
+  saveData() PROC:<{          	// 
+    // 60: .storeAddress(adminAddress)
+    $adminAddress GETGLOB   	//  g_adminAddress
+    // 59: var b = beginCell()
+    NEWC                    	//  g_adminAddress '2
+    // 60: .storeAddress(adminAddress)
+    STSTDADDR               	//  '2
+    // 61: .storeAddress(proxyAddress)
+    $proxyAddress GETGLOB   	//  '2 g_proxyAddress
+    // 59: var b = beginCell()
+    // ...61: .storeAddress(proxyAddress)
+    SWAP                    	//  g_proxyAddress '2
+    STSTDADDR               	//  '2
+    // 62: .storeAddress(domTreasuryAddress)
+    $domTreasuryAddress GETGLOB	//  '2 g_domTreasuryAddress
+    // 59: var b = beginCell()
+    // ...62: .storeAddress(domTreasuryAddress)
+    SWAP                    	//  g_domTreasuryAddress '2
+    STSTDADDR               	//  '2
+    // 63: .storeCoins(domBalance)
+    $domBalance GETGLOB     	//  '2 g_domBalance
+    // 59: var b = beginCell()
+    // ...63: .storeCoins(domBalance)
+    STGRAMS                 	//  '2
+    // 64: .storeCoins(tonReserve)
+    $tonReserve GETGLOB     	//  '2 g_tonReserve
+    // 59: var b = beginCell()
+    // ...64: .storeCoins(tonReserve)
+    STGRAMS                 	//  '2
+    // 65: .storeBool(hasPendingTreasury)
+    $hasPendingTreasury GETGLOB	//  '2 g_hasPendingTreasury
+    // 59: var b = beginCell()
+    // ...65: .storeBool(hasPendingTreasury)
+    1 STIR                  	//  b
+    // 67: if (hasPendingTreasury)
+    $hasPendingTreasury GETGLOB	//  b g_hasPendingTreasury
+    IF:<{                   	//  b
+      // 68: b = b.storeAddress(pendingTreasury)
+      $pendingTreasury GETGLOB	//  b g_pendingTreasury
+      SWAP                  	//  g_pendingTreasury b
+      STSTDADDR             	//  b
+      // 69: .storeUint(pendingTreasuryTime, 64)
+      $pendingTreasuryTime GETGLOB	//  b g_pendingTreasuryTime
+      // 68: b = b.storeAddress(pendingTreasury)
+      // ...69: .storeUint(pendingTreasuryTime, 64)
+      64 STUR               	//  b
+    }>                      	//  b
+    // 72: contract.setData(b.endCell())
+    ENDC                    	//  '20
+    c4 POP                  	// 
+  }>
+  // contracts/Dominum/treasury/gas_pool.tolk:78
+  sendInternalTransfer() PROC:<{	//  toOwner jettonAmount fromOwner responseDestination queryId msgValue
+    // 86: if (jettonAmount <= 0)
+    s4 PUSH                 	//  toOwner jettonAmount fromOwner responseDestination queryId msgValue jettonAmount
+    1 LESSINT               	//  toOwner jettonAmount fromOwner responseDestination queryId msgValue '7
+    IFJMP:<{                	//  toOwner jettonAmount fromOwner responseDestination queryId msgValue
+      6 BLKDROP             	// 
+    }>                      	//  toOwner jettonAmount fromOwner responseDestination queryId msgValue
+    // 90: var body = beginCell()
+    NEWC                    	//  toOwner jettonAmount fromOwner responseDestination queryId msgValue '10
+    // 91: .storeUint(OP_PROXY_INTERNAL_TRANSFER, 32)
+    x{000000b3} STSLICECONST	//  toOwner jettonAmount fromOwner responseDestination queryId msgValue '10
+    // 92: .storeUint(queryId, 64)
+    s1 s2 XCHG              	//  toOwner jettonAmount fromOwner responseDestination msgValue queryId '10
+    64 STU                  	//  toOwner jettonAmount fromOwner responseDestination msgValue '10
+    s0 s4 XCHG2             	//  toOwner msgValue fromOwner responseDestination '10 jettonAmount
+    // 93: .storeCoins(jettonAmount)
+    STGRAMS                 	//  toOwner msgValue fromOwner responseDestination '10
+    // 94: .storeAddress(toOwner)
+    s1 s4 XCHG              	//  responseDestination msgValue fromOwner toOwner '10
+    STSTDADDR               	//  responseDestination msgValue fromOwner '10
+    // 95: .storeAddress(fromOwner)
+    STSTDADDR               	//  responseDestination msgValue '10
+    // 96: .storeAddress(responseDestination)
+    s1 s2 XCHG              	//  msgValue responseDestination '10
+    STSTDADDR               	//  msgValue '10
+    // 97: .endCell()
+    ENDC                    	//  msgValue body
+    // 99: var msg = beginCell()
+    NEWC                    	//  msgValue body '22
+    // 100: .storeUint(0x18, 6)
+    b{011000} STSLICECONST  	//  msgValue body '22
+    // 101: .storeAddress(proxyAddress)
+    $proxyAddress GETGLOB   	//  msgValue body '22 g_proxyAddress
+    // 99: var msg = beginCell()
+    // ...101: .storeAddress(proxyAddress)
+    SWAP                    	//  msgValue body g_proxyAddress '22
+    STSTDADDR               	//  msgValue body '22
+    ROT                     	//  body '22 msgValue
+    // 102: .storeCoins(msgValue)
+    STGRAMS                 	//  body '22
+    // 103: .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    1 PUSHINT
+    107 STUR                	//  body '22
+    // 104: .storeRef(body)
+    STREF                   	//  '22
+    // 105: .endCell()
+    ENDC                    	//  msg
+    // 107: sendRawMessage(msg, 1)
+    1 PUSHINT               	//  msg '45=1
+    SENDRAWMSG              	// 
+  }>
+  // contracts/Dominum/treasury/gas_pool.tolk:113
+  sendTon() PROC:<{           	//  to amount queryId
+    // 114: if (amount <= 0)
+    OVER                    	//  to amount queryId amount
+    1 LESSINT               	//  to amount queryId '4
+    IFJMP:<{                	//  to amount queryId
+      3 BLKDROP             	// 
+    }>                      	//  to amount queryId
+    // 118: var body = beginCell()
+    NEWC                    	//  to amount queryId '7
+    // 119: .storeUint(OP_EXCESSES, 32)
+    x{d53276db} STSLICECONST	//  to amount queryId '7
+    // 120: .storeUint(queryId, 64)
+    64 STU                  	//  to amount '7
+    // 121: .endCell()
+    ENDC                    	//  to amount body
+    // 123: var msg = beginCell()
+    NEWC                    	//  to amount body '15
+    // 124: .storeUint(0x10, 6)
+    b{010000} STSLICECONST  	//  to amount body '15
+    // 125: .storeAddress(to)
+    s1 s3 XCHG              	//  body amount to '15
+    STSTDADDR               	//  body amount '15
+    // 126: .storeCoins(amount)
+    SWAP                    	//  body '15 amount
+    STGRAMS                 	//  body '15
+    // 127: .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    1 PUSHINT
+    107 STUR                	//  body '15
+    // 128: .storeRef(body)
+    STREF                   	//  '15
+    // 129: .endCell()
+    ENDC                    	//  msg
+    // 131: sendRawMessage(msg, 1)
+    1 PUSHINT               	//  msg '37=1
+    SENDRAWMSG              	// 
+  }>
+  // contracts/Dominum/treasury/gas_pool.tolk:137
+  onInternalMessage() PROC:<{ 	//  in.body
+    // 137: fun onInternalMessage(in: InMessage)
+    INMSG_BOUNCED           	//  in.body '1
+    0 THROWIF               	//  msgBody
+    // 140: if (msgBody.isEmpty())
+    DUP                     	//  msgBody msgBody
+    SEMPTY                  	//  msgBody '5
+    IFJMP:<{                	//  msgBody
+      // 141: return
+      DROP                  	// 
+    }>                      	//  msgBody
+    // 144: var senderAddress = in.senderAddress
+    INMSG_SRC               	//  msgBody senderAddress
+    // 145: var msgValue = in.valueCoins
+    INMSG_VALUE             	//  msgBody senderAddress msgValue
+    // 146: var myBalance = contract.getOriginalBalance()
+    BALANCE
+    FIRST                   	//  msgBody senderAddress msgValue myBalance
+    // 148: loadData()
+    loadData() CALLDICT     	//  msgBody senderAddress msgValue myBalance
+    // 150: var op = msgBody.loadUint(32)
+    s0 s3 XCHG              	//  myBalance senderAddress msgValue msgBody
+    32 LDU                  	//  myBalance senderAddress msgValue op msgBody
+    // 151: var queryId = msgBody.loadUint(64)
+    64 LDU                  	//  myBalance senderAddress msgValue op queryId msgBody
+    // 156: if (op == OP_GAS_POOL_EXECUTE)
+    s2 PUSH
+    160 PUSHINT             	//  myBalance senderAddress msgValue op queryId msgBody op '24=160
+    EQUAL                   	//  myBalance senderAddress msgValue op queryId msgBody '25
+    IFJMP:<{                	//  myBalance senderAddress msgValue op queryId msgBody
+      2 2 BLKDROP2          	//  myBalance senderAddress queryId msgBody
+      // 158: senderAddress == proxyAddress
+      $proxyAddress GETGLOB 	//  myBalance senderAddress queryId msgBody g_proxyAddress
+      s1 s3 XCHG            	//  myBalance msgBody queryId senderAddress g_proxyAddress
+      SDEQ                  	//  myBalance msgBody queryId '28
+      // 157: assert(
+      76 THROWIFNOT         	//  myBalance msgBody queryId
+      // 162: var jettonAmount = msgBody.loadCoins()
+      SWAP                  	//  myBalance queryId msgBody
+      LDGRAMS               	//  myBalance queryId jettonAmount msgBody
+      // 163: var toOwner = msgBody.loadAddress()
+      LDSTDADDR             	//  myBalance queryId jettonAmount toOwner msgBody
+      // 164: var fromOwner = msgBody.loadAddress()
+      LDSTDADDR             	//  myBalance queryId jettonAmount toOwner fromOwner msgBody
+      // 165: var treasuryFee = msgBody.loadCoins()
+      LDGRAMS               	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee msgBody
+      // 166: var gasPoolFee = msgBody.loadCoins()
+      LDGRAMS               	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee '47 '46
+      DROP                  	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee
+      // 168: assert(jettonAmount > 0, ERROR_INVALID_AMOUNT)
+      s4 PUSH               	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee jettonAmount
+      0 GTINT               	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee '51
+      81 THROWIFNOT         	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee
+      // 171: assert(treasuryFee == TAX_AMOUNT, ERROR_INVALID_AMOUNT)
+      OVER
+      100000000 PUSHINT     	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee treasuryFee '53=100000000
+      EQUAL                 	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee '54
+      81 THROWIFNOT         	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee
+      // 172: assert(gasPoolFee == TAX_HALF, ERROR_INVALID_AMOUNT)
+      DUP
+      50000000 PUSHINT      	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee gasPoolFee '56=50000000
+      EQUAL                 	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee '57
+      81 THROWIFNOT         	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee
+      // 174: var tonForTransfers = MIN_TON_FOR_STORAGE * 2
+      20000000 PUSHINT      	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee tonForTransfers
+      // 175: var availableTon = myBalance - tonReserve
+      $tonReserve GETGLOB   	//  myBalance queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee tonForTransfers g_tonReserve
+      s1 s8 XCHG            	//  tonForTransfers queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee myBalance g_tonReserve
+      SUB                   	//  tonForTransfers queryId jettonAmount toOwner fromOwner treasuryFee gasPoolFee availableTon
+      s0 s7 XCHG2           	//  gasPoolFee queryId jettonAmount toOwner fromOwner treasuryFee availableTon tonForTransfers
+      // 178: availableTon >= tonForTransfers
+      GEQ                   	//  gasPoolFee queryId jettonAmount toOwner fromOwner treasuryFee '66
+      // 177: assert(
+      90 THROWIFNOT         	//  gasPoolFee queryId jettonAmount toOwner fromOwner treasuryFee
+      // 182: domBalance += gasPoolFee
+      $domBalance GETGLOB   	//  gasPoolFee queryId jettonAmount toOwner fromOwner treasuryFee g_domBalance
+      s0 s6 XCHG2           	//  treasuryFee queryId jettonAmount toOwner fromOwner g_domBalance gasPoolFee
+      ADD                   	//  treasuryFee queryId jettonAmount toOwner fromOwner '67
+      $domBalance SETGLOB   	//  treasuryFee queryId jettonAmount toOwner fromOwner
+      // 183: saveData()
+      saveData() CALLDICT   	//  treasuryFee queryId jettonAmount toOwner fromOwner
+      s2 s2 s2 XCPU2
+      // 186: sendInternalTransfer(
+      s5 PUSH
+      // 192: MIN_TON_FOR_STORAGE
+      10000000 PUSHINT      	//  treasuryFee queryId fromOwner toOwner jettonAmount fromOwner fromOwner queryId '70=10000000
+      // 186: sendInternalTransfer(
+      sendInternalTransfer() CALLDICT	//  treasuryFee queryId fromOwner
+      // 197: domTreasuryAddress
+      $domTreasuryAddress GETGLOB	//  treasuryFee queryId fromOwner g_domTreasuryAddress
+      // 201: queryId + 1
+      s0 s2 XCHG            	//  treasuryFee g_domTreasuryAddress fromOwner queryId
+      INC                   	//  treasuryFee g_domTreasuryAddress fromOwner '73
+      OVER
+      s3 s4 XCHG
+      // 196: sendInternalTransfer(
+      SWAP
+      // 202: MIN_TON_FOR_STORAGE
+      10000000 PUSHINT      	//  g_domTreasuryAddress treasuryFee fromOwner fromOwner '73 '74=10000000
+      // 196: sendInternalTransfer(
+      sendInternalTransfer() CALLDICT	// 
+    }>                      	//  myBalance senderAddress msgValue op queryId msgBody
+    // 211: if (op == OP_TOP_UP)
+    s2 PUSH
+    161 PUSHINT             	//  myBalance senderAddress msgValue op queryId msgBody op '75=161
+    EQUAL                   	//  myBalance senderAddress msgValue op queryId msgBody '76
+    IFJMP:<{                	//  myBalance senderAddress msgValue op queryId msgBody
+      s4 s5 XCHG
+      5 BLKDROP             	//  senderAddress
+      // 213: senderAddress == adminAddress
+      $adminAddress GETGLOB 	//  senderAddress g_adminAddress
+      SDEQ                  	//  '79
+      // 212: assert(
+      76 THROWIFNOT         	// 
+    }>                      	//  myBalance senderAddress msgValue op queryId msgBody
+    // 223: if (op == OP_WITHDRAW_DOM)
+    s2 PUSH
+    162 PUSHINT             	//  myBalance senderAddress msgValue op queryId msgBody op '80=162
+    EQUAL                   	//  myBalance senderAddress msgValue op queryId msgBody '81
+    IFJMP:<{                	//  myBalance senderAddress msgValue op queryId msgBody
+      2 2 BLKDROP2          	//  myBalance senderAddress queryId msgBody
+      // 226: ERROR_NOT_ADMIN
+      s3 POP                	//  msgBody senderAddress queryId
+      // 225: senderAddress == adminAddress
+      $adminAddress GETGLOB 	//  msgBody senderAddress queryId g_adminAddress
+      s1 s2 XCHG            	//  msgBody queryId senderAddress g_adminAddress
+      SDEQ                  	//  msgBody queryId '84
+      // 224: assert(
+      76 THROWIFNOT         	//  msgBody queryId
+      // 229: var amount = msgBody.loadCoins()
+      SWAP                  	//  queryId msgBody
+      LDGRAMS               	//  queryId amount msgBody
+      // 230: var toOwner = msgBody.loadAddress()
+      LDSTDADDR             	//  queryId amount '91 '90
+      DROP                  	//  queryId amount toOwner
+      // 233: amount <= domBalance
+      $domBalance GETGLOB   	//  queryId amount toOwner g_domBalance
+      s2 PUSH               	//  queryId amount toOwner g_domBalance amount
+      GEQ                   	//  queryId amount toOwner '95
+      // 232: assert(
+      82 THROWIFNOT         	//  queryId amount toOwner
+      // 237: domBalance -= amount
+      $domBalance GETGLOB   	//  queryId amount toOwner g_domBalance
+      s2 PUSH               	//  queryId amount toOwner g_domBalance amount
+      SUB                   	//  queryId amount toOwner '96
+      $domBalance SETGLOB   	//  queryId amount toOwner
+      // 238: saveData()
+      saveData() CALLDICT   	//  queryId amount toOwner
+      // 243: contract.getAddress()
+      MYADDR                	//  queryId amount toOwner '99
+      // 244: adminAddress
+      $adminAddress GETGLOB 	//  queryId amount toOwner '99 g_adminAddress
+      s1 s0 s4 XCHG3
+      // 246: MIN_TON_FOR_STORAGE
+      10000000 PUSHINT      	//  toOwner amount '99 g_adminAddress queryId '101=10000000
+      // 240: sendInternalTransfer(
+      sendInternalTransfer() CALLDICT	// 
+    }>                      	//  myBalance senderAddress msgValue op queryId msgBody
+    // 255: if (op == OP_WITHDRAW_TON)
+    s2 PUSH
+    163 PUSHINT             	//  myBalance senderAddress msgValue op queryId msgBody op '102=163
+    EQUAL                   	//  myBalance senderAddress msgValue op queryId msgBody '103
+    IFJMP:<{                	//  myBalance senderAddress msgValue op queryId msgBody
+      // 258: ERROR_NOT_ADMIN
+      s2 POP                	//  myBalance senderAddress msgValue msgBody queryId
+      // 257: senderAddress == adminAddress
+      $adminAddress GETGLOB 	//  myBalance senderAddress msgValue msgBody queryId g_adminAddress
+      s1 s4 XCHG            	//  myBalance queryId msgValue msgBody senderAddress g_adminAddress
+      SDEQ                  	//  myBalance queryId msgValue msgBody '106
+      // 256: assert(
+      76 THROWIFNOT         	//  myBalance queryId msgValue msgBody
+      // 261: var amount = msgBody.loadCoins()
+      LDGRAMS               	//  myBalance queryId msgValue amount msgBody
+      // 262: var to = msgBody.loadAddress()
+      LDSTDADDR             	//  myBalance queryId msgValue amount '113 '112
+      DROP                  	//  myBalance queryId msgValue amount to
+      // 265: - tonReserve
+      $tonReserve GETGLOB   	//  myBalance queryId msgValue amount to g_tonReserve
+      // 264: var availableTon = myBalance
+      // ...265: - tonReserve
+      s1 s5 XCHG            	//  to queryId msgValue amount myBalance g_tonReserve
+      SUB                   	//  to queryId msgValue amount '117
+      ROT                   	//  to queryId amount '117 msgValue
+      // 266: - msgValue
+      SUB                   	//  to queryId amount availableTon
+      // 269: amount <= availableTon
+      OVER                  	//  to queryId amount availableTon amount
+      GEQ                   	//  to queryId amount '120
+      // 268: assert(
+      82 THROWIFNOT         	//  to queryId amount
+      // 273: sendTon(to, amount, queryId)
+      SWAP                  	//  to amount queryId
+      sendTon() CALLDICT    	// 
+    }>                      	//  myBalance senderAddress msgValue op queryId msgBody
+    // 280: if (op == OP_SET_RESERVE)
+    NIP                     	//  myBalance senderAddress msgValue op msgBody
+    s2 POP                  	//  myBalance senderAddress msgBody op
+    s3 POP                  	//  op senderAddress msgBody
+    s2 PUSH
+    164 PUSHINT             	//  op senderAddress msgBody op '121=164
+    EQUAL                   	//  op senderAddress msgBody '122
+    IFJMP:<{                	//  op senderAddress msgBody
+      // 283: ERROR_NOT_ADMIN
+      s2 POP                	//  msgBody senderAddress
+      // 282: senderAddress == adminAddress
+      $adminAddress GETGLOB 	//  msgBody senderAddress g_adminAddress
+      SDEQ                  	//  msgBody '125
+      // 281: assert(
+      76 THROWIFNOT         	//  msgBody
+      // 286: tonReserve = msgBody.loadCoins()
+      LDGRAMS               	//  '128 '127
+      DROP                  	//  '126
+      $tonReserve SETGLOB   	// 
+      // 287: saveData()
+      saveData() CALLDICT   	// 
+    }>                      	//  op senderAddress msgBody
+    // 296: if (op == OP_CHANGE_TREASURY)
+    s0 s2 XCHG
+    165 PUSHINT             	//  msgBody senderAddress op '130=165
+    EQUAL                   	//  msgBody senderAddress '131
+    IFJMP:<{                	//  msgBody senderAddress
+      // 298: senderAddress == adminAddress
+      $adminAddress GETGLOB 	//  msgBody senderAddress g_adminAddress
+      SDEQ                  	//  msgBody '134
+      // 297: assert(
+      76 THROWIFNOT         	//  msgBody
+      // 302: var subOp = msgBody.loadUint(8)
+      8 LDU                 	//  subOp msgBody
+      // 305: if (subOp == 1)
+      OVER                  	//  subOp msgBody subOp
+      1 EQINT               	//  subOp msgBody '141
+      IFJMP:<{              	//  subOp msgBody
+        // 306: pendingTreasury = msgBody.loadAddress()
+        NIP                 	//  msgBody
+        LDSTDADDR           	//  '144 '143
+        DROP                	//  '142
+        $pendingTreasury SETGLOB	// 
+        // 307: pendingTreasuryTime = blockchain.now() + TIMELOCK_PERIOD
+        NOW                 	//  '147
+        172800 PUSHINT      	//  '147 '148=172800
+        ADD                 	//  '146
+        $pendingTreasuryTime SETGLOB	// 
+        // 308: hasPendingTreasury = true
+        TRUE                	//  '150
+        $hasPendingTreasury SETGLOB	// 
+        // 309: saveData()
+        saveData() CALLDICT 	// 
+      }>                    	//  subOp msgBody
+      // 314: if (subOp == 2)
+      DROP                  	//  subOp
+      DUP                   	//  subOp subOp
+      2 EQINT               	//  subOp '153
+      IFJMP:<{              	//  subOp
+        // 315: assert(hasPendingTreasury, ERROR_NO_PENDING)
+        DROP                	// 
+        $hasPendingTreasury GETGLOB	//  g_hasPendingTreasury
+        92 THROWIFNOT       	// 
+        // 317: blockchain.now() >= pendingTreasuryTime
+        NOW                 	//  '157
+        $pendingTreasuryTime GETGLOB	//  '157 g_pendingTreasuryTime
+        GEQ                 	//  '159
+        // 316: assert(
+        91 THROWIFNOT       	// 
+        // 321: domTreasuryAddress = pendingTreasury
+        $pendingTreasury GETGLOB	//  '160
+        $domTreasuryAddress SETGLOB	// 
+        // 322: hasPendingTreasury = false
+        FALSE               	//  '162
+        $hasPendingTreasury SETGLOB	// 
+        // 323: saveData()
+        saveData() CALLDICT 	// 
+      }>                    	//  subOp
+      // 328: if (subOp == 3)
+      3 EQINT               	//  '165
+      IFJMP:<{              	// 
+        // 329: hasPendingTreasury = false
+        FALSE               	//  '166
+        $hasPendingTreasury SETGLOB	// 
+        // 330: saveData()
+        saveData() CALLDICT 	// 
+      }>                    	// 
+      // 334: throw(0xffff)
+      16 PUSHPOW2DEC
+      THROWANY
+    }>                      	//  msgBody senderAddress
+    // 337: throw(0xffff)
+    16 PUSHPOW2DEC
+    THROWANY
+  }>
+  // contracts/Dominum/treasury/gas_pool.tolk:343
+  getPoolData() PROC:<{       	// 
+    // 346: loadData()
+    loadData() CALLDICT     	// 
+    // 348: var availableTon = contract.getOriginalBalance()
+    BALANCE
+    FIRST                   	//  '1
+    // 349: - tonReserve
+    $tonReserve GETGLOB     	//  '1 g_tonReserve
+    // 348: var availableTon = contract.getOriginalBalance()
+    // ...349: - tonReserve
+    SUB                     	//  availableTon
+    // 352: adminAddress
+    $adminAddress GETGLOB   	//  availableTon g_adminAddress
+    // 353: proxyAddress
+    $proxyAddress GETGLOB   	//  availableTon g_adminAddress g_proxyAddress
+    // 354: domTreasuryAddress
+    $domTreasuryAddress GETGLOB	//  availableTon g_adminAddress g_proxyAddress g_domTreasuryAddress
+    // 355: domBalance
+    $domBalance GETGLOB     	//  availableTon g_adminAddress g_proxyAddress g_domTreasuryAddress g_domBalance
+    // 356: tonReserve
+    $tonReserve GETGLOB     	//  availableTon g_adminAddress g_proxyAddress g_domTreasuryAddress g_domBalance g_tonReserve
+    5 ROLL                  	//  g_adminAddress g_proxyAddress g_domTreasuryAddress g_domBalance g_tonReserve availableTon
+  }>
+  // contracts/Dominum/treasury/gas_pool.tolk:361
+  getPendingTreasury() PROC:<{	// 
+    // 362: loadData()
+    loadData() CALLDICT     	// 
+    // 364: if (!hasPendingTreasury)
+    $hasPendingTreasury GETGLOB	//  g_hasPendingTreasury
+    IFNOTJMP:<{             	// 
+      // 366: false
+      FALSE                 	//  '1
+      // 367: null
+      PUSHNULL              	//  '1 '2
+      0 PUSHINT             	//  '1 '2 '3=0
+    }>                      	// 
+    // 373: true
+    TRUE                    	//  '4
+    // 374: pendingTreasury
+    $pendingTreasury GETGLOB	//  '4 g_pendingTreasury
+    // 375: pendingTreasuryTime
+    $pendingTreasuryTime GETGLOB	//  '4 g_pendingTreasury g_pendingTreasuryTime
+  }>
+}END>c

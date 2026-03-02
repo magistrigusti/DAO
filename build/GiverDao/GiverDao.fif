@@ -1,0 +1,305 @@
+"Asm.fif" include
+// automatically generated from giver_dao.tolk, op_codes.tolk, errors.tolk, constants.tolk
+PROGRAM{
+  DECLPROC sendJettons()
+  0 DECLMETHOD onInternalMessage()
+  82953 DECLMETHOD getGiverData()
+  // 3 functions inlined in-place:
+  // - loadData (2 calls)
+  // - saveData (2 calls)
+  // - autoDistribute (1 call)
+  DECLGLOBVAR $managerAddress
+  DECLGLOBVAR $walletAddress
+  DECLGLOBVAR $bankDaoAddress
+  DECLGLOBVAR $daoFoundationAddress
+  // contracts/Dominum/givers/giver_dao.tolk:52
+  sendJettons() PROC:<{       	//  toAddress amount queryId
+    // 57: if (amount <= 0)
+    OVER                    	//  toAddress amount queryId amount
+    1 LESSINT               	//  toAddress amount queryId '4
+    IFJMP:<{                	//  toAddress amount queryId
+      3 BLKDROP             	// 
+    }>                      	//  toAddress amount queryId
+    // 61: assert(walletAddress != null, ERROR_NOT_VALID_WALLET)
+    $walletAddress GETGLOB  	//  toAddress amount queryId g_walletAddress
+    ISNULL                  	//  toAddress amount queryId '7
+    85 THROWIF              	//  toAddress amount queryId
+    // 63: var currentWalletAddress = walletAddress!
+    $walletAddress GETGLOB  	//  toAddress amount queryId currentWalletAddress
+    // 65: var msgBody = beginCell()
+    NEWC                    	//  toAddress amount queryId currentWalletAddress '12
+    // 66: .storeUint(OP_TRANSFER, 32)
+    x{0f8a7ea5} STSLICECONST	//  toAddress amount queryId currentWalletAddress '12
+    // 67: .storeUint(queryId, 64)
+    s1 s2 XCHG              	//  toAddress amount currentWalletAddress queryId '12
+    64 STU                  	//  toAddress amount currentWalletAddress '12
+    ROT                     	//  toAddress currentWalletAddress '12 amount
+    // 68: .storeCoins(amount)
+    STGRAMS                 	//  toAddress currentWalletAddress '12
+    s2 s(-1) PUXC           	//  toAddress currentWalletAddress toAddress '12
+    // 69: .storeAddress(toAddress)
+    STSTDADDR               	//  toAddress currentWalletAddress '12
+    // 70: .storeAddress(toAddress)
+    s1 s2 XCHG              	//  currentWalletAddress toAddress '12
+    STSTDADDR               	//  currentWalletAddress '12
+    // 71: .storeBool(false)
+    b{000000} STSLICECONST  	//  currentWalletAddress '12
+    // 74: .endCell()
+    ENDC                    	//  currentWalletAddress msgBody
+    // 76: var msg = beginCell()
+    NEWC                    	//  currentWalletAddress msgBody '29
+    // 77: .storeUint(0x18, 6)
+    b{011000} STSLICECONST  	//  currentWalletAddress msgBody '29
+    // 78: .storeAddress(currentWalletAddress)
+    s1 s2 XCHG              	//  msgBody currentWalletAddress '29
+    STSTDADDR               	//  msgBody '29
+    // 79: .storeCoins(MIN_TON_FOR_TRANSFER)
+    150000000 PUSHINT       	//  msgBody '29 '33=150000000
+    // 76: var msg = beginCell()
+    // ...79: .storeCoins(MIN_TON_FOR_TRANSFER)
+    STGRAMS                 	//  msgBody '29
+    // 80: .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    1 PUSHINT
+    107 STUR                	//  msgBody '29
+    // 81: .storeRef(msgBody)
+    STREF                   	//  '29
+    // 82: .endCell()
+    ENDC                    	//  msg
+    // 84: sendRawMessage(msg, 1)
+    1 PUSHINT               	//  msg '52=1
+    SENDRAWMSG              	// 
+  }>
+  // contracts/Dominum/givers/giver_dao.tolk:100
+  onInternalMessage() PROC:<{ 	//  in.body
+    // 100: fun onInternalMessage(in: InMessage)
+    INMSG_BOUNCED           	//  in.body '1
+    0 THROWIF               	//  msgBody
+    // 103: if (msgBody.isEmpty())
+    DUP                     	//  msgBody msgBody
+    SEMPTY                  	//  msgBody '5
+    IFJMP:<{                	//  msgBody
+      // 104: return
+      DROP                  	// 
+    }>                      	//  msgBody
+    // 107: var senderAddress = in.senderAddress
+    INMSG_SRC               	//  msgBody senderAddress
+    // 28: var ds = contract.getData().beginParse()
+    c4 PUSH                 	//  msgBody senderAddress '10
+    CTOS                    	//  msgBody senderAddress ds
+    // 29: managerAddress = ds.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress '12 ds
+    SWAP                    	//  msgBody senderAddress ds '12
+    $managerAddress SETGLOB 	//  msgBody senderAddress ds
+    // 30: walletAddress = ds.loadAddressOpt()
+    LDOPTSTDADDR            	//  msgBody senderAddress '16 ds
+    SWAP                    	//  msgBody senderAddress ds '16
+    $walletAddress SETGLOB  	//  msgBody senderAddress ds
+    // 32: var targets = ds.loadRef().beginParse()
+    PLDREF                  	//  msgBody senderAddress '23
+    CTOS                    	//  msgBody senderAddress targets
+    // 33: bankDaoAddress = targets.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress '25 targets
+    SWAP                    	//  msgBody senderAddress targets '25
+    $bankDaoAddress SETGLOB 	//  msgBody senderAddress targets
+    // 34: daoFoundationAddress = targets.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress '31 '30
+    DROP                    	//  msgBody senderAddress '29
+    $daoFoundationAddress SETGLOB	//  msgBody senderAddress
+    // 111: var op = msgBody.loadUint(32)
+    SWAP                    	//  senderAddress msgBody
+    32 LDU                  	//  senderAddress op msgBody
+    // 112: var queryId = msgBody.loadUint(64)
+    64 LDU                  	//  senderAddress op queryId msgBody
+    // 114: if (op == OP_TRANSFER_NOTIFICATION)
+    s2 PUSH
+    1935855772 PUSHINT      	//  senderAddress op queryId msgBody op '43=1935855772
+    EQUAL                   	//  senderAddress op queryId msgBody '44
+    IFJMP:<{                	//  senderAddress op queryId msgBody
+      // 117: ERROR_NOT_VALID_WALLET
+      s2 POP                	//  senderAddress msgBody queryId
+      // 116: walletAddress != null
+      $walletAddress GETGLOB	//  senderAddress msgBody queryId g_walletAddress
+      ISNULL                	//  senderAddress msgBody queryId '47
+      85 THROWIF            	//  senderAddress msgBody queryId
+      // 121: senderAddress == walletAddress!
+      $walletAddress GETGLOB	//  senderAddress msgBody queryId g_walletAddress
+      s1 s3 XCHG            	//  queryId msgBody senderAddress g_walletAddress
+      SDEQ                  	//  queryId msgBody '50
+      // 120: assert(
+      75 THROWIFNOT         	//  queryId msgBody
+      // 125: var amount = msgBody.loadCoins()
+      LDGRAMS               	//  queryId '53 '52
+      DROP                  	//  queryId amount
+      // 88: var feeTotal = TAX_AMOUNT + TAX_HALF
+      150000000 PUSHINT     	//  queryId amount feeTotal
+      // 90: var half = amount / 2
+      OVER                  	//  queryId amount feeTotal amount
+      1 RSHIFT#             	//  queryId amount feeTotal half
+      s2 s2 XCPU            	//  queryId half feeTotal amount half
+      // 91: var remainder = amount - half
+      SUB                   	//  queryId half feeTotal remainder
+      s2 s1 PUSH2           	//  queryId half feeTotal remainder half feeTotal
+      // 93: assert(half > feeTotal, ERROR_INVALID_AMOUNT)
+      GREATER               	//  queryId half feeTotal remainder '68
+      81 THROWIFNOT         	//  queryId half feeTotal remainder
+      s0 s1 PUSH2           	//  queryId half feeTotal remainder remainder feeTotal
+      // 94: assert(remainder > feeTotal, ERROR_INVALID_AMOUNT)
+      GREATER               	//  queryId half feeTotal remainder '70
+      81 THROWIFNOT         	//  queryId half feeTotal remainder
+      // 96: sendJettons(bankDaoAddress, half - feeTotal, queryId)
+      $bankDaoAddress GETGLOB	//  queryId half feeTotal remainder g_bankDaoAddress
+      s3 s2 XCPU            	//  queryId g_bankDaoAddress feeTotal remainder half feeTotal
+      SUB                   	//  queryId g_bankDaoAddress feeTotal remainder '72
+      s3 s0 s4 XC2PU        	//  queryId remainder feeTotal g_bankDaoAddress '72 queryId
+      sendJettons() CALLDICT	//  queryId remainder feeTotal
+      // 97: sendJettons(daoFoundationAddress, remainder - feeTotal, queryId + 1)
+      $daoFoundationAddress GETGLOB	//  queryId remainder feeTotal g_daoFoundationAddress
+      s0 s2 XCHG
+      SUBR                  	//  queryId g_daoFoundationAddress '74
+      s0 s2 XCHG            	//  '74 g_daoFoundationAddress queryId
+      INC                   	//  '74 g_daoFoundationAddress '76
+      s1 s2 XCHG            	//  g_daoFoundationAddress '74 '76
+      sendJettons() CALLDICT	// 
+    }>                      	//  senderAddress op queryId msgBody
+    // 136: if (op == OP_SET_WALLET)
+    NIP                     	//  senderAddress op msgBody
+    OVER                    	//  senderAddress op msgBody op
+    65 EQINT                	//  senderAddress op msgBody '78
+    IFJMP:<{                	//  senderAddress op msgBody
+      // 139: ERROR_NOT_MANAGER
+      NIP                   	//  senderAddress msgBody
+      // 138: senderAddress == managerAddress
+      $managerAddress GETGLOB	//  senderAddress msgBody g_managerAddress
+      s1 s2 XCHG            	//  msgBody senderAddress g_managerAddress
+      SDEQ                  	//  msgBody '81
+      // 137: assert(
+      77 THROWIFNOT         	//  msgBody
+      // 142: var newWalletAddress = msgBody.loadAddress()
+      LDSTDADDR             	//  '84 '83
+      DROP                  	//  '86
+      // 143: walletAddress = newWalletAddress
+      $walletAddress SETGLOB	// 
+      // 39: .storeAddress(bankDaoAddress)
+      $bankDaoAddress GETGLOB	//  g_bankDaoAddress
+      // 38: var targets = beginCell()
+      NEWC                  	//  g_bankDaoAddress '89
+      // 39: .storeAddress(bankDaoAddress)
+      STSTDADDR             	//  '89
+      // 40: .storeAddress(daoFoundationAddress)
+      $daoFoundationAddress GETGLOB	//  '89 g_daoFoundationAddress
+      // 38: var targets = beginCell()
+      // ...40: .storeAddress(daoFoundationAddress)
+      SWAP                  	//  g_daoFoundationAddress '89
+      STSTDADDR             	//  '89
+      // 41: .endCell()
+      ENDC                  	//  targets
+      // 45: .storeAddress(managerAddress)
+      $managerAddress GETGLOB	//  targets g_managerAddress
+      // 44: beginCell()
+      NEWC                  	//  targets g_managerAddress '95
+      // 45: .storeAddress(managerAddress)
+      STSTDADDR             	//  targets '95
+      // 46: .storeAddressOpt(walletAddress)
+      $walletAddress GETGLOB	//  targets '95 g_walletAddress
+      // 44: beginCell()
+      // ...46: .storeAddressOpt(walletAddress)
+      SWAP                  	//  targets g_walletAddress '95
+      STOPTSTDADDR          	//  targets '95
+      // 47: .storeRef(targets)
+      STREF                 	//  '95
+      // 48: .endCell()
+      ENDC                  	//  '100
+      // 43: contract.setData(
+      c4 POP                	// 
+    }>                      	//  senderAddress op msgBody
+    // 148: if (op == OP_CHANGE_WHITELIST)
+    SWAP                    	//  senderAddress msgBody op
+    64 EQINT                	//  senderAddress msgBody '102
+    IFJMP:<{                	//  senderAddress msgBody
+      // 150: senderAddress == managerAddress
+      $managerAddress GETGLOB	//  senderAddress msgBody g_managerAddress
+      s1 s2 XCHG            	//  msgBody senderAddress g_managerAddress
+      SDEQ                  	//  msgBody '105
+      // 149: assert(
+      77 THROWIFNOT         	//  msgBody
+      // 154: var newAddress1 = msgBody.loadAddress()
+      LDSTDADDR             	//  newAddress1 msgBody
+      // 155: var newAddress2 = msgBody.loadAddress()
+      LDSTDADDR             	//  newAddress1 '112 '111
+      DROP                  	//  '114 newAddress2
+      // 157: bankDaoAddress = newAddress1
+      SWAP                  	//  newAddress2 '114
+      $bankDaoAddress SETGLOB	//  '115
+      // 158: daoFoundationAddress = newAddress2
+      $daoFoundationAddress SETGLOB	// 
+      // 39: .storeAddress(bankDaoAddress)
+      $bankDaoAddress GETGLOB	//  g_bankDaoAddress
+      // 38: var targets = beginCell()
+      NEWC                  	//  g_bankDaoAddress '118
+      // 39: .storeAddress(bankDaoAddress)
+      STSTDADDR             	//  '118
+      // 40: .storeAddress(daoFoundationAddress)
+      $daoFoundationAddress GETGLOB	//  '118 g_daoFoundationAddress
+      // 38: var targets = beginCell()
+      // ...40: .storeAddress(daoFoundationAddress)
+      SWAP                  	//  g_daoFoundationAddress '118
+      STSTDADDR             	//  '118
+      // 41: .endCell()
+      ENDC                  	//  targets
+      // 45: .storeAddress(managerAddress)
+      $managerAddress GETGLOB	//  targets g_managerAddress
+      // 44: beginCell()
+      NEWC                  	//  targets g_managerAddress '124
+      // 45: .storeAddress(managerAddress)
+      STSTDADDR             	//  targets '124
+      // 46: .storeAddressOpt(walletAddress)
+      $walletAddress GETGLOB	//  targets '124 g_walletAddress
+      // 44: beginCell()
+      // ...46: .storeAddressOpt(walletAddress)
+      SWAP                  	//  targets g_walletAddress '124
+      STOPTSTDADDR          	//  targets '124
+      // 47: .storeRef(targets)
+      STREF                 	//  '124
+      // 48: .endCell()
+      ENDC                  	//  '129
+      // 43: contract.setData(
+      c4 POP                	// 
+    }>                      	//  senderAddress msgBody
+    // 164: throw(0xffff)
+    16 PUSHPOW2DEC
+    THROWANY
+  }>
+  // contracts/Dominum/givers/giver_dao.tolk:167
+  getGiverData() PROC:<{      	// 
+    // 28: var ds = contract.getData().beginParse()
+    c4 PUSH                 	//  '1
+    CTOS                    	//  ds
+    // 29: managerAddress = ds.loadAddress()
+    LDSTDADDR               	//  '3 ds
+    SWAP                    	//  ds '3
+    $managerAddress SETGLOB 	//  ds
+    // 30: walletAddress = ds.loadAddressOpt()
+    LDOPTSTDADDR            	//  '7 ds
+    SWAP                    	//  ds '7
+    $walletAddress SETGLOB  	//  ds
+    // 32: var targets = ds.loadRef().beginParse()
+    PLDREF                  	//  '14
+    CTOS                    	//  targets
+    // 33: bankDaoAddress = targets.loadAddress()
+    LDSTDADDR               	//  '16 targets
+    SWAP                    	//  targets '16
+    $bankDaoAddress SETGLOB 	//  targets
+    // 34: daoFoundationAddress = targets.loadAddress()
+    LDSTDADDR               	//  '22 '21
+    DROP                    	//  '20
+    $daoFoundationAddress SETGLOB	// 
+    // 170: managerAddress
+    $managerAddress GETGLOB 	//  g_managerAddress
+    // 171: walletAddress
+    $walletAddress GETGLOB  	//  g_managerAddress g_walletAddress
+    // 172: bankDaoAddress
+    $bankDaoAddress GETGLOB 	//  g_managerAddress g_walletAddress g_bankDaoAddress
+    // 173: daoFoundationAddress
+    $daoFoundationAddress GETGLOB	//  g_managerAddress g_walletAddress g_bankDaoAddress g_daoFoundationAddress
+  }>
+}END>c

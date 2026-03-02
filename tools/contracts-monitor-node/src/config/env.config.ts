@@ -5,13 +5,18 @@ import type {
     NetworkKind,
 } from '../types/monitor.types.js';
 
-function readRequiredString(name: string): string {
+const DEFAULT_TON_ENDPOINT = 'https://toncenter.com/api/v2/jsonRPC';
+const DEFAULT_GAS_POOL_ADDRESS =
+    'EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c';
+
+function readStringWithFallback(
+    name: string,
+    fallback: string
+): string {
     const value = process.env[name]?.trim();
 
     if (!value) {
-        throw new Error(
-            `Environment variable "${name}" is required.`
-        );
+        return fallback;
     }
 
     return value;
@@ -65,9 +70,15 @@ function readNetwork(): NetworkKind {
 export function loadMonitorConfig(): MonitorConfig {
     return {
         network: readNetwork(),
-        tonEndpoint: readRequiredString('TON_ENDPOINT'),
+        tonEndpoint: readStringWithFallback(
+            'TON_ENDPOINT',
+            DEFAULT_TON_ENDPOINT
+        ),
         tonApiKey: readOptionalString('TON_API_KEY'),
-        gasPoolAddress: readRequiredString('GAS_POOL_ADDRESS'),
+        gasPoolAddress: readStringWithFallback(
+            'GAS_POOL_ADDRESS',
+            DEFAULT_GAS_POOL_ADDRESS
+        ),
         marketMakerAddress: readOptionalString('MARKET_MAKER_ADDRESS'),
         pollIntervalMs: readPositiveNumber('POLL_INTERVAL_MS', 30000),
         outputFilePath: resolve(

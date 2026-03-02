@@ -2,6 +2,12 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
+// ========== TOLK MIGRATION v1.2 ==========
+// Контракт переписан с legacy API на новый Tolk API.
+// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
+// Статус: migrated
+// =========================================
+
 // =====================================================
 // DOM TREASURY — Единое казначейство Dominum
 // =====================================================
@@ -11,37 +17,37 @@ import "../core/constants.tolk";
 // Админа НЕТ — адреса жёстко зашиты при деплое!
 // =====================================================
 
-global ownerAddress: slice;           // СИД-фраза владельца
-global jettonWalletAddress: slice;    // Jetton Wallet казначейства
+global ownerAddress: address;
+global jettonWalletAddress: address;
 
 // Whitelist — 3 банка (ЖЁСТКО при деплое!)
-global bankDaoAddress: slice;
-global bankDefiAddress: slice;
-global bankDominumAddress: slice;
+global bankDaoAddress: address;
+global bankDefiAddress: address;
+global bankDominumAddress: address;
 
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
 
 fun loadData() {
-    var ds = getContractData().beginParse();
-    
-    ownerAddress = ds.loadMsgAddress();
-    jettonWalletAddress = ds.loadMsgAddress();
-    
-    bankDaoAddress = ds.loadMsgAddress();
-    bankDefiAddress = ds.loadMsgAddress();
-    bankDominumAddress = ds.loadMsgAddress();
+    var ds = contract.getData().beginParse();
+
+    ownerAddress = ds.loadAddress();
+    jettonWalletAddress = ds.loadAddress();
+
+    bankDaoAddress = ds.loadAddress();
+    bankDefiAddress = ds.loadAddress();
+    bankDominumAddress = ds.loadAddress();
 }
 
 fun saveData() {
-    setContractData(
+    contract.setData(
         beginCell()
-            .storeSlice(ownerAddress)
-            .storeSlice(jettonWalletAddress)
-            .storeSlice(bankDaoAddress)
-            .storeSlice(bankDefiAddress)
-            .storeSlice(bankDominumAddress)
+            .storeAddress(ownerAddress)
+            .storeAddress(jettonWalletAddress)
+            .storeAddress(bankDaoAddress)
+            .storeAddress(bankDefiAddress)
+            .storeAddress(bankDominumAddress)
             .endCell()
     );
 }
@@ -50,16 +56,17 @@ fun saveData() {
 // ПРОВЕРКА WHITELIST
 // -----------------------------------------------------
 
-fun isWhitelisted(address: slice): int {
-    if (address.equalSlices(bankDaoAddress)) {
+fun isWhitelisted(candidate: address): bool {
+    if (candidate == bankDaoAddress) {
         return true;
     }
-    if (address.equalSlices(bankDefiAddress)) {
+    if (candidate == bankDefiAddress) {
         return true;
     }
-    if (address.equalSlices(bankDominumAddress)) {
+    if (candidate == bankDominumAddress) {
         return true;
     }
+
     return false;
 }
 
@@ -67,20 +74,20 @@ fun isWhitelisted(address: slice): int {
 // ВЫВОД TON
 // -----------------------------------------------------
 
-fun withdrawTon(toAddress: slice, amount: int, queryId: int) {
+fun withdrawTon(toAddress: address, amount: int, queryId: int) {
     var body = beginCell()
         .storeUint(OP_EXCESSES, 32)
         .storeUint(queryId, 64)
         .endCell();
-    
+
     var msg = beginCell()
         .storeUint(0x10, 6)
-        .storeSlice(toAddress)
+        .storeAddress(toAddress)
         .storeCoins(amount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
-    
+
     sendRawMessage(msg, 1);
 }
 
@@ -88,26 +95,26 @@ fun withdrawTon(toAddress: slice, amount: int, queryId: int) {
 // ВЫВОД DOM (через Jetton Wallet)
 // -----------------------------------------------------
 
-fun withdrawDom(toAddress: slice, amount: int, queryId: int) {
+fun withdrawDom(toAddress: address, amount: int, queryId: int) {
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
-        .storeSlice(toAddress)
-        .storeSlice(ownerAddress)        // response_destination
+        .storeAddress(toAddress)
+        .storeAddress(ownerAddress)
         .storeBool(false)                // no custom_payload
         .storeCoins(0)                   // forward_ton_amount
         .storeBool(false)                // no forward_payload
         .endCell();
-    
+
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(jettonWalletAddress)
+        .storeAddress(jettonWalletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
-    
+
     sendRawMessage(msg, 1);
 }
 
@@ -115,79 +122,70 @@ fun withdrawDom(toAddress: slice, amount: int, queryId: int) {
 // MAIN
 // -----------------------------------------------------
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
     // Пустое сообщение — просто принимаем TON
-    if (msgBody.isEndOfSlice()) {
+    if (msgBody.isEmpty()) {
         return;
     }
-    
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-    
-    if (flags & 1) {
-        return;
-    }
-    
-    var senderAddress = cs.loadMsgAddress();
-    
+
+    var senderAddress = in.senderAddress;
+
     loadData();
-    
+
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
-    
+
     // =====================================================
     // OP_TRANSFER_NOTIFICATION — получили DOM (налог)
-    // Просто принимаем, ничего не делаем
+    // Принимать можно только от treasury jetton wallet
     // =====================================================
     if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(senderAddress == jettonWalletAddress, ERROR_NOT_VALID_WALLET);
         return;
     }
-    
+
     // =====================================================
     // OP_WITHDRAW — вывести TON (только owner, только whitelist)
     // =====================================================
     if (op == OP_WITHDRAW) {
         assert(
-            senderAddress.equalSlices(ownerAddress),
+            senderAddress == ownerAddress,
             ERROR_NOT_OWNER
         );
-        
+
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
-        
+        var toAddress = msgBody.loadAddress();
+
         // ТОЛЬКО НА БАНКИ!
         assert(isWhitelisted(toAddress), ERROR_NOT_IN_WHITELIST);
-        
+
         withdrawTon(toAddress, amount, queryId);
-        
+
         return;
     }
-    
+
     // =====================================================
     // OP_WITHDRAW_JETTONS — вывести DOM (только owner, только whitelist)
     // =====================================================
     if (op == OP_WITHDRAW_JETTONS) {
         assert(
-            senderAddress.equalSlices(ownerAddress),
+            senderAddress == ownerAddress,
             ERROR_NOT_OWNER
         );
-        
+
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
-        
+        var toAddress = msgBody.loadAddress();
+
         // ТОЛЬКО НА БАНКИ!
         assert(isWhitelisted(toAddress), ERROR_NOT_IN_WHITELIST);
-        
+
         withdrawDom(toAddress, amount, queryId);
-        
+
         return;
     }
-    
+
     throw(0xffff);
 }
 
@@ -195,20 +193,20 @@ fun onInternalMessage(
 // GETTERS
 // -----------------------------------------------------
 
-get fun getTreasuryData(): (slice, slice, slice, slice, slice, int) {
+get fun getTreasuryData(): (address, address, address, address, address, int) {
     loadData();
-    
+
     return (
         ownerAddress,
         jettonWalletAddress,
         bankDaoAddress,
         bankDefiAddress,
         bankDominumAddress,
-        getBalance().0
+        contract.getOriginalBalance()
     );
 }
 
-get fun isAddressWhitelisted(address: slice): int {
+get fun isAddressWhitelisted(candidate: address): bool {
     loadData();
-    return isWhitelisted(address);
+    return isWhitelisted(candidate);
 }

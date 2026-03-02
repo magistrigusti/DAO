@@ -13,33 +13,45 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-global managerAddress: slice;
-global walletAddress: slice;
-global defiBankAddress: slice;
-global defiDualAddress: slice;
+// ========== TOLK MIGRATION v1.2 ==========
+// Контракт переписан с legacy API на новый Tolk API.
+// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
+// Статус: migrated
+// =========================================
+
+global managerAddress: address;
+global walletAddress: address?;
+global defiBankAddress: address;
+global defiDualAddress: address;
 
 fun loadData() {
-    var ds = getContractData().beginParse();
+    var ds = contract.getData().beginParse();
 
-    managerAddress = ds.loadMsgAddress();
-    walletAddress = ds.loadMsgAddress();
-    defiBankAddress = ds.loadMsgAddress();
-    defiDualAddress = ds.loadMsgAddress();
+    managerAddress = ds.loadAddress();
+    walletAddress = ds.loadAddressOpt();
+
+    var targets = ds.loadRef().beginParse();
+    defiBankAddress = targets.loadAddress();
+    defiDualAddress = targets.loadAddress();
 }
 
 fun saveData() {
-    setContractData(
+    var targets = beginCell()
+        .storeAddress(defiBankAddress)
+        .storeAddress(defiDualAddress)
+        .endCell();
+
+    contract.setData(
         beginCell()
-            .storeSlice(managerAddress)
-            .storeSlice(walletAddress)
-            .storeSlice(defiBankAddress)
-            .storeSlice(defiDualAddress)
+            .storeAddress(managerAddress)
+            .storeAddressOpt(walletAddress)
+            .storeRef(targets)
             .endCell()
     );
 }
 
 fun sendJettons(
-    toAddress: slice,
+    toAddress: address,
     amount: int,
     queryId: int
 ) {
@@ -47,12 +59,16 @@ fun sendJettons(
         return;
     }
 
+    assert(walletAddress != null, ERROR_NOT_VALID_WALLET);
+
+    var currentWalletAddress = walletAddress!;
+
     var msgBody = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
-        .storeSlice(toAddress)
-        .storeSlice(toAddress)
+        .storeAddress(toAddress)
+        .storeAddress(toAddress)
         .storeBool(false)
         .storeCoins(0)
         .storeBool(false)
@@ -60,7 +76,7 @@ fun sendJettons(
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeAddress(currentWalletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
@@ -82,24 +98,14 @@ fun autoDistribute(amount: int, queryId: int) {
     sendJettons(defiDualAddress, remainder - feeTotal, queryId + 1);
 }
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
-        return;
-    }
-
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
 
     loadData();
 
@@ -108,11 +114,17 @@ fun onInternalMessage(
 
     if (op == OP_TRANSFER_NOTIFICATION) {
         assert(
-            senderAddress.equalSlices(walletAddress),
+            walletAddress != null,
+            ERROR_NOT_VALID_WALLET
+        );
+
+        assert(
+            senderAddress == walletAddress!,
             ERROR_NOT_OWNER
         );
 
         var amount = msgBody.loadCoins();
+        msgBody.loadAddress();
         autoDistribute(amount, queryId);
 
         return;
@@ -124,11 +136,11 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_SET_WALLET) {
         assert(
-            senderAddress.equalSlices(managerAddress),
+            senderAddress == managerAddress,
             ERROR_NOT_MANAGER
         );
 
-        var newWalletAddress = msgBody.loadMsgAddress();
+        var newWalletAddress = msgBody.loadAddress();
         walletAddress = newWalletAddress;
         saveData();
         return;
@@ -136,12 +148,12 @@ fun onInternalMessage(
 
     if (op == OP_CHANGE_WHITELIST) {
         assert(
-            senderAddress.equalSlices(managerAddress),
+            senderAddress == managerAddress,
             ERROR_NOT_MANAGER
         );
 
-        var newAddress1 = msgBody.loadMsgAddress();
-        var newAddress2 = msgBody.loadMsgAddress();
+        var newAddress1 = msgBody.loadAddress();
+        var newAddress2 = msgBody.loadAddress();
 
         defiBankAddress = newAddress1;
         defiDualAddress = newAddress2;
@@ -153,7 +165,7 @@ fun onInternalMessage(
     throw(0xffff);
 }
 
-get fun getGiverData(): (slice, slice, slice, slice) {
+get fun getGiverData(): (address, address?, address, address) {
     loadData();
 
     return (

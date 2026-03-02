@@ -1,6 +1,12 @@
-import "../core/op_codes";
-import "../core/errors";
-import "../core/constants";
+import "../core/op_codes.tolk";
+import "../core/errors.tolk";
+import "../core/constants.tolk";
+
+// ========== TOLK MIGRATION v1.2 ==========
+// Контракт переписан с legacy API на новый Tolk API.
+// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
+// Статус: migrated
+// =========================================
 
 // =====================================================
 // MINTER — Контракт минта DOM по расписанию
@@ -23,29 +29,29 @@ const MINT_AMOUNT: int = 10000000000000;
 // Интервал: 30 дней (в секундах)
 const MINT_INTERVAL: int = 2592000;
 
-global adminAddress: slice;    // СИД-фраза (менять нельзя!)
-global masterAddress: slice;   // Jetton Master
-global lastMintTime: int;      // Время последнего минта
-global isStarted: int;         // Запущен ли таймер
+global adminAddress: address;
+global masterAddress: address;
+global lastMintTime: int;
+global isStarted: bool;
 
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
 
 fun loadData() {
-    var ds = getContractData().beginParse();
+    var ds = contract.getData().beginParse();
 
-    adminAddress = ds.loadMsgAddress();
-    masterAddress = ds.loadMsgAddress();
+    adminAddress = ds.loadAddress();
+    masterAddress = ds.loadAddress();
     lastMintTime = ds.loadUint(64);
     isStarted = ds.loadBool();
 }
 
 fun saveData() {
-    setContractData(
+    contract.setData(
         beginCell()
-            .storeSlice(adminAddress)
-            .storeSlice(masterAddress)
+            .storeAddress(adminAddress)
+            .storeAddress(masterAddress)
             .storeUint(lastMintTime, 64)
             .storeBool(isStarted)
             .endCell()
@@ -59,7 +65,7 @@ fun saveData() {
 fun sendMint(amount: int, queryId: int, forwardValue: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(masterAddress)
+        .storeAddress(masterAddress)
         .storeCoins(forwardValue)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(
@@ -78,24 +84,15 @@ fun sendMint(amount: int, queryId: int, forwardValue: int) {
 // MAIN
 // -----------------------------------------------------
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
-        return;
-    }
-
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
+    var msgValue = in.valueCoins;
 
     loadData();
 
@@ -107,7 +104,7 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_MINT) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_OWNER
         );
 
@@ -126,7 +123,7 @@ fun onInternalMessage(
         if (isStarted) {
             // Таймер запущен — проверяем интервал
             assert(
-                now() >= lastMintTime + MINT_INTERVAL,
+                blockchain.now() >= lastMintTime + MINT_INTERVAL,
                 ERROR_TOO_EARLY
             );
         } else {
@@ -140,7 +137,7 @@ fun onInternalMessage(
         }
 
         // Записываем время
-        lastMintTime = now();
+        lastMintTime = blockchain.now();
         saveData();
 
         // Отправляем на Master
@@ -157,7 +154,7 @@ fun onInternalMessage(
 // GETTERS
 // -----------------------------------------------------
 
-get fun getMinterData(): (slice, slice, int, int, int, int) {
+get fun getMinterData(): (address, address, int, int, bool, int) {
     loadData();
 
     var nextMintTime = lastMintTime + MINT_INTERVAL;
@@ -172,7 +169,7 @@ get fun getMinterData(): (slice, slice, int, int, int, int) {
     );
 }
 
-get fun canMintNow(): int {
+get fun canMintNow(): bool {
     loadData();
 
     if (!isStarted) {
@@ -180,5 +177,5 @@ get fun canMintNow(): int {
         return true;
     }
 
-    return now() >= lastMintTime + MINT_INTERVAL;
+    return blockchain.now() >= lastMintTime + MINT_INTERVAL;
 }

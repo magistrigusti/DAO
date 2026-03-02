@@ -54,6 +54,7 @@ export class PoolMetricsService {
         };
 
         return {
+            status: 'ok',
             readAt: raw.readAt,
             address: raw.address,
             adminAddress: raw.adminAddress,
@@ -104,6 +105,7 @@ export class PoolMetricsService {
         };
 
         return {
+            status: 'ok',
             readAt: raw.readAt,
             address: raw.address,
             ownerAddress: raw.ownerAddress,

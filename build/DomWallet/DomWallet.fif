@@ -1,0 +1,501 @@
+"Asm.fif" include
+// automatically generated from wallet.tolk, op_codes.tolk, errors.tolk, constants.tolk
+PROGRAM{
+  DECLPROC requireInternalSender()
+  0 DECLMETHOD onInternalMessage()
+  83615 DECLMETHOD getWalletData()
+  // 6 functions inlined in-place:
+  // - loadData (2 calls)
+  // - saveData (3 calls)
+  // - buildWalletData (1 call)
+  // - buildWalletStateInit (1 call)
+  // - buildWalletAddress (1 call)
+  // - notifyOwner (1 call)
+  DECLGLOBVAR $balance
+  DECLGLOBVAR $ownerAddress
+  DECLGLOBVAR $masterAddress
+  DECLGLOBVAR $gasPoolAddress
+  DECLGLOBVAR $jettonWalletCode
+  // contracts/Dominum/dom/wallet.tolk:86
+  requireInternalSender() PROC:<{	//  senderAddress fromOwner
+    // 91: if (senderAddress == masterAddress)
+    $masterAddress GETGLOB  	//  senderAddress fromOwner g_masterAddress
+    s2 PUSH                 	//  senderAddress fromOwner g_masterAddress senderAddress
+    SDEQ                    	//  senderAddress fromOwner '3
+    IFJMP:<{                	//  senderAddress fromOwner
+      2DROP                 	// 
+    }>                      	//  senderAddress fromOwner
+    // 96: if (senderAddress == gasPoolAddress)
+    $gasPoolAddress GETGLOB 	//  senderAddress fromOwner g_gasPoolAddress
+    s2 PUSH                 	//  senderAddress fromOwner g_gasPoolAddress senderAddress
+    SDEQ                    	//  senderAddress fromOwner '5
+    IFJMP:<{                	//  senderAddress fromOwner
+      2DROP                 	// 
+    }>                      	//  senderAddress fromOwner
+    // 57: return beginCell()
+    NEWC                    	//  senderAddress fromOwner '10
+    // 58: .storeCoins(0)
+    x{0} STSLICECONST       	//  senderAddress fromOwner '10
+    // 59: .storeAddress(owner)
+    STSTDADDR               	//  senderAddress '10
+    // 60: .storeAddress(masterAddress)
+    $masterAddress GETGLOB  	//  senderAddress '10 g_masterAddress
+    // 57: return beginCell()
+    // ...60: .storeAddress(masterAddress)
+    SWAP                    	//  senderAddress g_masterAddress '10
+    STSTDADDR               	//  senderAddress '10
+    // 61: .storeAddress(gasPoolAddress)
+    $gasPoolAddress GETGLOB 	//  senderAddress '10 g_gasPoolAddress
+    // 57: return beginCell()
+    // ...61: .storeAddress(gasPoolAddress)
+    SWAP                    	//  senderAddress g_gasPoolAddress '10
+    STSTDADDR               	//  senderAddress '10
+    // 62: .storeRef(jettonWalletCode)
+    $jettonWalletCode GETGLOB	//  senderAddress '10 g_jettonWalletCode
+    // 57: return beginCell()
+    // ...62: .storeRef(jettonWalletCode)
+    STREFR                  	//  senderAddress '10
+    // 63: .endCell()
+    ENDC                    	//  senderAddress walletData
+    // 69: return beginCell()
+    NEWC                    	//  senderAddress walletData '22
+    // 70: .storeUint(0, 2)
+    b{00} STSLICECONST      	//  senderAddress walletData '22
+    // 71: .storeMaybeRef(jettonWalletCode)
+    $jettonWalletCode GETGLOB	//  senderAddress walletData '22 g_jettonWalletCode
+    // 69: return beginCell()
+    // ...71: .storeMaybeRef(jettonWalletCode)
+    SWAP                    	//  senderAddress walletData g_jettonWalletCode '22
+    STOPTREF                	//  senderAddress walletData '22
+    // 72: .storeMaybeRef(walletData)
+    STOPTREF                	//  senderAddress '22
+    // 73: .storeUint(0, 1)
+    b{0} STSLICECONST       	//  senderAddress '22
+    // 74: .endCell()
+    ENDC                    	//  senderAddress '7
+    // 78: var wc = contract.getAddress().getWorkchain()
+    MYADDR                  	//  senderAddress '7 '34
+    REWRITESTDADDR
+    DROP                    	//  senderAddress '7 wc
+    // 79: return address.fromWorkchainAndHash(wc, stateInit.hash())
+    SWAP                    	//  senderAddress wc '7
+    HASHCU                  	//  senderAddress wc '36
+    SWAP                    	//  senderAddress '36 wc
+    NEWC
+    b{100} STSLICECONST
+    8 STI
+    256 STU
+    BTOS                    	//  senderAddress expectedWallet
+    // 106: senderAddress == expectedWallet
+    SDEQ                    	//  '39
+    // 105: assert(
+    85 THROWIFNOT           	// 
+  }>
+  // contracts/Dominum/dom/wallet.tolk:138
+  onInternalMessage() PROC:<{ 	//  in.body
+    // 138: fun onInternalMessage(in: InMessage)
+    INMSG_BOUNCED           	//  in.body '1
+    0 THROWIF               	//  msgBody
+    // 141: if (msgBody.isEmpty())
+    DUP                     	//  msgBody msgBody
+    SEMPTY                  	//  msgBody '5
+    IFJMP:<{                	//  msgBody
+      // 142: return
+      DROP                  	// 
+    }>                      	//  msgBody
+    // 145: var senderAddress = in.senderAddress
+    INMSG_SRC               	//  msgBody senderAddress
+    // 146: var msgValue = in.valueCoins
+    INMSG_VALUE             	//  msgBody senderAddress msgValue
+    // 31: var ds = contract.getData().beginParse()
+    c4 PUSH                 	//  msgBody senderAddress msgValue '13
+    CTOS                    	//  msgBody senderAddress msgValue ds
+    // 33: balance = ds.loadCoins()
+    LDGRAMS                 	//  msgBody senderAddress msgValue '15 ds
+    SWAP                    	//  msgBody senderAddress msgValue ds '15
+    $balance SETGLOB        	//  msgBody senderAddress msgValue ds
+    // 34: ownerAddress = ds.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress msgValue '19 ds
+    SWAP                    	//  msgBody senderAddress msgValue ds '19
+    $ownerAddress SETGLOB   	//  msgBody senderAddress msgValue ds
+    // 35: masterAddress = ds.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress msgValue '23 ds
+    SWAP                    	//  msgBody senderAddress msgValue ds '23
+    $masterAddress SETGLOB  	//  msgBody senderAddress msgValue ds
+    // 36: gasPoolAddress = ds.loadAddress()
+    LDSTDADDR               	//  msgBody senderAddress msgValue '27 ds
+    SWAP                    	//  msgBody senderAddress msgValue ds '27
+    $gasPoolAddress SETGLOB 	//  msgBody senderAddress msgValue ds
+    // 37: jettonWalletCode = ds.loadRef()
+    PLDREF                  	//  msgBody senderAddress msgValue '31
+    $jettonWalletCode SETGLOB	//  msgBody senderAddress msgValue
+    // 150: var op = msgBody.loadUint(32)
+    s0 s2 XCHG              	//  msgValue senderAddress msgBody
+    32 LDU                  	//  msgValue senderAddress op msgBody
+    // 151: var queryId = msgBody.loadUint(64)
+    64 LDU                  	//  msgValue senderAddress op queryId msgBody
+    // 156: if (op == OP_INTERNAL_TRANSFER)
+    s2 PUSH
+    395134233 PUSHINT       	//  msgValue senderAddress op queryId msgBody op '45=395134233
+    EQUAL                   	//  msgValue senderAddress op queryId msgBody '46
+    IFJMP:<{                	//  msgValue senderAddress op queryId msgBody
+      // 157: var amount = msgBody.loadCoins()
+      s2 POP                	//  msgValue senderAddress msgBody queryId
+      s3 POP                	//  queryId senderAddress msgBody
+      LDGRAMS               	//  queryId senderAddress amount msgBody
+      // 158: var fromOwner = msgBody.loadAddress()
+      LDSTDADDR             	//  queryId senderAddress amount '53 '52
+      DROP                  	//  queryId senderAddress amount fromOwner
+      s2 s2 XCPU            	//  queryId fromOwner amount senderAddress fromOwner
+      // 161: requireInternalSender(senderAddress, fromOwner)
+      requireInternalSender() CALLDICT	//  queryId fromOwner amount
+      // 163: balance += amount
+      $balance GETGLOB      	//  queryId fromOwner amount g_balance
+      OVER                  	//  queryId fromOwner amount g_balance amount
+      ADD                   	//  queryId fromOwner amount '59
+      $balance SETGLOB      	//  queryId fromOwner amount
+      // 42: beginCell()
+      NEWC                  	//  queryId fromOwner amount '62
+      // 43: .storeCoins(balance)
+      $balance GETGLOB      	//  queryId fromOwner amount '62 g_balance
+      // 42: beginCell()
+      // ...43: .storeCoins(balance)
+      STGRAMS               	//  queryId fromOwner amount '62
+      // 44: .storeAddress(ownerAddress)
+      $ownerAddress GETGLOB 	//  queryId fromOwner amount '62 g_ownerAddress
+      // 42: beginCell()
+      // ...44: .storeAddress(ownerAddress)
+      SWAP                  	//  queryId fromOwner amount g_ownerAddress '62
+      STSTDADDR             	//  queryId fromOwner amount '62
+      // 45: .storeAddress(masterAddress)
+      $masterAddress GETGLOB	//  queryId fromOwner amount '62 g_masterAddress
+      // 42: beginCell()
+      // ...45: .storeAddress(masterAddress)
+      SWAP                  	//  queryId fromOwner amount g_masterAddress '62
+      STSTDADDR             	//  queryId fromOwner amount '62
+      // 46: .storeAddress(gasPoolAddress)
+      $gasPoolAddress GETGLOB	//  queryId fromOwner amount '62 g_gasPoolAddress
+      // 42: beginCell()
+      // ...46: .storeAddress(gasPoolAddress)
+      SWAP                  	//  queryId fromOwner amount g_gasPoolAddress '62
+      STSTDADDR             	//  queryId fromOwner amount '62
+      // 47: .storeRef(jettonWalletCode)
+      $jettonWalletCode GETGLOB	//  queryId fromOwner amount '62 g_jettonWalletCode
+      // 42: beginCell()
+      // ...47: .storeRef(jettonWalletCode)
+      STREFR                	//  queryId fromOwner amount '62
+      // 48: .endCell()
+      ENDC                  	//  queryId fromOwner amount '73
+      // 41: contract.setData(
+      c4 POP                	//  queryId fromOwner amount
+      // 116: var body = beginCell()
+      NEWC                  	//  queryId fromOwner amount '76
+      // 117: .storeUint(OP_TRANSFER_NOTIFICATION, 32)
+      x{7362d09c} STSLICECONST	//  queryId fromOwner amount '76
+      // 118: .storeUint(queryId, 64)
+      s1 s3 XCHG            	//  amount fromOwner queryId '76
+      64 STU                	//  amount fromOwner '76
+      ROT                   	//  fromOwner '76 amount
+      // 119: .storeCoins(amount)
+      STGRAMS               	//  fromOwner '76
+      // 120: .storeAddress(fromOwner)
+      STSTDADDR             	//  '76
+      // 121: .endCell()
+      ENDC                  	//  body
+      // 123: var msg = beginCell()
+      NEWC                  	//  body '86
+      // 124: .storeUint(0x10, 6)
+      b{010000} STSLICECONST	//  body '86
+      // 125: .storeAddress(ownerAddress)
+      $ownerAddress GETGLOB 	//  body '86 g_ownerAddress
+      // 123: var msg = beginCell()
+      // ...125: .storeAddress(ownerAddress)
+      SWAP                  	//  body g_ownerAddress '86
+      STSTDADDR             	//  body '86
+      // 126: .storeCoins(0)
+      1 PUSHINT
+      111 STUR              	//  body '86
+      // 128: .storeRef(body)
+      STREF                 	//  '86
+      // 129: .endCell()
+      ENDC                  	//  msg
+      // 131: sendRawMessage(msg, 64)
+      64 PUSHINT            	//  msg '110=64
+      SENDRAWMSG            	// 
+    }>                      	//  msgValue senderAddress op queryId msgBody
+    // 175: if (op == OP_TRANSFER)
+    s2 PUSH
+    260734629 PUSHINT       	//  msgValue senderAddress op queryId msgBody op '111=260734629
+    EQUAL                   	//  msgValue senderAddress op queryId msgBody '112
+    IFJMP:<{                	//  msgValue senderAddress op queryId msgBody
+      // 178: ERROR_NOT_OWNER
+      s2 POP                	//  msgValue senderAddress msgBody queryId
+      // 177: senderAddress == ownerAddress
+      $ownerAddress GETGLOB 	//  msgValue senderAddress msgBody queryId g_ownerAddress
+      s1 s3 XCHG            	//  msgValue queryId msgBody senderAddress g_ownerAddress
+      SDEQ                  	//  msgValue queryId msgBody '115
+      // 176: assert(
+      75 THROWIFNOT         	//  msgValue queryId msgBody
+      // 181: var jettonAmount = msgBody.loadCoins()
+      LDGRAMS               	//  msgValue queryId jettonAmount msgBody
+      // 182: var toOwner = msgBody.loadAddress()
+      LDSTDADDR             	//  msgValue queryId jettonAmount '122 '121
+      DROP                  	//  msgValue queryId jettonAmount toOwner
+      // 185: assert(jettonAmount > 0, ERROR_INVALID_AMOUNT)
+      OVER                  	//  msgValue queryId jettonAmount toOwner jettonAmount
+      0 GTINT               	//  msgValue queryId jettonAmount toOwner '130
+      81 THROWIFNOT         	//  msgValue queryId jettonAmount toOwner
+      // 189: var treasuryFee: int = TAX_AMOUNT
+      100000000 PUSHINT     	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000
+      // 190: var gasPoolFee: int = TAX_HALF
+      50000000 PUSHINT      	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000
+      // 193: var totalSpend = jettonAmount + totalFee
+      s3 PUSH
+      // 192: var totalFee = treasuryFee + gasPoolFee
+      150000000 PUSHINT     	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 jettonAmount totalFee
+      // 193: var totalSpend = jettonAmount + totalFee
+      ADD                   	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend
+      // 195: assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE)
+      $balance GETGLOB      	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend g_balance
+      OVER                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend g_balance totalSpend
+      GEQ                   	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend '141
+      82 THROWIFNOT         	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend
+      // 196: assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS)
+      s6 PUSH
+      10000000 PUSHINT      	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend msgValue '143=10000000
+      GEQ                   	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend '144
+      90 THROWIFNOT         	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend
+      // 198: balance -= totalSpend
+      $balance GETGLOB      	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 totalSpend g_balance
+      SUBR                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '145
+      $balance SETGLOB      	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000
+      // 42: beginCell()
+      NEWC                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148
+      // 43: .storeCoins(balance)
+      $balance GETGLOB      	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148 g_balance
+      // 42: beginCell()
+      // ...43: .storeCoins(balance)
+      STGRAMS               	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148
+      // 44: .storeAddress(ownerAddress)
+      $ownerAddress GETGLOB 	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148 g_ownerAddress
+      // 42: beginCell()
+      // ...44: .storeAddress(ownerAddress)
+      SWAP                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 g_ownerAddress '148
+      STSTDADDR             	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148
+      // 45: .storeAddress(masterAddress)
+      $masterAddress GETGLOB	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148 g_masterAddress
+      // 42: beginCell()
+      // ...45: .storeAddress(masterAddress)
+      SWAP                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 g_masterAddress '148
+      STSTDADDR             	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148
+      // 46: .storeAddress(gasPoolAddress)
+      $gasPoolAddress GETGLOB	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148 g_gasPoolAddress
+      // 42: beginCell()
+      // ...46: .storeAddress(gasPoolAddress)
+      SWAP                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 g_gasPoolAddress '148
+      STSTDADDR             	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148
+      // 47: .storeRef(jettonWalletCode)
+      $jettonWalletCode GETGLOB	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148 g_jettonWalletCode
+      // 42: beginCell()
+      // ...47: .storeRef(jettonWalletCode)
+      STREFR                	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '148
+      // 48: .endCell()
+      ENDC                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '159
+      // 41: contract.setData(
+      c4 POP                	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000
+      // 206: var gasPoolBody = beginCell()
+      NEWC                  	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '162
+      // 207: .storeUint(OP_GAS_POOL_EXECUTE, 32)
+      x{000000a0} STSLICECONST	//  msgValue queryId jettonAmount toOwner treasuryFee=100000000 gasPoolFee=50000000 '162
+      // 208: .storeUint(queryId, 64)
+      s1 s5 XCHG            	//  msgValue gasPoolFee=50000000 jettonAmount toOwner treasuryFee=100000000 queryId '162
+      64 STU                	//  msgValue gasPoolFee=50000000 jettonAmount toOwner treasuryFee=100000000 '162
+      s0 s3 XCHG2           	//  msgValue gasPoolFee=50000000 treasuryFee=100000000 toOwner '162 jettonAmount
+      // 209: .storeCoins(jettonAmount)
+      STGRAMS               	//  msgValue gasPoolFee=50000000 treasuryFee=100000000 toOwner '162
+      // 210: .storeAddress(toOwner)
+      STSTDADDR             	//  msgValue gasPoolFee=50000000 treasuryFee=100000000 '162
+      // 211: .storeAddress(ownerAddress)
+      $ownerAddress GETGLOB 	//  msgValue gasPoolFee=50000000 treasuryFee=100000000 '162 g_ownerAddress
+      // 206: var gasPoolBody = beginCell()
+      // ...211: .storeAddress(ownerAddress)
+      SWAP                  	//  msgValue gasPoolFee=50000000 treasuryFee=100000000 g_ownerAddress '162
+      STSTDADDR             	//  msgValue gasPoolFee=50000000 treasuryFee=100000000 '162
+      // 212: .storeCoins(treasuryFee)
+      SWAP                  	//  msgValue gasPoolFee=50000000 '162 treasuryFee=100000000
+      STGRAMS               	//  msgValue gasPoolFee=50000000 '162
+      // 213: .storeCoins(gasPoolFee)
+      SWAP                  	//  msgValue '162 gasPoolFee=50000000
+      STGRAMS               	//  msgValue '162
+      // 214: .endCell()
+      ENDC                  	//  msgValue gasPoolBody
+      // 216: var msg = beginCell()
+      NEWC                  	//  msgValue gasPoolBody '176
+      // 217: .storeUint(0x18, 6)
+      b{011000} STSLICECONST	//  msgValue gasPoolBody '176
+      // 218: .storeAddress(gasPoolAddress)
+      $gasPoolAddress GETGLOB	//  msgValue gasPoolBody '176 g_gasPoolAddress
+      // 216: var msg = beginCell()
+      // ...218: .storeAddress(gasPoolAddress)
+      SWAP                  	//  msgValue gasPoolBody g_gasPoolAddress '176
+      STSTDADDR             	//  msgValue gasPoolBody '176
+      ROT                   	//  gasPoolBody '176 msgValue
+      // 219: .storeCoins(msgValue)
+      STGRAMS               	//  gasPoolBody '176
+      // 220: .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+      1 PUSHINT
+      107 STUR              	//  gasPoolBody '176
+      // 221: .storeRef(gasPoolBody)
+      STREF                 	//  '176
+      // 222: .endCell()
+      ENDC                  	//  msg
+      // 224: sendRawMessage(msg, 1)
+      1 PUSHINT             	//  msg '199=1
+      SENDRAWMSG            	// 
+    }>                      	//  msgValue senderAddress op queryId msgBody
+    // 232: if (op == OP_BURN)
+    s0 s2 XCHG
+    1499400124 PUSHINT      	//  msgValue senderAddress msgBody queryId op '200=1499400124
+    EQUAL                   	//  msgValue senderAddress msgBody queryId '201
+    IFJMP:<{                	//  msgValue senderAddress msgBody queryId
+      // 234: senderAddress == ownerAddress
+      $ownerAddress GETGLOB 	//  msgValue senderAddress msgBody queryId g_ownerAddress
+      s1 s3 XCHG            	//  msgValue queryId msgBody senderAddress g_ownerAddress
+      SDEQ                  	//  msgValue queryId msgBody '204
+      // 233: assert(
+      75 THROWIFNOT         	//  msgValue queryId msgBody
+      // 238: var burnAmount = msgBody.loadCoins()
+      LDGRAMS               	//  msgValue queryId burnAmount msgBody
+      // 239: var responseDestination = msgBody.loadAddressOpt()
+      LDOPTSTDADDR          	//  msgValue queryId burnAmount '211 '210
+      DROP                  	//  msgValue queryId burnAmount responseDestination
+      // 241: assert(burnAmount > 0, ERROR_INVALID_AMOUNT)
+      OVER                  	//  msgValue queryId burnAmount responseDestination burnAmount
+      0 GTINT               	//  msgValue queryId burnAmount responseDestination '215
+      81 THROWIFNOT         	//  msgValue queryId burnAmount responseDestination
+      // 242: assert(balance >= burnAmount, ERROR_INSUFFICIENT_BALANCE)
+      $balance GETGLOB      	//  msgValue queryId burnAmount responseDestination g_balance
+      s2 PUSH               	//  msgValue queryId burnAmount responseDestination g_balance burnAmount
+      GEQ                   	//  msgValue queryId burnAmount responseDestination '218
+      82 THROWIFNOT         	//  msgValue queryId burnAmount responseDestination
+      // 244: balance -= burnAmount
+      $balance GETGLOB      	//  msgValue queryId burnAmount responseDestination g_balance
+      s2 PUSH               	//  msgValue queryId burnAmount responseDestination g_balance burnAmount
+      SUB                   	//  msgValue queryId burnAmount responseDestination '219
+      $balance SETGLOB      	//  msgValue queryId burnAmount responseDestination
+      // 42: beginCell()
+      NEWC                  	//  msgValue queryId burnAmount responseDestination '222
+      // 43: .storeCoins(balance)
+      $balance GETGLOB      	//  msgValue queryId burnAmount responseDestination '222 g_balance
+      // 42: beginCell()
+      // ...43: .storeCoins(balance)
+      STGRAMS               	//  msgValue queryId burnAmount responseDestination '222
+      // 44: .storeAddress(ownerAddress)
+      $ownerAddress GETGLOB 	//  msgValue queryId burnAmount responseDestination '222 g_ownerAddress
+      // 42: beginCell()
+      // ...44: .storeAddress(ownerAddress)
+      SWAP                  	//  msgValue queryId burnAmount responseDestination g_ownerAddress '222
+      STSTDADDR             	//  msgValue queryId burnAmount responseDestination '222
+      // 45: .storeAddress(masterAddress)
+      $masterAddress GETGLOB	//  msgValue queryId burnAmount responseDestination '222 g_masterAddress
+      // 42: beginCell()
+      // ...45: .storeAddress(masterAddress)
+      SWAP                  	//  msgValue queryId burnAmount responseDestination g_masterAddress '222
+      STSTDADDR             	//  msgValue queryId burnAmount responseDestination '222
+      // 46: .storeAddress(gasPoolAddress)
+      $gasPoolAddress GETGLOB	//  msgValue queryId burnAmount responseDestination '222 g_gasPoolAddress
+      // 42: beginCell()
+      // ...46: .storeAddress(gasPoolAddress)
+      SWAP                  	//  msgValue queryId burnAmount responseDestination g_gasPoolAddress '222
+      STSTDADDR             	//  msgValue queryId burnAmount responseDestination '222
+      // 47: .storeRef(jettonWalletCode)
+      $jettonWalletCode GETGLOB	//  msgValue queryId burnAmount responseDestination '222 g_jettonWalletCode
+      // 42: beginCell()
+      // ...47: .storeRef(jettonWalletCode)
+      STREFR                	//  msgValue queryId burnAmount responseDestination '222
+      // 48: .endCell()
+      ENDC                  	//  msgValue queryId burnAmount responseDestination '233
+      // 41: contract.setData(
+      c4 POP                	//  msgValue queryId burnAmount responseDestination
+      // 247: var body = beginCell()
+      NEWC                  	//  msgValue queryId burnAmount responseDestination '236
+      // 248: .storeUint(OP_BURN_NOTIFICATION, 32)
+      x{7bdd97de} STSLICECONST	//  msgValue queryId burnAmount responseDestination '236
+      // 249: .storeUint(queryId, 64)
+      s1 s3 XCHG            	//  msgValue responseDestination burnAmount queryId '236
+      64 STU                	//  msgValue responseDestination burnAmount '236
+      // 250: .storeCoins(burnAmount)
+      SWAP                  	//  msgValue responseDestination '236 burnAmount
+      STGRAMS               	//  msgValue responseDestination '236
+      // 251: .storeAddress(ownerAddress)
+      $ownerAddress GETGLOB 	//  msgValue responseDestination '236 g_ownerAddress
+      // 247: var body = beginCell()
+      // ...251: .storeAddress(ownerAddress)
+      SWAP                  	//  msgValue responseDestination g_ownerAddress '236
+      STSTDADDR             	//  msgValue responseDestination '236
+      // 252: .storeAddressOpt(responseDestination)
+      STOPTSTDADDR          	//  msgValue '236
+      // 253: .endCell()
+      ENDC                  	//  msgValue body
+      // 255: var msg = beginCell()
+      NEWC                  	//  msgValue body '248
+      // 256: .storeUint(0x18, 6)
+      b{011000} STSLICECONST	//  msgValue body '248
+      // 257: .storeAddress(masterAddress)
+      $masterAddress GETGLOB	//  msgValue body '248 g_masterAddress
+      // 255: var msg = beginCell()
+      // ...257: .storeAddress(masterAddress)
+      SWAP                  	//  msgValue body g_masterAddress '248
+      STSTDADDR             	//  msgValue body '248
+      ROT                   	//  body '248 msgValue
+      // 258: .storeCoins(msgValue)
+      STGRAMS               	//  body '248
+      // 259: .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+      1 PUSHINT
+      107 STUR              	//  body '248
+      // 260: .storeRef(body)
+      STREF                 	//  '248
+      // 261: .endCell()
+      ENDC                  	//  msg
+      // 263: sendRawMessage(msg, 1)
+      1 PUSHINT             	//  msg '271=1
+      SENDRAWMSG            	// 
+    }>                      	//  msgValue senderAddress msgBody queryId
+    // 268: throw(0xffff)
+    16 PUSHPOW2DEC
+    THROWANY
+  }>
+  // contracts/Dominum/dom/wallet.tolk:275
+  getWalletData() PROC:<{     	// 
+    // 31: var ds = contract.getData().beginParse()
+    c4 PUSH                 	//  '1
+    CTOS                    	//  ds
+    // 33: balance = ds.loadCoins()
+    LDGRAMS                 	//  '3 ds
+    SWAP                    	//  ds '3
+    $balance SETGLOB        	//  ds
+    // 34: ownerAddress = ds.loadAddress()
+    LDSTDADDR               	//  '7 ds
+    SWAP                    	//  ds '7
+    $ownerAddress SETGLOB   	//  ds
+    // 35: masterAddress = ds.loadAddress()
+    LDSTDADDR               	//  '11 ds
+    SWAP                    	//  ds '11
+    $masterAddress SETGLOB  	//  ds
+    // 36: gasPoolAddress = ds.loadAddress()
+    LDSTDADDR               	//  '15 ds
+    SWAP                    	//  ds '15
+    $gasPoolAddress SETGLOB 	//  ds
+    // 37: jettonWalletCode = ds.loadRef()
+    PLDREF                  	//  '19
+    $jettonWalletCode SETGLOB	// 
+    // 279: balance
+    $balance GETGLOB        	//  g_balance
+    // 280: ownerAddress
+    $ownerAddress GETGLOB   	//  g_balance g_ownerAddress
+    // 281: masterAddress
+    $masterAddress GETGLOB  	//  g_balance g_ownerAddress g_masterAddress
+    // 282: gasPoolAddress
+    $gasPoolAddress GETGLOB 	//  g_balance g_ownerAddress g_masterAddress g_gasPoolAddress
+  }>
+}END>c

@@ -46,6 +46,8 @@ export type VolumeDelta = {
 };
 
 export type GasPoolView = {
+    status: 'ok' | 'error';
+    error?: string;
     readAt: string;
     address: string;
     adminAddress: string;
@@ -66,6 +68,8 @@ export type GasPoolView = {
 };
 
 export type MarketMakerView = {
+    status: 'ok' | 'error';
+    error?: string;
     readAt: string;
     address: string;
     ownerAddress: string;

@@ -2,6 +2,12 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
+// ========== TOLK MIGRATION v1.2 ==========
+// Контракт переписан с legacy API на новый Tolk API.
+// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
+// Статус: migrated
+// =========================================
+
 // =====================================================
 // GAS PROXY — Прокси для Gas Pool
 // =====================================================
@@ -20,74 +26,70 @@ import "../core/constants.tolk";
 // 48 часов в секундах
 const TIMELOCK_PERIOD: int = 172800;
 
-global adminAddress: slice;
-global realGasPoolAddress: slice;
+global adminAddress: address;
+global realGasPoolAddress: address;
 
 // Одноразовая конфигурация для проверки sender Wallet.
 // Это нужно, чтобы разорвать циклическую зависимость
 // на этапе деплоя (master <-> gas_proxy).
-global walletConfigReady: int;
-global masterAddress: slice;
+global walletConfigReady: bool;
+global masterAddress: address;
 global jettonWalletCode: cell;
 
 // Timelock
-global pendingAddress: slice;
+global pendingAddress: address;
 global pendingTime: int;
-global hasPending: int;
+global hasPending: bool;
 
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
 
-fun getNullAddress(): slice {
-    return beginCell()
-        .storeUint(0, 2)
-        .endCell()
-        .beginParse();
-}
-
 fun loadData() {
-    var ds = getContractData().beginParse();
+    var ds = contract.getData().beginParse();
 
-    adminAddress = ds.loadMsgAddress();
-    realGasPoolAddress = ds.loadMsgAddress();
+    adminAddress = ds.loadAddress();
+    realGasPoolAddress = ds.loadAddress();
     walletConfigReady = ds.loadBool();
 
     if (walletConfigReady) {
-        masterAddress = ds.loadMsgAddress();
+        masterAddress = ds.loadAddress();
         jettonWalletCode = ds.loadRef();
     } else {
-        masterAddress = getNullAddress();
+        masterAddress = adminAddress;
         jettonWalletCode = beginCell().endCell();
     }
 
     hasPending = ds.loadBool();
 
     if (hasPending) {
-        pendingAddress = ds.loadMsgAddress();
+        pendingAddress = ds.loadAddress();
         pendingTime = ds.loadUint(64);
+    } else {
+        pendingAddress = adminAddress;
+        pendingTime = 0;
     }
 }
 
 fun saveData() {
     var b = beginCell()
-        .storeSlice(adminAddress)
-        .storeSlice(realGasPoolAddress)
+        .storeAddress(adminAddress)
+        .storeAddress(realGasPoolAddress)
         .storeBool(walletConfigReady);
 
     if (walletConfigReady) {
-        b = b.storeSlice(masterAddress)
+        b = b.storeAddress(masterAddress)
              .storeRef(jettonWalletCode);
     }
 
     b = b.storeBool(hasPending);
 
     if (hasPending) {
-        b = b.storeSlice(pendingAddress)
+        b = b.storeAddress(pendingAddress)
              .storeUint(pendingTime, 64);
     }
 
-    setContractData(b.endCell());
+    contract.setData(b.endCell());
 }
 
 // -----------------------------------------------------
@@ -98,19 +100,19 @@ fun assertWalletConfigReady() {
     assert(walletConfigReady, ERROR_PROXY_NOT_CONFIGURED);
 }
 
-fun buildWalletData(owner: slice): cell {
+fun buildWalletData(owner: address): cell {
     assertWalletConfigReady();
 
     return beginCell()
         .storeCoins(0)
-        .storeSlice(owner)
-        .storeSlice(masterAddress)
-        .storeSlice(myAddress())
+        .storeAddress(owner)
+        .storeAddress(masterAddress)
+        .storeAddress(contract.getAddress())
         .storeRef(jettonWalletCode)
         .endCell();
 }
 
-fun buildWalletStateInit(owner: slice): cell {
+fun buildWalletStateInit(owner: address): cell {
     var walletData = buildWalletData(owner);
 
     return beginCell()
@@ -121,20 +123,16 @@ fun buildWalletStateInit(owner: slice): cell {
         .endCell();
 }
 
-fun buildWalletAddress(stateInit: cell): slice {
-    return beginCell()
-        .storeUint(4, 3)
-        .storeInt(0, 8)
-        .storeUint(stateInit.hash(), 256)
-        .endCell()
-        .beginParse();
+fun buildWalletAddress(stateInit: cell): address {
+    var wc = contract.getAddress().getWorkchain();
+    return address.fromWorkchainAndHash(wc, stateInit.hash());
 }
 
 fun sendInternalTransfer(
-    toOwner: slice,
+    toOwner: address,
     jettonAmount: int,
-    fromOwner: slice,
-    responseDestination: slice,
+    fromOwner: address,
+    responseDestination: address?,
     queryId: int
 ) {
     if (jettonAmount <= 0) {
@@ -148,15 +146,15 @@ fun sendInternalTransfer(
         .storeUint(OP_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(jettonAmount)
-        .storeSlice(fromOwner)
-        .storeSlice(responseDestination)
+        .storeAddress(fromOwner)
+        .storeAddressOpt(responseDestination)
         .storeCoins(0)
         .storeBool(false)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(toWallet)
+        .storeAddress(toWallet)
         .storeCoins(0)
         .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
         .storeRef(stateInit)
@@ -170,24 +168,15 @@ fun sendInternalTransfer(
 // MAIN
 // -----------------------------------------------------
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
-        return;
-    }
-
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
+    var msgValue = in.valueCoins;
 
     loadData();
 
@@ -200,13 +189,13 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_SET_PROXY_WALLET_CONFIG) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
         assert(!walletConfigReady, ERROR_ALREADY_INITIALIZED);
 
         msgBody.loadUint(64);
-        masterAddress = msgBody.loadMsgAddress();
+        masterAddress = msgBody.loadAddress();
         jettonWalletCode = msgBody.loadRef();
         walletConfigReady = true;
         saveData();
@@ -221,8 +210,8 @@ fun onInternalMessage(
     if (op == OP_GAS_POOL_EXECUTE) {
         var queryId = msgBody.loadUint(64);
         var jettonAmount = msgBody.loadCoins();
-        var toOwner = msgBody.loadMsgAddress();
-        var fromOwner = msgBody.loadMsgAddress();
+        var toOwner = msgBody.loadAddress();
+        var fromOwner = msgBody.loadAddress();
         var treasuryFee = msgBody.loadCoins();
         var gasPoolFee = msgBody.loadCoins();
 
@@ -233,7 +222,7 @@ fun onInternalMessage(
         );
 
         assert(
-            senderAddress.equalSlices(expectedWallet),
+            senderAddress == expectedWallet,
             ERROR_NOT_VALID_WALLET
         );
 
@@ -247,15 +236,15 @@ fun onInternalMessage(
             .storeUint(OP_GAS_POOL_EXECUTE, 32)
             .storeUint(queryId, 64)
             .storeCoins(jettonAmount)
-            .storeSlice(toOwner)
-            .storeSlice(fromOwner)
+            .storeAddress(toOwner)
+            .storeAddress(fromOwner)
             .storeCoins(treasuryFee)
             .storeCoins(gasPoolFee)
             .endCell();
 
         var msg = beginCell()
             .storeUint(0x18, 6)
-            .storeSlice(realGasPoolAddress)
+            .storeAddress(realGasPoolAddress)
             .storeCoins(0)
             .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .storeRef(fullBody)
@@ -272,15 +261,15 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_PROXY_INTERNAL_TRANSFER) {
         assert(
-            senderAddress.equalSlices(realGasPoolAddress),
+            senderAddress == realGasPoolAddress,
             ERROR_NOT_ADMIN
         );
 
         var queryId = msgBody.loadUint(64);
         var jettonAmount = msgBody.loadCoins();
-        var toOwner = msgBody.loadMsgAddress();
-        var fromOwner = msgBody.loadMsgAddress();
-        var responseDestination = msgBody.loadMsgAddress();
+        var toOwner = msgBody.loadAddress();
+        var fromOwner = msgBody.loadAddress();
+        var responseDestination = msgBody.loadAddressOpt();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
         assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
@@ -305,12 +294,12 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_REQUEST_CHANGE_POOL) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
-        pendingAddress = msgBody.loadMsgAddress();
-        pendingTime = now() + TIMELOCK_PERIOD;
+        pendingAddress = msgBody.loadAddress();
+        pendingTime = blockchain.now() + TIMELOCK_PERIOD;
         hasPending = true;
         saveData();
 
@@ -323,12 +312,12 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_CONFIRM_CHANGE_POOL) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
         assert(hasPending, ERROR_NO_PENDING);
-        assert(now() >= pendingTime, ERROR_TOO_EARLY);
+        assert(blockchain.now() >= pendingTime, ERROR_TOO_EARLY);
 
         realGasPoolAddress = pendingAddress;
         hasPending = false;
@@ -343,7 +332,7 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_CANCEL_CHANGE_POOL) {
         assert(
-            senderAddress.equalSlices(adminAddress),
+            senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
 
@@ -360,7 +349,7 @@ fun onInternalMessage(
 // GETTERS
 // -----------------------------------------------------
 
-get fun getProxyData(): (slice, slice, int) {
+get fun getProxyData(): (address, address, bool) {
     loadData();
 
     return (
@@ -370,13 +359,13 @@ get fun getProxyData(): (slice, slice, int) {
     );
 }
 
-get fun getWalletConfig(): (int, slice) {
+get fun getWalletConfig(): (bool, address?) {
     loadData();
 
     if (!walletConfigReady) {
         return (
             false,
-            getNullAddress()
+            null
         );
     }
 
@@ -386,16 +375,13 @@ get fun getWalletConfig(): (int, slice) {
     );
 }
 
-get fun getPendingChange(): (int, slice, int) {
+get fun getPendingChange(): (bool, address?, int) {
     loadData();
 
     if (!hasPending) {
         return (
             false,
-            beginCell()
-                .storeUint(0, 2)
-                .endCell()
-                .beginParse(),
+            null,
             0
         );
     }

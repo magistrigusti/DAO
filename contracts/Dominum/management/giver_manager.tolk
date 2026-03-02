@@ -11,23 +11,29 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
+// ========== TOLK MIGRATION v1.2 ==========
+// Контракт переписан с legacy API на новый Tolk API.
+// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
+// Статус: migrated
+// =========================================
+
 // =====================================================
 // STORAGE
 // =====================================================
-global ownerAddress: slice;
+global ownerAddress: address;
 
 // =====================================================
 // LOAD / SAVE
 // =====================================================
 fun loadData() {
-    var ds = getContractData().beginParse();
-    ownerAddress = ds.loadMsgAddress();
+    var ds = contract.getData().beginParse();
+    ownerAddress = ds.loadAddress();
 }
 
 fun saveData() {
-    setContractData(
+    contract.setData(
         beginCell()
-            .storeSlice(ownerAddress)
+            .storeAddress(ownerAddress)
             .endCell()
     );
 }
@@ -36,75 +42,65 @@ fun saveData() {
 // SEND: CHANGE WHITELIST
 // =====================================================
 fun sendChangeWhitelist(
-    giverAddress: slice,
-    newAddress1: slice,
-    newAddress2: slice,
+    giverAddress: address,
+    newAddress1: address,
+    newAddress2: address,
     queryId: int
 ) {
     var msgBody = beginCell()
         .storeUint(OP_CHANGE_WHITELIST, 32)
         .storeUint(queryId, 64)
-        .storeSlice(newAddress1)
-        .storeSlice(newAddress2)
+        .storeAddress(newAddress1)
+        .storeAddress(newAddress2)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(giverAddress)
+        .storeAddress(giverAddress)
         .storeCoins(MIN_TON_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
 
-    sendRawMessage(msg, 64);
+    sendRawMessage(msg, 1);
 }
 
 // =====================================================
 // SEND: SET WALLET
 // =====================================================
 fun sendSetWallet(
-    giverAddress: slice,
-    walletAddress: slice,
+    giverAddress: address,
+    walletAddress: address,
     queryId: int
 ) {
     var msgBody = beginCell()
         .storeUint(OP_SET_WALLET, 32)
         .storeUint(queryId, 64)
-        .storeSlice(walletAddress)
+        .storeAddress(walletAddress)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(giverAddress)
+        .storeAddress(giverAddress)
         .storeCoins(MIN_TON_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
 
-    sendRawMessage(msg, 64);
+    sendRawMessage(msg, 1);
 }
 
 // =====================================================
 // MAIN
 // =====================================================
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
-        return;
-    }
-
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
 
     loadData();
 
@@ -118,12 +114,12 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_SET_WALLET) {
         assert(
-            senderAddress.equalSlices(ownerAddress),
+            senderAddress == ownerAddress,
             ERROR_NOT_OWNER
         );
 
-        var giverAddress = msgBody.loadMsgAddress();
-        var walletAddress = msgBody.loadMsgAddress();
+        var giverAddress = msgBody.loadAddress();
+        var walletAddress = msgBody.loadAddress();
 
         sendSetWallet(
             giverAddress,
@@ -141,13 +137,13 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_CHANGE_WHITELIST) {
         assert(
-            senderAddress.equalSlices(ownerAddress),
+            senderAddress == ownerAddress,
             ERROR_NOT_OWNER
         );
 
-        var giverAddress = msgBody.loadMsgAddress();
-        var newAddress1 = msgBody.loadMsgAddress();
-        var newAddress2 = msgBody.loadMsgAddress();
+        var giverAddress = msgBody.loadAddress();
+        var newAddress1 = msgBody.loadAddress();
+        var newAddress2 = msgBody.loadAddress();
 
         sendChangeWhitelist(
             giverAddress,
@@ -165,7 +161,7 @@ fun onInternalMessage(
 // =====================================================
 // GETTERS
 // =====================================================
-get fun getManagerData(): slice {
+get fun getManagerData(): address {
     loadData();
     return ownerAddress;
 }
