@@ -1,6 +1,9 @@
 {
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/dom-metadata.json", "destination": "/api/metadata" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "framework": null
 }
