@@ -16,8 +16,8 @@ import "../core/constants.tolk";
 // Накапливает: domBalance (комиссия gasPoolFee)
 // =====================================================
 
-// 48 часов в секундах
-const TIMELOCK_PERIOD: int = 172800;
+// TESTNET: 60 сек. MAINNET: 172800 (48ч)
+const TIMELOCK_PERIOD: int = 60;
 
 global adminAddress: address;
 global proxyAddress: address;
