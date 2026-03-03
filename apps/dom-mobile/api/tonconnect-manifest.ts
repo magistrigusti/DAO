@@ -13,12 +13,13 @@ export default async function handler(
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost';
   const base = `${protocol}://${host}`;
 
+  const baseClean = base.replace(/\/$/, '');
   const manifest = {
-    url: `${base}/`,
+    url: baseClean,
     name: 'DOM Mobile',
-    iconUrl: `${base}/favicon.ico`,
-    termsOfUseUrl: `${base}/`,
-    privacyPolicyUrl: `${base}/`,
+    iconUrl: `${baseClean}/favicon.ico`,
+    termsOfUseUrl: baseClean,
+    privacyPolicyUrl: baseClean,
   };
 
   res.setHeader('Content-Type', 'application/json');
