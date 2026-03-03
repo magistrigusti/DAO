@@ -13,6 +13,7 @@
     "deploy": "npx blueprint run",
     "compile": "npx blueprint build --all",
     "app": "cd apps/dom-mobile && npm start",
+    "dev": "cd apps/dom-mobile && npm start",
     "app:web": "cd apps/dom-mobile && npm run web",
     "app:build": "cd apps/dom-mobile && npm run build:web",
     "metadata-server": "cd apps/metadata-server && npm install && npm start"
