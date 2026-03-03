@@ -1,10 +1,18 @@
 // ========== ЭКРАН DASHBOARD ==========
 // Обзор: TonConnectButton (web) или кнопка (native), после подключения — действия
 import React, { useState, useCallback } from 'react';
-import { Platform, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  Platform,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Linking,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useTonConnect } from '../services/TonConnectProvider';
+import { TelegramBrowserBanner } from '../components/TelegramBrowserBanner';
 import {
   fetchAllowedActions,
   filterActionsByRoles,
@@ -52,10 +60,25 @@ export default function DashboardScreen({ navigation }: Props) {
       <Text style={s.title}>DOM Mobile</Text>
       <Text style={s.subtitle}>Обзор экосистемы DOM</Text>
 
+      <TelegramBrowserBanner />
+
       <View style={s.wallet}>
         <Text style={s.label}>
           Кошелёк: {connected ? formatAddress(address) : 'не подключен'}
         </Text>
+        {!connected && Platform.OS === 'web' && (
+          <TouchableOpacity
+            style={s.openBrowserLink}
+            onPress={() => {
+              const url = typeof window !== 'undefined' ? window.location.href : '';
+              if (url) Linking.openURL(url);
+            }}
+          >
+            <Text style={s.openBrowserText}>
+              Не подключается? Открыть в Chrome/Safari →
+            </Text>
+          </TouchableOpacity>
+        )}
         {TonConnectButton ? (
           <View style={s.tonConnectWrapper}>
             <TonConnectButton
@@ -127,6 +150,13 @@ const s = StyleSheet.create({
   },
   tonConnectBtn: {
     borderRadius: 8,
+  },
+  openBrowserLink: {
+    marginBottom: 8,
+  },
+  openBrowserText: {
+    fontSize: 12,
+    color: '#6366f1',
   },
   actions: {
     gap: 12,
