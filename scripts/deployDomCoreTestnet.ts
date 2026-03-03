@@ -1,5 +1,6 @@
 import { compile, NetworkProvider } from '@ton/blueprint';
-import { Address, beginCell, toNano } from '@ton/core';
+import { Address, toNano } from '@ton/core';
+import { buildDomJettonContent } from './domMetadata';
 import { DomMaster } from '../wrappers/DomMaster';
 import { GasProxy } from '../wrappers/GasProxy';
 import { GasPool } from '../wrappers/GasPool';
@@ -32,6 +33,7 @@ export async function run(
     // 6: bankDominum
     // 7: dominumFoundation
     // 8: domTreasuryOwner
+    // 9: metadataBaseUrl (например https://dominum.vercel.app)
     // Если аргумент не передан — берём адрес текущего wallet sender.
     // ======================================
     const ui = provider.ui();
@@ -81,6 +83,8 @@ export async function run(
         args[8],
         deployer
     );
+
+    const metadataBaseUrl = args[9]?.trim() || undefined;
 
     ui.write('Compiling DOM contracts...');
 
@@ -194,7 +198,10 @@ export async function run(
                 giverDefiAddress: giverDefi.address,
                 giverDaoAddress: giverDao.address,
                 giverDominumAddress: giverDominum.address,
-                content: beginCell().endCell(),
+                content: buildDomJettonContent({
+                    version: 'Dv1',
+                    baseUrl: metadataBaseUrl,
+                }),
                 jettonWalletCode: walletCode,
             },
             masterCode
