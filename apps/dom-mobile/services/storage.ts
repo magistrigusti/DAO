@@ -9,8 +9,14 @@ const STORAGE_KEYS = {
 export interface StoredContracts {
   master?: string;
   minter?: string;
+  gasProxy?: string;
   gasPool?: string;
   treasury?: string;
+  giverAllodium?: string;
+  giverDefi?: string;
+  giverDao?: string;
+  giverDominum?: string;
+  network?: 'mainnet' | 'testnet';
 }
 
 export interface StoredConfig {

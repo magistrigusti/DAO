@@ -1,6 +1,6 @@
 // ========== ЭКРАН MONITOR ==========
-// Адреса контрактов из API (MongoDB). Сохранение после деплоя.
-// Позже: totalSupply, balance через TON API
+// Адреса контрактов: API (MongoDB) или локально при ошибке API.
+// Ссылки на Tonscan — проверка балансов.
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -10,11 +10,12 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { fetchContracts, saveContracts, type StoredContracts } from '../services/api';
-import { getConfig } from '../services/storage';
+import { getConfig, getContracts, setContracts } from '../services/storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Monitor'>;
 
@@ -28,12 +29,16 @@ const FIELDS: { key: keyof StoredContracts; label: string }[] = [
   { key: 'giverDominum', label: 'Giver Dominum' },
 ];
 
+const TONSCAN_BASE =
+  'https://testnet.tonscan.org/address/';
+
 export default function MonitorScreen({}: Props) {
-  const [contracts, setContracts] = useState<StoredContracts>({});
+  const [contracts, setContractsState] = useState<StoredContracts>({});
   const [edit, setEdit] = useState<StoredContracts>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<'api' | 'local'>('api');
 
   const loadContracts = useCallback(async () => {
     setLoading(true);
@@ -41,10 +46,16 @@ export default function MonitorScreen({}: Props) {
     try {
       const cfg = await getConfig();
       const data = await fetchContracts(cfg.apiUrl || undefined);
-      setContracts(data);
+      setContractsState(data);
       setEdit(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
+      setSource('api');
+    } catch {
+      const local = await getContracts();
+      const data = local as StoredContracts;
+      setContractsState(data);
+      setEdit(data);
+      setSource('local');
+      setError('API unavailable. Paste addresses from deploy output, then Save.');
     } finally {
       setLoading(false);
     }
@@ -60,12 +71,22 @@ export default function MonitorScreen({}: Props) {
     try {
       const cfg = await getConfig();
       const saved = await saveContracts(edit, cfg.apiUrl || undefined);
-      setContracts(saved);
+      setContractsState(saved);
       setEdit(saved);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save');
+      setSource('api');
+    } catch {
+      await setContracts(edit);
+      setContractsState(edit);
+      setSource('local');
+      setError('API unavailable. Saved locally.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openTonscan = (addr: string) => {
+    if (addr && addr.startsWith('EQ')) {
+      Linking.openURL(`${TONSCAN_BASE}${addr}`);
     }
   };
 
@@ -83,18 +104,29 @@ export default function MonitorScreen({}: Props) {
         <Text style={s.btnText}>Обновить</Text>
       </TouchableOpacity>
 
-      {FIELDS.map(({ key, label }) => (
-        <View key={key} style={s.field}>
-          <Text style={s.label}>{label}</Text>
-          <TextInput
-            style={s.input}
-            value={edit[key] ?? ''}
-            onChangeText={(v) => setEdit((prev) => ({ ...prev, [key]: v }))}
-            placeholder="EQ..."
-            placeholderTextColor="#64748b"
-          />
-        </View>
-      ))}
+      {FIELDS.map(({ key, label }) => {
+        const addr = edit[key] ?? '';
+        return (
+          <View key={key} style={s.field}>
+            <Text style={s.label}>{label}</Text>
+            <TextInput
+              style={s.input}
+              value={addr}
+              onChangeText={(v) => setEdit((prev) => ({ ...prev, [key]: v }))}
+              placeholder="EQ..."
+              placeholderTextColor="#64748b"
+            />
+            {addr ? (
+              <TouchableOpacity
+                onPress={() => openTonscan(addr)}
+                style={s.link}
+              >
+                <Text style={s.linkText}>→ Tonscan (balance)</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        );
+      })}
 
       <TouchableOpacity
         style={[s.btn, s.btnPrimary]}
@@ -174,5 +206,12 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     marginTop: 16,
+  },
+  link: {
+    marginTop: 6,
+  },
+  linkText: {
+    color: '#6366f1',
+    fontSize: 12,
   },
 });

@@ -342,6 +342,24 @@ export async function run(
         ui.write(`  → ${base}${raw}`);
     }
     ui.write('=====================================');
+    ui.write('');
+    ui.write('--- Copy to Monitor (app) ---');
+    const json = JSON.stringify(
+        {
+            master: fmt(master.address),
+            gasProxy: fmt(gasProxy.address),
+            gasPool: fmt(gasPool.address),
+            giverAllodium: fmt(giverAllodium.address),
+            giverDefi: fmt(giverDefi.address),
+            giverDao: fmt(giverDao.address),
+            giverDominum: fmt(giverDominum.address),
+            network,
+        },
+        null,
+        2
+    );
+    ui.write(json);
+    ui.write('---');
     ui.write(
         'Next: wait 48h, run confirmGasProxyPool. Mint: manual from deployer.'
     );
