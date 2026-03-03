@@ -9,10 +9,13 @@ import type { RootStackParamList } from '../navigation/AppNavigator';
 type Props = NativeStackScreenProps<RootStackParamList, 'Deploy'>;
 
 const STEPS = [
-  '1. Подключи кошелёк (TonConnect)',
-  '2. Запусти deployDomCoreTestnet через Blueprint',
-  '3. Подтверди Gas Pool через 48ч (confirmGasProxyPool)',
-  '4. Сохрани адреса в Monitor → «Сохранить контракты»',
+  '1. Терминал: cd c:\\projects\\DAO',
+  '2. npx blueprint build --all',
+  '3. npm run deploy → выбрать deployDomCoreTestnet',
+  '4. Подключить кошелёк (QR/TonConnect)',
+  '5. Подтвердить все транзакции в кошельке',
+  '6. Подождать 1 мин → npx blueprint run confirmGasProxyPool EQ... --testnet --tonconnect',
+  '7. Monitor → сохранить адреса Master, GasProxy, GasPool',
 ];
 
 export default function DeployScreen({ navigation }: Props) {
@@ -32,7 +35,7 @@ export default function DeployScreen({ navigation }: Props) {
       </View>
 
       <Text style={s.hint}>
-        После деплоя перейди в Monitor и сохрани адреса Master, GasProxy, GasPool.
+        Подробно: DEPLOY_STEPS.md в корне проекта.
       </Text>
 
       <Text
