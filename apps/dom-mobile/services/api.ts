@@ -72,3 +72,38 @@ export async function saveContracts(
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+// ========== ALLOWED WALLETS (whitelist по ролям) ==========
+
+export type WalletRole = 'deploy' | 'mint' | 'monitor' | 'assets' | 'settings';
+
+export async function fetchAllowedActions(
+  address: string,
+  apiBase?: string
+): Promise<WalletRole[] | null> {
+  const base = getApiBase(apiBase);
+  try {
+    const res = await fetch(`${base}/api/allowed-wallets?address=${encodeURIComponent(address)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.roles ?? [];
+  } catch {
+    return null;
+  }
+}
+
+/** Если whitelist пуст — все действия. Иначе только те, что в roles. */
+export function filterActionsByRoles<T extends { key: string }>(
+  actions: T[],
+  roles: WalletRole[] | null
+): T[] {
+  if (!roles || roles.length === 0) return actions;
+  const roleMap: Record<string, WalletRole> = {
+    Deploy: 'deploy',
+    Mint: 'mint',
+    Monitor: 'monitor',
+    Assets: 'assets',
+    Settings: 'settings',
+  };
+  return actions.filter((a) => roles.includes(roleMap[a.key] ?? ''));
+}

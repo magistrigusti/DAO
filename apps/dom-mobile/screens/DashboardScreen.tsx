@@ -1,15 +1,40 @@
 // ========== ЭКРАН DASHBOARD ==========
-// Обзор: статус кошелька, контракты, быстрые действия
-import React from 'react';
+// Обзор: сначала Connect Wallet, после подключения — действия по whitelist
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useTonConnect } from '../services/TonConnectProvider';
+import {
+  fetchAllowedActions,
+  filterActionsByRoles,
+} from '../services/api';
+import { getConfig } from '../services/storage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
+const ALL_ACTIONS = [
+  { key: 'Deploy', label: 'Deploy', route: 'Deploy' as const },
+  { key: 'Mint', label: 'Mint', route: 'Mint' as const },
+  { key: 'Monitor', label: 'Monitor', route: 'Monitor' as const },
+  { key: 'Assets', label: 'Активы', route: 'Assets' as const },
+  { key: 'Settings', label: 'Settings', route: 'Settings' as const },
+];
+
 export default function DashboardScreen({ navigation }: Props) {
-  const { connected, address } = useTonConnect();
+  const { connected, address, connectWallet, disconnect } = useTonConnect();
+  const [allowedActions, setAllowedActions] = useState<typeof ALL_ACTIONS>(ALL_ACTIONS);
+
+  const loadAllowedActions = useCallback(async () => {
+    if (!address) return;
+    const cfg = await getConfig();
+    const roles = await fetchAllowedActions(address, cfg.apiUrl || undefined);
+    setAllowedActions(filterActionsByRoles(ALL_ACTIONS, roles));
+  }, [address]);
+
+  React.useEffect(() => {
+    if (connected && address) loadAllowedActions();
+  }, [connected, address, loadAllowedActions]);
 
   return (
     <View style={s.container}>
@@ -20,45 +45,29 @@ export default function DashboardScreen({ navigation }: Props) {
         <Text style={s.label}>
           Кошелёк: {connected ? address ?? '—' : 'не подключен'}
         </Text>
-        <TouchableOpacity style={s.connectBtn}>
+        <TouchableOpacity
+          style={s.connectBtn}
+          onPress={connected ? disconnect : connectWallet}
+        >
           <Text style={s.btnText}>
-            {connected ? 'Disconnect' : 'Connect Wallet'}
+            {connected ? 'Отключить' : 'Подключить кошелёк'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      <View style={s.actions}>
-        <TouchableOpacity
-          style={s.btn}
-          onPress={() => navigation.navigate('Deploy')}
-        >
-          <Text style={s.btnText}>Deploy</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.btn}
-          onPress={() => navigation.navigate('Mint')}
-        >
-          <Text style={s.btnText}>Mint</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.btn}
-          onPress={() => navigation.navigate('Monitor')}
-        >
-          <Text style={s.btnText}>Monitor</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.btn}
-          onPress={() => navigation.navigate('Assets')}
-        >
-          <Text style={s.btnText}>Активы</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.btn}
-          onPress={() => navigation.navigate('Settings')}
-        >
-          <Text style={s.btnText}>Settings</Text>
-        </TouchableOpacity>
-      </View>
+      {connected && (
+        <View style={s.actions}>
+          {allowedActions.map(({ key, label, route }) => (
+            <TouchableOpacity
+              key={key}
+              style={s.btn}
+              onPress={() => navigation.navigate(route)}
+            >
+              <Text style={s.btnText}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
