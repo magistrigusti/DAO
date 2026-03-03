@@ -445,8 +445,7 @@ PROGRAM{
         $pendingTreasury SETGLOB	// 
         // 307: pendingTreasuryTime = blockchain.now() + TIMELOCK_PERIOD
         NOW                 	//  '147
-        172800 PUSHINT      	//  '147 '148=172800
-        ADD                 	//  '146
+        60 ADDCONST         	//  '146
         $pendingTreasuryTime SETGLOB	// 
         // 308: hasPendingTreasury = true
         TRUE                	//  '150

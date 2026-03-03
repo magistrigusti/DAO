@@ -495,8 +495,7 @@ PROGRAM{
       $pendingAddress SETGLOB	// 
       // 302: pendingTime = blockchain.now() + TIMELOCK_PERIOD
       NOW                   	//  '202
-      172800 PUSHINT        	//  '202 '203=172800
-      ADD                   	//  '201
+      60 ADDCONST           	//  '201
       $pendingTime SETGLOB  	// 
       // 303: hasPending = true
       TRUE                  	//  '205
