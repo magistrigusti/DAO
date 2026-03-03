@@ -16,6 +16,7 @@
     "@react-navigation/native": "^7.0.0",
     "@react-navigation/native-stack": "^7.0.0",
     "@tonconnect/sdk": "^3.4.0",
+    "@tonconnect/ui-react": "^2.4.2",
     "@vercel/node": "^3.2.0",
     "expo": "~52.0.0",
     "expo-asset": "~11.0.5",
@@ -31,8 +32,8 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~18.3.12",
-    "typescript": "~5.3.0",
-    "babel-plugin-module-resolver": "^5.0.0"
+    "babel-plugin-module-resolver": "^5.0.0",
+    "typescript": "~5.3.0"
   },
   "private": true
 }

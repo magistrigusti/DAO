@@ -1,12 +1,18 @@
 // ========== TONCONNECT PROVIDER ==========
-// Placeholder — TonConnect SDK для RN требует manifest + storage
-// Полная интеграция: @tonconnect/sdk + AsyncStorage + deep links
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+// Web: TonConnectUIProvider + TonConnectAdapter (реальные кошельки)
+// Native: placeholder (manifest + deep links позже)
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = '@dom_wallet_address';
 
-interface TonConnectContextValue {
+export interface TonConnectContextValue {
   connected: boolean;
   address: string | null;
   connectWallet: () => Promise<void>;
@@ -24,13 +30,45 @@ export function useTonConnect() {
   return useContext(TonConnectContext);
 }
 
+// ========== ADAPTER ДЛЯ WEB (TonConnect UI) ==========
+// Использует useTonWallet, useTonConnectUI из @tonconnect/ui-react
+import { useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
+
+export function TonConnectAdapter({ children }: { children: React.ReactNode }) {
+  const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
+
+  const connected = !!wallet;
+  const address = wallet?.account?.address ?? null;
+
+  const connectWallet = useCallback(async () => {
+    tonConnectUI?.openModal();
+  }, [tonConnectUI]);
+
+  const disconnect = useCallback(async () => {
+    await tonConnectUI?.disconnect();
+  }, [tonConnectUI]);
+
+  const value: TonConnectContextValue = {
+    connected,
+    address,
+    connectWallet,
+    disconnect,
+  };
+
+  return (
+    <TonConnectContext.Provider value={value}>
+      {children}
+    </TonConnectContext.Provider>
+  );
+}
+
+// ========== PROVIDER ДЛЯ NATIVE (placeholder) ==========
 export function TonConnectProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
 
   const connectWallet = useCallback(async () => {
-    // Placeholder: TonConnect.connect() → wallet.connect()
-    // Пока симулируем — сохраняем тестовый адрес для проверки UI
     const testAddress = 'EQD...test';
     await AsyncStorage.setItem(STORAGE_KEY, testAddress);
     setAddress(testAddress);

@@ -4,6 +4,7 @@
   "installCommand": "cd apps/dom-mobile && npm install",
   "rewrites": [
     { "source": "/dom-metadata.json", "destination": "/api/metadata" },
+    { "source": "/tonconnect-manifest.json", "destination": "/api/tonconnect-manifest" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

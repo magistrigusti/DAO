@@ -1,7 +1,7 @@
 // ========== ЭКРАН DASHBOARD ==========
-// Обзор: сначала Connect Wallet, после подключения — действия по whitelist
+// Обзор: TonConnectButton (web) или кнопка (native), после подключения — действия
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Platform, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useTonConnect } from '../services/TonConnectProvider';
@@ -21,6 +21,12 @@ const ALL_ACTIONS = [
   { key: 'Settings', label: 'Settings', route: 'Settings' as const },
 ];
 
+function formatAddress(addr: string | null): string {
+  if (!addr) return '—';
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
 export default function DashboardScreen({ navigation }: Props) {
   const { connected, address, connectWallet, disconnect } = useTonConnect();
   const [allowedActions, setAllowedActions] = useState<typeof ALL_ACTIONS>(ALL_ACTIONS);
@@ -36,6 +42,11 @@ export default function DashboardScreen({ navigation }: Props) {
     if (connected && address) loadAllowedActions();
   }, [connected, address, loadAllowedActions]);
 
+  const TonConnectButton =
+    Platform.OS === 'web'
+      ? require('@tonconnect/ui-react').TonConnectButton
+      : null;
+
   return (
     <View style={s.container}>
       <Text style={s.title}>DOM Mobile</Text>
@@ -43,16 +54,25 @@ export default function DashboardScreen({ navigation }: Props) {
 
       <View style={s.wallet}>
         <Text style={s.label}>
-          Кошелёк: {connected ? address ?? '—' : 'не подключен'}
+          Кошелёк: {connected ? formatAddress(address) : 'не подключен'}
         </Text>
-        <TouchableOpacity
-          style={s.connectBtn}
-          onPress={connected ? disconnect : connectWallet}
-        >
-          <Text style={s.btnText}>
-            {connected ? 'Отключить' : 'Подключить кошелёк'}
-          </Text>
-        </TouchableOpacity>
+        {TonConnectButton ? (
+          <View style={s.tonConnectWrapper}>
+            <TonConnectButton
+              className="ton-connect-btn"
+              style={s.tonConnectBtn}
+            />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={s.connectBtn}
+            onPress={connected ? disconnect : connectWallet}
+          >
+            <Text style={s.btnText}>
+              {connected ? 'Отключить' : 'Подключить кошелёк'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {connected && (
@@ -101,6 +121,12 @@ const s = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignSelf: 'flex-start',
+  },
+  tonConnectWrapper: {
+    alignSelf: 'flex-start',
+  },
+  tonConnectBtn: {
+    borderRadius: 8,
   },
   actions: {
     gap: 12,
