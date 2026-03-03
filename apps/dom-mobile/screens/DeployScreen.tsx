@@ -1,32 +1,58 @@
 // ========== ЭКРАН DEPLOY ==========
-// Деплой DOM core (Master, Minter, Givers, Treasury, Gas Pool)
-// Placeholder — интеграция с wrappers позже
+// Деплой DOM core (Master, Givers, Gas Pool, Proxy)
+// После деплоя через Blueprint — сохрани адреса в Monitor
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Deploy'>;
 
-export default function DeployScreen({}: Props) {
+const STEPS = [
+  '1. Подключи кошелёк (TonConnect)',
+  '2. Запусти deployDomCoreTestnet через Blueprint',
+  '3. Подтверди Gas Pool через 48ч (confirmGasProxyPool)',
+  '4. Сохрани адреса в Monitor → «Сохранить контракты»',
+];
+
+export default function DeployScreen({ navigation }: Props) {
   return (
-    <View style={s.container}>
+    <ScrollView style={s.container} contentContainerStyle={s.content}>
       <Text style={s.title}>Deploy DOM Core</Text>
       <Text style={s.subtitle}>
-        Placeholder: интеграция с deployDomCoreTestnet
+        Деплой через Blueprint (QR / TonConnect)
       </Text>
+
+      <View style={s.steps}>
+        {STEPS.map((step, i) => (
+          <Text key={i} style={s.step}>
+            {step}
+          </Text>
+        ))}
+      </View>
+
       <Text style={s.hint}>
-        Подключи кошелёк — деплой будет доступен
+        После деплоя перейди в Monitor и сохрани адреса Master, GasProxy, GasPool.
       </Text>
-    </View>
+
+      <Text
+        style={s.link}
+        onPress={() => navigation.navigate('Monitor')}
+      >
+        → Monitor
+      </Text>
+    </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
     backgroundColor: '#0f0f1a',
+  },
+  content: {
+    padding: 24,
+    paddingBottom: 48,
   },
   title: {
     fontSize: 24,
@@ -36,10 +62,26 @@ const s = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#94a3b8',
-    marginBottom: 16,
+    marginBottom: 24,
+  },
+  steps: {
+    marginBottom: 24,
+  },
+  step: {
+    fontSize: 14,
+    color: '#e2e8f0',
+    marginBottom: 8,
+    paddingLeft: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#6366f1',
   },
   hint: {
     fontSize: 12,
     color: '#64748b',
+    marginBottom: 12,
+  },
+  link: {
+    fontSize: 14,
+    color: '#6366f1',
   },
 });
