@@ -18,10 +18,22 @@ function parseAddressOrDefault(
     return Address.parse(raw.trim());
 }
 
+// Уникальные адреса-дискриминаторы для гиверов при деплое без args.
+// Без этого все 4 гивера получают одинаковый init → один адрес → 4× TON на один контракт.
+const GIVER_DISCRIMINATORS: readonly Address[] = [
+    Address.parse('0:0000000000000000000000000000000000000000000000000000000000000001'),
+    Address.parse('0:0000000000000000000000000000000000000000000000000000000000000002'),
+    Address.parse('0:0000000000000000000000000000000000000000000000000000000000000003'),
+    Address.parse('0:0000000000000000000000000000000000000000000000000000000000000004'),
+] as const;
+
 export async function run(
     provider: NetworkProvider,
     args: string[]
 ) {
+    // Убираем MaxListenersExceededWarning при TonConnect
+    process.setMaxListeners?.(20);
+
     // ========== ГЕРОИ В ЛОКАЦИЯХ ==========
     // args (опционально, по порядку):
     // 0: allodiumFrs
@@ -34,7 +46,8 @@ export async function run(
     // 7: dominumFoundation
     // 8: domTreasuryOwner
     // 9: metadataBaseUrl (например https://dominum.vercel.app)
-    // Если аргумент не передан — берём адрес текущего wallet sender.
+    // Если аргумент не передан: firstTarget=deployer, secondTarget=дискриминатор
+    // (чтобы 4 гивера имели разные адреса; whitelist меняется через Giver Manager).
     // ======================================
     const ui = provider.ui();
     const sender = provider.sender();
@@ -47,37 +60,25 @@ export async function run(
 
     const deployer = sender.address;
 
-    const allodiumFrsAddress = parseAddressOrDefault(
-        args[0],
-        deployer
-    );
+    const allodiumFrsAddress = parseAddressOrDefault(args[0], deployer);
     const allodiumFoundationAddress = parseAddressOrDefault(
         args[1],
-        deployer
+        GIVER_DISCRIMINATORS[0]
     );
-    const defiBankAddress = parseAddressOrDefault(
-        args[2],
-        deployer
-    );
+    const defiBankAddress = parseAddressOrDefault(args[2], deployer);
     const defiDualAddress = parseAddressOrDefault(
         args[3],
-        deployer
+        GIVER_DISCRIMINATORS[1]
     );
-    const bankDaoAddress = parseAddressOrDefault(
-        args[4],
-        deployer
-    );
+    const bankDaoAddress = parseAddressOrDefault(args[4], deployer);
     const daoFoundationAddress = parseAddressOrDefault(
         args[5],
-        deployer
+        GIVER_DISCRIMINATORS[2]
     );
-    const bankDominumAddress = parseAddressOrDefault(
-        args[6],
-        deployer
-    );
+    const bankDominumAddress = parseAddressOrDefault(args[6], deployer);
     const dominumFoundationAddress = parseAddressOrDefault(
         args[7],
-        deployer
+        GIVER_DISCRIMINATORS[3]
     );
     const domTreasuryOwnerAddress = parseAddressOrDefault(
         args[8],
@@ -208,34 +209,79 @@ export async function run(
         )
     );
 
+    // ========== PREVIEW: куда и сколько ==========
+    const network = provider.network();
+    const fmt = (a: Address) =>
+        a.toString({ testOnly: network === 'testnet', bounceable: false });
+    ui.write('');
+    ui.write('========== DEPLOY PLAN ==========');
+    ui.write(`GiverManager  0.5 TON  → ${fmt(giverManager.address)}`);
+    ui.write(`GiverAllodium 0.5 TON  → ${fmt(giverAllodium.address)}`);
+    ui.write(`GiverDeFi     0.5 TON  → ${fmt(giverDefi.address)}`);
+    ui.write(`GiverDAO      0.5 TON  → ${fmt(giverDao.address)}`);
+    ui.write(`GiverDominum  0.5 TON  → ${fmt(giverDominum.address)}`);
+    ui.write(`GasProxy      1 TON    → ${fmt(gasProxy.address)}`);
+    ui.write(`GasPool       20 TON   → ${fmt(gasPool.address)}`);
+    ui.write(`Master        2 TON    → ${fmt(master.address)}`);
+    ui.write(`+ config: 0.2+0.2 TON (gas proxy), 0.1×4 TON (setWallet)`);
+    ui.write(`TOTAL: ~26 TON`);
+    ui.write('=================================');
+    ui.write('');
+
+    // ========== DEPLOY GIVER MANAGER ==========
     ui.write('Deploying giver manager...');
-    await giverManager.sendDeploy(provider.sender(), toNano('0.5'));
-    await provider.waitForDeploy(giverManager.address);
+    if (!(await provider.isContractDeployed(giverManager.address))) {
+        await giverManager.sendDeploy(provider.sender(), toNano('0.5'));
+        await provider.waitForDeploy(giverManager.address);
+    } else {
+        ui.write('Giver manager already deployed, skipping.');
+    }
 
-    ui.write('Deploying givers...');
-    await giverAllodium.sendDeploy(provider.sender(), toNano('3'));
-    await provider.waitForDeploy(giverAllodium.address);
+    // ========== DEPLOY GIVERS (4 transactions — approve each in wallet) ==========
+    const giversToDeploy = [
+        { name: 'Allodium', giver: giverAllodium },
+        { name: 'DeFi', giver: giverDefi },
+        { name: 'DAO', giver: giverDao },
+        { name: 'Dominum', giver: giverDominum },
+    ] as const;
 
-    await giverDefi.sendDeploy(provider.sender(), toNano('3'));
-    await provider.waitForDeploy(giverDefi.address);
+    for (let i = 0; i < giversToDeploy.length; i += 1) {
+        const { name, giver } = giversToDeploy[i];
+        const label = `[${i + 1}/${giversToDeploy.length}]`;
+        if (await provider.isContractDeployed(giver.address)) {
+            ui.write(`Giver ${name} ${label} already deployed, skipping.`);
+            continue;
+        }
+        ui.write(`Deploying giver ${name} ${label}. Approve in wallet...`);
+        await giver.sendDeploy(provider.sender(), toNano('0.5'));
+        await provider.waitForDeploy(giver.address);
+    }
 
-    await giverDao.sendDeploy(provider.sender(), toNano('3'));
-    await provider.waitForDeploy(giverDao.address);
+    // ========== DEPLOY GAS PROXY & POOL ==========
+    if (!(await provider.isContractDeployed(gasProxy.address))) {
+        ui.write('Deploying gas proxy...');
+        await gasProxy.sendDeploy(provider.sender(), toNano('1'));
+        await provider.waitForDeploy(gasProxy.address);
+    } else {
+        ui.write('Gas proxy already deployed, skipping.');
+    }
 
-    await giverDominum.sendDeploy(provider.sender(), toNano('3'));
-    await provider.waitForDeploy(giverDominum.address);
+    if (!(await provider.isContractDeployed(gasPool.address))) {
+        ui.write('Deploying gas pool...');
+        await gasPool.sendDeploy(provider.sender(), toNano('20'));
+        await provider.waitForDeploy(gasPool.address);
+    } else {
+        ui.write('Gas pool already deployed, skipping.');
+    }
 
-    ui.write('Deploying gas proxy...');
-    await gasProxy.sendDeploy(provider.sender(), toNano('1'));
-    await provider.waitForDeploy(gasProxy.address);
-
-    ui.write('Deploying gas pool...');
-    await gasPool.sendDeploy(provider.sender(), toNano('20'));
-    await provider.waitForDeploy(gasPool.address);
-
-    ui.write('Deploying master...');
-    await master.sendDeploy(provider.sender(), toNano('2'));
-    await provider.waitForDeploy(master.address);
+    // ========== DEPLOY MASTER ==========
+    if (!(await provider.isContractDeployed(master.address))) {
+        ui.write('Deploying master...');
+        await master.sendDeploy(provider.sender(), toNano('2'));
+        await provider.waitForDeploy(master.address);
+    } else {
+        ui.write('Master already deployed, skipping.');
+    }
 
     ui.write('Configuring gas proxy wallet settings...');
     await gasProxy.sendSetWalletConfig(provider.sender(), {
@@ -275,20 +321,28 @@ export async function run(
     }
 
     ui.write('');
-    ui.write('DOM core deployment completed.');
-    ui.write(`Master: ${master.address.toString()}`);
-    ui.write(`GasProxy: ${gasProxy.address.toString()}`);
-    ui.write(`GasPool: ${gasPool.address.toString()}`);
-    ui.write(`GiverManager: ${giverManager.address.toString()}`);
-    ui.write(`GiverAllodium: ${giverAllodium.address.toString()}`);
-    ui.write(`GiverDefi: ${giverDefi.address.toString()}`);
-    ui.write(`GiverDao: ${giverDao.address.toString()}`);
-    ui.write(`GiverDominum: ${giverDominum.address.toString()}`);
-    ui.write('');
+    ui.write('========== DEPLOY COMPLETE ==========');
+    const base =
+        network === 'testnet'
+            ? 'https://testnet.tonscan.org/address/'
+            : 'https://tonscan.org/address/';
+    const contracts = [
+        ['Master', master.address, '2 TON'],
+        ['GasPool', gasPool.address, '20 TON'],
+        ['GasProxy', gasProxy.address, '1 TON'],
+        ['GiverManager', giverManager.address, '0.5 TON'],
+        ['GiverAllodium', giverAllodium.address, '0.5 TON'],
+        ['GiverDeFi', giverDefi.address, '0.5 TON'],
+        ['GiverDAO', giverDao.address, '0.5 TON'],
+        ['GiverDominum', giverDominum.address, '0.5 TON'],
+    ] as const;
+    for (const [name, addr, amount] of contracts) {
+        const raw = fmt(addr);
+        ui.write(`${name} (${amount}): ${raw}`);
+        ui.write(`  → ${base}${raw}`);
+    }
+    ui.write('=====================================');
     ui.write(
-        'Next step: wait 48h and run confirmGasProxyPool with GasProxy address.'
-    );
-    ui.write(
-        'Mint for Phase-1 is manual from deployer wallet (master minter).'
+        'Next: wait 48h, run confirmGasProxyPool. Mint: manual from deployer.'
     );
 }
