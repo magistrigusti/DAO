@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dominum.dommobile"
@@ -26,6 +28,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "scheme": "dom-mobile"
+    "scheme": "dom-mobile",
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }
