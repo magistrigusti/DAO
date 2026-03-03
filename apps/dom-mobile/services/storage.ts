@@ -15,11 +15,13 @@ export interface StoredContracts {
 
 export interface StoredConfig {
   metadataUrl: string;
+  apiUrl: string;
   network: 'mainnet' | 'testnet';
 }
 
 const DEFAULT_CONFIG: StoredConfig = {
   metadataUrl: 'https://dominum.vercel.app',
+  apiUrl: '',
   network: 'testnet',
 };
 

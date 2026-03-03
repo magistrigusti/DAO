@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "DOM Mobile",
     "slug": "dom-mobile",
@@ -26,9 +26,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "@tonconnect/ui-react-native"
-    ],
     "scheme": "dom-mobile"
   }
 }

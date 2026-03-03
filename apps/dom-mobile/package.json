@@ -6,9 +6,12 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:web": "npx expo export --platform web"
   },
   "dependencies": {
+    "@vercel/node": "^3.2.0",
+    "mongodb": "^6.12.0",
     "expo": "~52.0.0",
     "expo-status-bar": "~2.0.0",
     "react": "18.3.1",
@@ -17,7 +20,7 @@
     "@react-navigation/native-stack": "^7.0.0",
     "react-native-screens": "~4.4.0",
     "react-native-safe-area-context": "4.12.0",
-    "@tonconnect/ui-react-native": "^0.0.40",
+    "@tonconnect/sdk": "^3.4.0",
     "@react-native-async-storage/async-storage": "1.23.1"
   },
   "devDependencies": {

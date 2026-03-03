@@ -16,11 +16,13 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({}: Props) {
   const [metadataUrl, setMetadataUrl] = useState('');
+  const [apiUrl, setApiUrl] = useState('');
   const [network, setNetwork] = useState<'mainnet' | 'testnet'>('testnet');
 
   const loadConfig = useCallback(async () => {
     const cfg = await getConfig();
     setMetadataUrl(cfg.metadataUrl);
+    setApiUrl(cfg.apiUrl);
     setNetwork(cfg.network);
   }, []);
 
@@ -29,7 +31,7 @@ export default function SettingsScreen({}: Props) {
   }, [loadConfig]);
 
   const saveConfig = async () => {
-    await setConfig({ metadataUrl, network });
+    await setConfig({ metadataUrl, apiUrl, network });
   };
 
   return (
@@ -42,6 +44,15 @@ export default function SettingsScreen({}: Props) {
         value={metadataUrl}
         onChangeText={setMetadataUrl}
         placeholder="https://dominum.vercel.app"
+        placeholderTextColor="#64748b"
+      />
+
+      <Text style={s.label}>API URL (для мобильного — адрес Vercel)</Text>
+      <TextInput
+        style={s.input}
+        value={apiUrl}
+        onChangeText={setApiUrl}
+        placeholder="https://dom-mobile.vercel.app"
         placeholderTextColor="#64748b"
       />
 

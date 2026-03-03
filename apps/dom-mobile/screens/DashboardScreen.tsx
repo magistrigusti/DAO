@@ -4,14 +4,28 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { useTonConnect } from '../services/TonConnectProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
+  const { connected, address } = useTonConnect();
+
   return (
     <View style={s.container}>
       <Text style={s.title}>DOM Mobile</Text>
       <Text style={s.subtitle}>Обзор экосистемы DOM</Text>
+
+      <View style={s.wallet}>
+        <Text style={s.label}>
+          Кошелёк: {connected ? address ?? '—' : 'не подключен'}
+        </Text>
+        <TouchableOpacity style={s.connectBtn}>
+          <Text style={s.btnText}>
+            {connected ? 'Disconnect' : 'Connect Wallet'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={s.actions}>
         <TouchableOpacity
@@ -31,6 +45,12 @@ export default function DashboardScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('Monitor')}
         >
           <Text style={s.btnText}>Monitor</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.btn}
+          onPress={() => navigation.navigate('Assets')}
+        >
+          <Text style={s.btnText}>Активы</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={s.btn}
@@ -57,7 +77,21 @@ const s = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#94a3b8',
-    marginBottom: 32,
+    marginBottom: 24,
+  },
+  wallet: {
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 14,
+    color: '#94a3b8',
+    marginBottom: 8,
+  },
+  connectBtn: {
+    backgroundColor: '#6366f1',
+    padding: 12,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
   },
   actions: {
     gap: 12,

@@ -6,6 +6,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import DeployScreen from '../screens/DeployScreen';
 import MintScreen from '../screens/MintScreen';
 import MonitorScreen from '../screens/MonitorScreen';
+import AssetsScreen from '../screens/AssetsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
 export type RootStackParamList = {
@@ -13,6 +14,7 @@ export type RootStackParamList = {
   Deploy: undefined;
   Mint: undefined;
   Monitor: undefined;
+  Assets: undefined;
   Settings: undefined;
 };
 
@@ -31,6 +33,7 @@ export function AppNavigator() {
         <Stack.Screen name="Deploy" component={DeployScreen} />
         <Stack.Screen name="Mint" component={MintScreen} />
         <Stack.Screen name="Monitor" component={MonitorScreen} />
+        <Stack.Screen name="Assets" component={AssetsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
