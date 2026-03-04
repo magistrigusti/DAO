@@ -28,7 +28,7 @@ const TAX_HALF: int = 50000000;
 // Минимум TON для transfer-подобных операций.
 // Важно: газ сети (валидаторы) может потребовать сверху —
 // но остаток обычно возвращается через excess.
-const MIN_TON_FOR_TRANSFER: int = 150000000; // 0.15 TON
+const MIN_TON_FOR_TRANSFER: int = 50000000; 
 
 // Минимум для служебных сообщений (смена whitelist/курс/адреса и т.п.)
 const MIN_TON_FOR_STORAGE: int = 10000000; // 0.01 TON

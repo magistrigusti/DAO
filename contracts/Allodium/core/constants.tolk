@@ -18,5 +18,5 @@ const EXCHANGE_DECIMALS_FACTOR: int = 100;
 const TAX_ALLOD_TON: int = 30000000;
 
 // TON на служебные сообщения
-const MIN_TON_FOR_TRANSFER: int = 150000000; // 0.15 TON
+const MIN_TON_FOR_TRANSFER: int = 50000000; 
 const MIN_TON_FOR_STORAGE: int = 10000000;   // 0.01 TON

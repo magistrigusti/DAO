@@ -1,22 +1,12 @@
 {
   "name": "dominum-dao",
   "version": "1.0.0",
-  "description": "Dominum (DOM) — DAO для сбора средств на покупку острова. NFT-участки, голосование токенами DOM.",
+  "description": "Dominum (DOM) — smart contracts only.",
   "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
   "scripts": {
     "build": "npx blueprint build",
-    "test": "node --test --require ts-node/register \"tests/**/*.test.ts\"",
-    "test:blueprint": "npx blueprint test",
-    "deploy": "npx blueprint run",
     "compile": "npx blueprint build --all",
-    "app": "cd apps/dom-mobile && npm start",
-    "dev": "cd apps/dom-mobile && npm start",
-    "app:web": "cd apps/dom-mobile && npm run web",
-    "app:build": "cd apps/dom-mobile && npm run build:web",
-    "metadata-server": "cd apps/metadata-server && npm install && npm start"
+    "deploy": "npx blueprint run"
   },
   "keywords": [
     "ton",
