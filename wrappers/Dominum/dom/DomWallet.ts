@@ -7,6 +7,7 @@ import {
     ContractProvider,
     Sender,
 } from '@ton/core';
+
 const OP_TRANSFER = 0xf8a7ea5n;
 const OP_BURN = 0x595f07bcn;
 
@@ -48,11 +49,12 @@ export class DomWallet implements Contract {
         const init = { code, data };
 
         return new DomWallet(
-            contractAddress(workchain, init), init
+            contractAddress(workchain, init),
+            init
         );
     }
 
-    statuc createFromAddress(address: Address) {
+    static createFromAddress(address: Address) {
         return new DomWallet(address);
     }
 
@@ -77,6 +79,64 @@ export class DomWallet implements Contract {
             queryId?: bigint;
         }
     ) {
+        // ВАЖНО:
+        // твой wallet.tolk читает только:
+        // amount -> toOwner -> responseDestination
+        // без custom_payload / forward_payload.
         const body = beginCell()
+            .storeUint(OP_TRANSFER, 32)
+            .storeUint(opts.queryId ?? 0n, 64)
+            .storeCoins(opts.jettonAmount)
+            .storeAddress(opts.toOwner)
+            .storeAddress(
+                opts.responseDestination ?? null
+            )
+            .endCell();
+
+        await provider.internal(via, {
+            value: opts.value,
+            body,
+        });
+    }
+
+    async sendBurn(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            amount: bigint;
+            responseDestination?: Address | null;
+            queryId?: bigint;
+        }
+    ) {
+        const body = beginCell()
+            .storeUint(OP_BURN, 32)
+            .storeUint(opts.queryId ?? 0n, 64)
+            .storeCoins(opts.amount)
+            .storeAddress(
+                opts.responseDestination ?? null
+            )
+            .endCell();
+
+        await provider.internal(via, {
+            value: opts.value,
+            body,
+        });
+    }
+
+    async getWalletData(
+        provider: ContractProvider
+    ) {
+        const { stack } = await provider.get(
+            'getWalletData',
+            []
+        );
+
+        return {
+            balance: stack.readBigNumber(),
+            ownerAddress: stack.readAddress(),
+            masterAddress: stack.readAddress(),
+            gasPoolAddress: stack.readAddress(),
+        };
     }
 }

@@ -1,71 +1,45 @@
 import {
-  Address,
-  beginCell,
-  Cell,
-  Contract,
-  contractAddress,
-  ContractProvider,
-  Sender,
+    Address,
+    beginCell,
+    Cell,
+    Contract,
+    contractAddress,
+    ContractProvider,
+    Sender,
 } from '@ton/core';
-
+const OP_REQUEST_CHANGE_POOL = 0xb0;
+const OP_CONFIRM_CHANGE_POOL = 0xb1;
+const OP_CANCEL_CHANGE_POOL = 0xb2;
 const OP_SET_PROXY_WALLET_CONFIG = 0xb4;
 
 export type GasProxyConfig = {
-  adminAddress: Address;
-  realGasPoolAddress: Address;
-  walletConfigReady: boolean;
-  masterAddress?: Address;
-  jettonWalletCode?: Cell;
-  hasPending: boolean;
+    adminAddress: Address;
+    realGasPoolAddress: Address;
+    walletConfigReady: boolean;
+    masterAAddress?: Address | null;
+    jettonWalletCode?: Cell | null;
+    hasPending: boolean;
+    pendingAddress?: Address | null;
+    pendingTime?: bigint;
 };
 
-export function gasProxyConfigToCell(config: GasProxyConfig): Cell {
-  let b = beginCell()
-      .storeAddress(config.adminAddress)
-      .storeAddress(config.realGasPoolAddress)
-      .storeBit(config.walletConfigReady);
-  if (config.walletConfigReady && config.masterAddress && config.jettonWalletCode) {
-      b = b.storeAddress(config.masterAddress).storeRef(config.jettonWalletCode);
-  }
-  b = b.storeBit(config.hasPending);
-  if (config.hasPending) {
-      b = b.storeAddress(config.adminAddress).storeUint(0, 64);
-  }
-  return b.endCell();
-}
+export function gasProxyConfigToCell(
+    config: GasProxyConfig
+): Cell {
+    let builder = beginCell()
+        .storeAddress(config.adminAddress)
+        .storeAddress(config.realGasPoolAddress)
+        .storeBit(config.walletConfigReady);
 
-export class GasProxy implements Contract {
-  constructor(
-      readonly address: Address,
-      readonly init?: { code: Cell; data: Cell }
-  ) {}
+    if (config.walletConfigReady) {
+        if (!config.masterAddress || !config.jettonWalletCode) {
+            throw new Error(
+                'GasProxy: masterAddress and jettonWalletCode are required when walletConfig Ready = true'
+            );
+        }
 
-  static createFromConfig(config: GasProxyConfig, code: Cell, workchain = 0) {
-      const data = gasProxyConfigToCell(config);
-      const init = { code, data };
-      return new GasProxy(contractAddress(workchain, init), init);
-  }
-
-  async sendSetWalletConfig(
-      provider: ContractProvider,
-      via: Sender,
-      opts: { value: bigint; masterAddress: Address; jettonWalletCode: Cell }
-  ) {
-      const body = beginCell()
-          .storeUint(OP_SET_PROXY_WALLET_CONFIG, 32)
-          .storeUint(0, 64)
-          .storeAddress(opts.masterAddress)
-          .storeRef(opts.jettonWalletCode)
-          .endCell();
-      await provider.internal(via, { value: opts.value, body });
-  }
-
-  async getProxyData(provider: ContractProvider) {
-      const { stack } = await provider.get('getProxyData', []);
-      return {
-          adminAddress: stack.readAddress(),
-          realGasPoolAddress: stack.readAddress(),
-          hasPending: stack.readBoolean(),
-      };
-  }
+        builder = builder
+            .storeAddress(config.masterAddress)
+            .storeRef(config.jettonWalletCode);
+    }
 }
