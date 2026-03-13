@@ -89,5 +89,85 @@ export class GasPool implements Contract {
     return new GasPool(address);
   }
 
-  
+  async sendDeploy(
+    provider: ContractProvider,
+    via: Sender,
+    value: bigint
+  ) {
+    await provider.internal(via, { value });
+  }
+
+  async sendGasPoolExecute(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      jettonAmount: bigint;
+      toOwner: Address;
+      fromOwner: Address;
+      treasuryFee: bigint;
+      gasPoolFee: bigint;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_GAS_POOL_EXECUTE, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeCoins(opts.jettonAmount)
+      .storeAddress(opts.toOwner)
+      .storeAddress(opts.fromOwner)
+      .storeCoins(opts.treasuryFee)
+      .storeCoins(opts.gasPoolFee)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
+  async sendTopUp(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_TOP_UP, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
+  async sendWithdrawDom(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toOwner: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_WITHDRAW_DOM, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeCoins(opts.amount)
+      .storeAddress(opts.toOwner)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
+
+
 }
