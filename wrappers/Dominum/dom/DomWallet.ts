@@ -7,9 +7,7 @@ import {
     ContractProvider,
     Sender,
 } from '@ton/core';
-
-const OP_TRANSFER = 0xf8a7ea5n;
-const OP_BURN = 0x595f07bcn;
+import { OP_BURN, OP_TRANSFER } from '../core/op_code';
 
 export type DomWalletConfig = {
     balance: bigint;

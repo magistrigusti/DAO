@@ -7,8 +7,7 @@ import {
     ContractProvider,
     Sender,
 } from '@ton/core';
-
-const OP_MINT = 0x15;
+import { OP_MINT } from '../core/op_code';
 
 export type DomMasterConfig = {
     totalSupply: bigint;
