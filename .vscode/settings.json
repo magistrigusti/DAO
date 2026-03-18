@@ -1,5 +1,11 @@
 {
   "workbench.colorTheme": "Cursor Light",
   "workbench.preferredHighContrastLightColorTheme": "Cursor Light",
-  "workbench.preferredLightColorTheme": "Cursor Dark Midnight"
+  "workbench.preferredLightColorTheme": "Cursor Dark Midnight",
+  "editor.rulers": [110],
+  "editor.wordWrap": "bounded",
+  "editor.wordWrapColumn": 110,
+  "printWidth": 110,
+  "tabWidth": 2,
+  "singleQuote": true
 }

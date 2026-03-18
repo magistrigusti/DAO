@@ -3,42 +3,41 @@ import "../core/errors.tolk";
 import "../core/constants.tolk";
 
 // ========== TOLK MIGRATION v1.2 ==========
-// Контракт переписан с legacy API на новый Tolk API.
-// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
-// Статус: migrated
+// MASTER v2:
+// - без minter
+// - минт только owner
+// - первый минт сразу
+// - дальше только через 30 дней от прошлого минта
+// - за один минт: от 1 DOM до 10 млн DOM
+// - распределение через 4 givers сохраняется
 // =========================================
 
 // =====================================================
 // JETTON MASTER — Главный контракт токена DOM (TEP-74)
 // =====================================================
-// Минт: только от minterAddress (жёстко при деплое!)
-// Админа НЕТ — контракт неизменяем!
+// Минт: только ownerAddress
+// Владелец задаётся при деплое.
+// Отдельного minter больше нет.
 //
-// Распределение минта (4 гивера):
-// - 30% Allodium  → FRS + Foundation
-// - 20% DeFi      → Foundry + Market Maker
-// - 25% DAO       → Bank DAO + DAO Foundation
-// - 25% Dominum   → Bank Dominum + Dominum Foundation
+// Базовое распределение минта:
+// - 30% Allodium
+// - 20% DeFi
+// - 25% DAO
+// - 25% Dominum
 //
 // Wallet storage:
-// (balance, owner, master, gasProxy, walletCode)
+// (balance, owner, master, gasPool, walletCode)
 // =====================================================
 
-// Доли минта
-const SHARE_ALLODIUM: int = 30;
-const SHARE_DEFI: int = 20;
-const SHARE_DAO: int = 25;
-const SHARE_DOMINUM: int = 25;
-
-const SHARE_TOTAL: int =
-    SHARE_ALLODIUM
-    + SHARE_DEFI
-    + SHARE_DAO
-    + SHARE_DOMINUM;
-
+// -----------------------------------------------------
+// STORAGE
+// -----------------------------------------------------
 global totalSupply: int;
 
-global minterAddress: address;
+global ownerAddress: address;
+global lastMintTime: int;
+global isStarted: bool;
+
 global gasPoolAddress: address;
 
 global giverAllodiumAddress: address;
@@ -52,13 +51,15 @@ global jettonWalletCode: cell;
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
-
 fun loadData() {
     var ds = contract.getData().beginParse();
 
     totalSupply = ds.loadCoins();
 
-    minterAddress = ds.loadAddress();
+    ownerAddress = ds.loadAddress();
+    lastMintTime = ds.loadUint(64);
+    isStarted = ds.loadBool();
+
     gasPoolAddress = ds.loadAddress();
 
     var giversFirst = ds.loadRef().beginParse();
@@ -87,7 +88,9 @@ fun saveData() {
     contract.setData(
         beginCell()
             .storeCoins(totalSupply)
-            .storeAddress(minterAddress)
+            .storeAddress(ownerAddress)
+            .storeUint(lastMintTime, 64)
+            .storeBool(isStarted)
             .storeAddress(gasPoolAddress)
             .storeRef(giversFirst)
             .storeRef(giversSecond)
@@ -100,7 +103,6 @@ fun saveData() {
 // -----------------------------------------------------
 // WALLET ADDRESS
 // -----------------------------------------------------
-
 fun calculateWalletData(owner: address): cell {
     return beginCell()
         .storeCoins(0)
@@ -128,9 +130,26 @@ fun calculateWalletAddress(stateInit: cell): address {
 }
 
 // -----------------------------------------------------
-// MINT
+// SERVICE
 // -----------------------------------------------------
+fun requireOwner(senderAddress: address) {
+    assert(
+        senderAddress == ownerAddress,
+        ERROR_NOT_OWNER
+    );
+}
 
+fun canMintInternal(): bool {
+    if (!isStarted) {
+        return true;
+    }
+
+    return blockchain.now() >= lastMintTime + MINT_INTERVAL;
+}
+
+// -----------------------------------------------------
+// MINT SEND
+// -----------------------------------------------------
 fun sendToWallet(
     toOwner: address,
     jettonAmount: int,
@@ -140,6 +159,9 @@ fun sendToWallet(
     var stateInit = calculateWalletStateInit(toOwner);
     var walletAddress = calculateWalletAddress(stateInit);
 
+    // ========== ВАЖНО ==========
+    // Формат тела оставлен совместимым
+    // с текущим wallet.tolk
     var msgBody = beginCell()
         .storeUint(OP_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -154,7 +176,10 @@ fun sendToWallet(
         .storeUint(0x18, 6)
         .storeAddress(walletAddress)
         .storeCoins(msgValue)
-        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+        .storeUint(
+            4 + 2 + 1,
+            1 + 4 + 4 + 64 + 32 + 1 + 1 + 1
+        )
         .storeRef(stateInit)
         .storeRef(msgBody)
         .endCell();
@@ -162,13 +187,29 @@ fun sendToWallet(
     sendRawMessage(msg, 1);
 }
 
-fun mintJettons(amount: int, queryId: int, msgValue: int) {
+fun mintJettons(
+    amount: int,
+    queryId: int,
+    msgValue: int
+) {
+    assert(
+        GIVERS_COUNT == 4,
+        ERROR_INVALID_AMOUNT
+    );
+
+    assert(
+        SHARE_ALLODIUM
+        + SHARE_DEFI
+        + SHARE_DAO
+        + SHARE_DOMINUM
+        == 100,
+        ERROR_INVALID_AMOUNT
+    );
+
     assert(
         totalSupply + amount <= MAX_SUPPLY,
         ERROR_LIMIT_EXCEEDED
     );
-
-    assert(SHARE_TOTAL == 100, ERROR_INVALID_AMOUNT);
 
     totalSupply = totalSupply + amount;
 
@@ -181,9 +222,12 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
         - amountDefi
         - amountDao;
 
-    // TON делим на 4 отправки
-    var tonPer = msgValue / 4;
-    var tonRemainder = msgValue - tonPer * 4;
+    // =====================================================
+    // TON-логика оставлена как в текущем master:
+    // весь присланный TON делим на 4 mint-сообщения
+    // =====================================================
+    var tonPer = msgValue / GIVERS_COUNT;
+    var tonRemainder = msgValue - tonPer * GIVERS_COUNT;
 
     sendToWallet(
         giverAllodiumAddress,
@@ -212,14 +256,11 @@ fun mintJettons(amount: int, queryId: int, msgValue: int) {
         queryId + 3,
         tonPer
     );
-
-    saveData();
 }
 
 // -----------------------------------------------------
 // MESSAGES
 // -----------------------------------------------------
-
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -236,18 +277,48 @@ fun onInternalMessage(in: InMessage) {
     var queryId = msgBody.loadUint(64);
 
     // =====================================================
-    // OP_MINT — только от Minter (жёстко!)
+    // OP_MINT — только owner
+    // Первый минт можно сразу.
+    // Далее — только через 30 дней от прошлого минта.
+    // За один раз: от 1 DOM до 10 млн DOM.
     // =====================================================
     if (op == OP_MINT) {
-        assert(
-            senderAddress == minterAddress,
-            ERROR_NOT_MINTER
-        );
+        requireOwner(senderAddress);
 
         var amount = msgBody.loadCoins();
-        assert(amount > 0, ERROR_INVALID_AMOUNT);
+
+        assert(
+            amount >= MIN_MINT_AMOUNT,
+            ERROR_INVALID_AMOUNT
+        );
+
+        assert(
+            amount <= MAX_MINT_AMOUNT,
+            ERROR_LIMIT_EXCEEDED
+        );
+
+        assert(
+            canMintInternal(),
+            ERROR_TOO_EARLY
+        );
+
+        var requiredTon =
+            MIN_TON_FOR_TRANSFER * GIVERS_COUNT;
+
+        assert(
+            msgValue >= requiredTon,
+            ERROR_INSUFFICIENT_GAS
+        );
+
+        if (!isStarted) {
+            isStarted = true;
+        }
+
+        lastMintTime = blockchain.now();
 
         mintJettons(amount, queryId, msgValue);
+        saveData();
+
         return;
     }
 
@@ -265,6 +336,11 @@ fun onInternalMessage(in: InMessage) {
         assert(
             senderAddress == expectedWallet,
             ERROR_NOT_VALID_WALLET
+        );
+
+        assert(
+            totalSupply >= burnAmount,
+            ERROR_INSUFFICIENT_BALANCE
         );
 
         totalSupply = totalSupply - burnAmount;
@@ -294,14 +370,13 @@ fun onInternalMessage(in: InMessage) {
 // -----------------------------------------------------
 // GETTERS
 // -----------------------------------------------------
-
 get fun getJettonData(): (int, int, address, cell, cell) {
     loadData();
 
     return (
         totalSupply,
         -1,
-        minterAddress,
+        ownerAddress,
         content,
         jettonWalletCode
     );
@@ -314,13 +389,35 @@ get fun getWalletAddress(ownerAddress: address): address {
     return calculateWalletAddress(stateInit);
 }
 
-get fun getMasterData(): (address, address) {
+get fun getMasterData(): (address, address, int, int, bool) {
     loadData();
 
+    var nextMintTime = 0;
+
+    if (isStarted) {
+        nextMintTime = lastMintTime + MINT_INTERVAL;
+    }
+
     return (
-        minterAddress,
-        gasPoolAddress
+        ownerAddress,
+        gasPoolAddress,
+        lastMintTime,
+        nextMintTime,
+        isStarted
     );
+}
+
+get fun getMintRules(): (int, int, int) {
+    return (
+        MIN_MINT_AMOUNT,
+        MAX_MINT_AMOUNT,
+        MINT_INTERVAL
+    );
+}
+
+get fun canMintNow(): bool {
+    loadData();
+    return canMintInternal();
 }
 
 get fun getGiversData(): (address, address, address, address) {
