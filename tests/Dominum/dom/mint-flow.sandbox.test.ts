@@ -15,8 +15,6 @@ import { compile } from '@ton/blueprint';
 import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
 import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
 
-const OP_MINT = 0x15;
-
 describe('DOM master mint', () => {
     let blockchain: Blockchain;
 
@@ -49,7 +47,9 @@ describe('DOM master mint', () => {
             DomMaster.createFromConfig(
                 {
                     totalSupply: 0n,
-                    minterAddress: admin.address,
+                    ownerAddress: admin.address,
+                    lastMintTime: 0n,
+                    isStarted: false,
                     gasPoolAddress: admin.address,
                     giverAllodiumAddress: giver1.address,
                     giverDefiAddress: giver2.address,
@@ -69,26 +69,33 @@ describe('DOM master mint', () => {
 
         const mintAmount = 1_000_000_000_000n;
 
-        const mintBody = beginCell()
-            .storeUint(OP_MINT, 32)
-            .storeUint(0, 64)
-            .storeCoins(mintAmount)
-            .endCell();
-
-        await admin.send({
-            to: domMaster.address,
-            value: toNano('0.25'),
-            body: mintBody,
-        });
+        await domMaster.sendMint(
+            admin.getSender(),
+            {
+                value: toNano('0.25'),
+                amount: mintAmount,
+                queryId: 0n,
+            }
+        );
 
         const masterData = await domMaster.getJettonData();
 
-        expect(masterData.totalSupply).toEqual(mintAmount);
+        expect(masterData.totalSupply).toEqual(
+            mintAmount
+        );
 
-        const w1 = await domMaster.getWalletAddress(giver1.address);
-        const w2 = await domMaster.getWalletAddress(giver2.address);
-        const w3 = await domMaster.getWalletAddress(giver3.address);
-        const w4 = await domMaster.getWalletAddress(giver4.address);
+        const w1 = await domMaster.getWalletAddress(
+            giver1.address
+        );
+        const w2 = await domMaster.getWalletAddress(
+            giver2.address
+        );
+        const w3 = await domMaster.getWalletAddress(
+            giver3.address
+        );
+        const w4 = await domMaster.getWalletAddress(
+            giver4.address
+        );
 
         const wallet1 = blockchain.openContract(
             DomWallet.createFromAddress(w1)

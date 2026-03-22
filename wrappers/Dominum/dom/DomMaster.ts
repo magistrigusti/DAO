@@ -11,7 +11,9 @@ import { OP_MINT } from '../core/op_code';
 
 export type DomMasterConfig = {
     totalSupply: bigint;
-    minterAddress: Address;
+    ownerAddress: Address;
+    lastMintTime: bigint;
+    isStarted: boolean;
     gasPoolAddress: Address;
     giverAllodiumAddress: Address;
     giverDefiAddress: Address;
@@ -36,7 +38,9 @@ export function domMasterConfigToCell(
 
     return beginCell()
         .storeCoins(config.totalSupply)
-        .storeAddress(config.minterAddress)
+        .storeAddress(config.ownerAddress)
+        .storeUint(config.lastMintTime, 64)
+        .storeBit(config.isStarted)
         .storeAddress(config.gasPoolAddress)
         .storeRef(giversFirst)
         .storeRef(giversSecond)
@@ -82,8 +86,6 @@ export class DomMaster implements Contract {
         });
     }
 
-    // Удобно для sandbox:
-    // сработает, только если sender == minterAddress.
     async sendMint(
         provider: ContractProvider,
         via: Sender,
@@ -116,7 +118,7 @@ export class DomMaster implements Contract {
         return {
             totalSupply: stack.readBigNumber(),
             mintable: stack.readBigNumber(),
-            minterAddress: stack.readAddress(),
+            ownerAddress: stack.readAddress(),
             content: stack.readCell(),
             jettonWalletCode: stack.readCell(),
         };
@@ -150,9 +152,38 @@ export class DomMaster implements Contract {
         );
 
         return {
-            minterAddress: stack.readAddress(),
+            ownerAddress: stack.readAddress(),
             gasPoolAddress: stack.readAddress(),
+            lastMintTime: stack.readBigNumber(),
+            nextMintTime: stack.readBigNumber(),
+            isStarted: stack.readBoolean(),
         };
+    }
+
+    async getMintRules(
+        provider: ContractProvider
+    ) {
+        const { stack } = await provider.get(
+            'getMintRules',
+            []
+        );
+
+        return {
+            minMintAmount: stack.readBigNumber(),
+            maxMintAmount: stack.readBigNumber(),
+            mintInterval: stack.readBigNumber(),
+        };
+    }
+
+    async canMintNow(
+        provider: ContractProvider
+    ) {
+        const { stack } = await provider.get(
+            'canMintNow',
+            []
+        );
+
+        return stack.readBoolean();
     }
 
     async getGiversData(
