@@ -13,8 +13,8 @@ import "../core/constants.tolk";
 // =====================================================
 // При transfer отправляет ОДНО сообщение на Gas Pool.
 // Gas Pool сам распределяет: получателю + DOM Treasury.
-// Пользователь платит ~0.01 TON + DOM (налог + комиссия).
-// Возврата TON нет — это "входной билет".
+// Пользователь прикладывает TON для запуска цепочки transfer.
+// Wallet оставляет себе gas, а остаток форвардит в Gas Pool.
 // =====================================================
 
 global balance: int;
@@ -193,7 +193,7 @@ fun onInternalMessage(in: InMessage) {
         var totalSpend = jettonAmount + totalFee;
 
         assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
-        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
 
         balance -= totalSpend;
         saveData();
@@ -216,12 +216,12 @@ fun onInternalMessage(in: InMessage) {
         var msg = beginCell()
             .storeUint(0x18, 6)
             .storeAddress(gasPoolAddress)
-            .storeCoins(msgValue)
+            .storeCoins(0)
             .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .storeRef(gasPoolBody)
             .endCell();
 
-        sendRawMessage(msg, 1);
+        sendRawMessage(msg, 64);
 
         return;
     }

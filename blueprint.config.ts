@@ -1,6 +1,7 @@
 import { Config } from '@ton/blueprint';
 
 export const config: Config = {
+    separateCompilables: true,
     // Сеть для деплоя (testnet для разработки)
     network: {
         endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC',

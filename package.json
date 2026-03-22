@@ -6,7 +6,8 @@
   "scripts": {
     "build": "npx blueprint build",
     "compile": "npx blueprint build --all",
-    "deploy": "npx blueprint run"
+    "deploy": "npx blueprint run",
+    "test": "jest"
   },
   "keywords": [
     "ton",
@@ -25,7 +26,10 @@
     "@ton/sandbox": "^0.40.0",
     "@ton/tolk-js": "^1.2.0",
     "@ton/ton": "^16.1.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }

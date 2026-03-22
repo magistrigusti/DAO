@@ -1,120 +1,216 @@
-import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano, Address } from '@ton/core';
-import { printTransactionFees } from '@ton/sandbox';
-import { DomMaster } from '../../../wrappers/DomMaster';
-import { DomWallet } from '../../../wrappers/DomWallet';
-import { GasPool } from '../../../wrappers/GasPool';
-import { GasProxy } from '../../../wrappers/GasProxy';
+/// <reference types="jest" />
+
+import {
+    Blockchain,
+    SandboxContract,
+    TreasuryContract,
+} from '@ton/sandbox';
+import {
+    beginCell,
+    Cell,
+    toNano,
+} from '@ton/core';
 import { compile } from '@ton/blueprint';
 
+import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
+import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
+import { GasPool } from '../../../wrappers/Dominum/treasury/GasPool';
+import { GasProxy } from '../../../wrappers/Dominum/treasury/GasProxy';
+
 describe('Gas Pool transfer', () => {
-  let blockchain: Blockchain;
-  let domMaster: SandboxContract<DomMaster>;
-  let gasPool: SandboxContract<GasPool>;
-  let gasProxy: SandboxContract<GasProxy>;
-  let sender: SandboxContract<TreasuryContract>;
-  let receiver: SandboxContract<TreasuryContract>;
-  let treasuryOwner: SandboxContract<TreasuryContract>;
+    let blockchain: Blockchain;
 
-  beforeAll(async () => {
-    blockchain = await Blockchain.create();
-    sender = await blockchain.treasury('sender');
-    receiver = await blockchain.treasury('receiver');
-    treasuryOwner = await blockchain.treasury('treasury');
-  
-    const walletCode = Cell.fromBoc(
-      (await complite('DomWallet')).code.toBoc()
-    )[0];
-    const masterCode = Cell.fromBoc(
-      (await compile('DomMaster')).code.toBoc()
-    )[0];
-    const gasPoolCode = Cell.fromBoc(
-      (await compile('GasPool')).code.toBoc()
-    )[0];
-    const gasProxyCode = Cell.fromBoc(
-      (await compile('GasProxy')).code.toBoc()
-    )[0];
+    let admin: SandboxContract<TreasuryContract>;
+    let sender: SandboxContract<TreasuryContract>;
+    let receiver: SandboxContract<TreasuryContract>;
+    let treasuryOwner: SandboxContract<TreasuryContract>;
+    let giver4: SandboxContract<TreasuryContract>;
 
-    const gasProxyConfig = {
-      adminAddress: sender.address,
-      realGasPoolAddress: Address.parseRaw(''),
-      walletConfigReady: false,
-      hasPending: false,
-    };
-    const gasProxyContract = GasProxy.createFromConfig(
-      gasProxyConfig as any,
-      gasProxyCode
-    );
-    const gasProxyAddr = gasProxyContract.address;
+    let walletCode: Cell;
+    let masterCode: Cell;
+    let gasPoolCode: Cell;
+    let gasProxyCode: Cell;
 
-    const gasPoolConfig = {
-      adminAddress: sender.address,
-      proxyAddress: gasProxyAddr,
-      domTreasuryAddress: treasuryOwner.address,
-      domBalance: 0n,
-      tonReserve: 0n,
-      hasPendingTreasury: false,
-    };
-    gasPool = blockchain.openContract(
-      GasPool.createFromConfig(gasPoolConfig as any, gasPoolCode)
-    );
-    await gasPool.init?.();
+    beforeAll(async () => {
+        walletCode = await compile('DomWallet');
+        masterCode = await compile('DomMaster');
+        gasPoolCode = await compile('GasPool');
+        gasProxyCode = await compile('GasProxy');
+    });
 
-    const gasProxyFullConfig = {
-      ...gasProxyConfig,
-      realGasPoolAddress: gasPool.address,
-    };
-    gasProxy = blockchain.openContract(
-      GasProxy.createFromConfig(gasProxyFullConfig as any, gasProxyCode)
-    );
-    await gasProxy.init?.();
+    beforeEach(async () => {
+        blockchain = await Blockchain.create();
 
-    const content = Cell.EMPTY;
-    const giver1 = await blockchain.treasury('g1');
-    const giver2 = await blockchain.treasury('g2');
-    const giver3 = await blockchain.treasury('g3');
-    const giver4 = await blockchain.treasury('g4');
-    const minterAddr = await blockchain.treasury('minter').address;
+        admin = await blockchain.treasury('admin');
+        sender = await blockchain.treasury('sender');
+        receiver = await blockchain.treasury('receiver');
+        treasuryOwner = await blockchain.treasury('treasury');
+        giver4 = await blockchain.treasury('giver4');
+    });
 
-    const masterConfig = {
-      totalSupply: 0n,
-      minterAddress: minterAddr,
-      gasPoolAddress: gasProxy.address,
-      giverAllodiumAddress: giver1.address,
-      giverDefiAddress: giver2.address,
-      giverDaoAddress: giver3.address,
-      giverDominumAddress: giver4.address,
-      content,
-      jettonWalletCode: walletCode,
-    };
-    domMaster = blockchain.openContract(
-      DomMaster.createFromConfig(masterConfig, masterCode)
-    );
-    await domMaster.init?.();
+    it('should route wallet transfer through proxy and gas pool', async () => {
+        // ========== DEPLOY PROXY / POOL ==========
+        // Цикл адресов разрываем так:
+        // 1) proxy деплоим с временным realGasPoolAddress
+        // 2) pool получает уже финальный proxyAddress
+        // 3) потом через timelock proxy переключаем на реальный pool
+        const gasProxy = blockchain.openContract(
+            GasProxy.createFromConfig(
+                {
+                    adminAddress: admin.address,
+                    realGasPoolAddress: admin.address,
+                },
+                gasProxyCode
+            )
+        );
 
-    await gasProxy.sendSetWalletConfig(sender.getSender(), {
-      value: toNano('0.05'),
-      masterAddress: domMaster.address,
-      jettonWalletCode: walletCode,
-    } as any);
+        const gasPool = blockchain.openContract(
+            GasPool.createFromConfig(
+                {
+                    adminAddress: admin.address,
+                    proxyAddress: gasProxy.address,
+                    domTreasuryAddress: treasuryOwner.address,
+                    domBalance: 0n,
+                    tonReserve: 0n,
+                },
+                gasPoolCode
+            )
+        );
 
-    const minterCode = Cell.fromBoc(
-      (await compile('DomMinter')).code.toBoc()
-    )[0];
-    const minterConfig = {
-      adminAddress: minterAddr,
-      masterAddress: domMaster.address,
-      lastMintTime: 0n,
-      isStarted: false,
-    };
-    const domMinter = blockchain.openContract(
-      DomMinter.createFromConfig(minterConfig as any, minterCode)
-    );
-    await domMinter.sendMint(
-      { getSender: () => blockchain.sender(minterAddr) } as any,
-      { value: toNano('1'), aamount: 10_000_000_000_000n } as any
-    );
-  });
+        await gasProxy.sendDeploy(
+            admin.getSender(),
+            toNano('0.1')
+        );
 
-  
-})
+        await gasPool.sendDeploy(
+            admin.getSender(),
+            toNano('0.1')
+        );
+
+        const baseNow =
+            (blockchain.now ?? Math.floor(Date.now() / 1000))
+            + 1;
+
+        blockchain.now = baseNow;
+
+        await gasProxy.sendRequestChangePool(
+            admin.getSender(),
+            {
+                value: toNano('0.05'),
+                newGasPoolAddress: gasPool.address,
+                queryId: 1n,
+            }
+        );
+
+        blockchain.now = baseNow + 61;
+
+        await gasProxy.sendConfirmChangePool(
+            admin.getSender(),
+            {
+                value: toNano('0.05'),
+                queryId: 2n,
+            }
+        );
+
+        // ========== DEPLOY MASTER ==========
+        const domMaster = blockchain.openContract(
+            DomMaster.createFromConfig(
+                {
+                    totalSupply: 0n,
+                    ownerAddress: admin.address,
+                    lastMintTime: 0n,
+                    isStarted: false,
+                    gasPoolAddress: gasProxy.address,
+                    giverAllodiumAddress: sender.address,
+                    giverDefiAddress: receiver.address,
+                    giverDaoAddress: treasuryOwner.address,
+                    giverDominumAddress: giver4.address,
+                    content: beginCell().endCell(),
+                    jettonWalletCode: walletCode,
+                },
+                masterCode
+            )
+        );
+
+        await domMaster.sendDeploy(
+            admin.getSender(),
+            toNano('0.05')
+        );
+
+        await gasProxy.sendSetWalletConfig(
+            admin.getSender(),
+            {
+                value: toNano('0.05'),
+                masterAddress: domMaster.address,
+                jettonWalletCode: walletCode,
+                queryId: 3n,
+            }
+        );
+
+        // ========== MINT TO SENDER ==========
+        await domMaster.sendMint(
+            admin.getSender(),
+            {
+                value: toNano('0.25'),
+                amount: 1_000_000_000n,
+                queryId: 4n,
+            }
+        );
+
+        const senderWalletAddress =
+            await domMaster.getWalletAddress(
+                sender.address
+            );
+
+        const receiverWalletAddress =
+            await domMaster.getWalletAddress(
+                receiver.address
+            );
+
+        const treasuryWalletAddress =
+            await domMaster.getWalletAddress(
+                treasuryOwner.address
+            );
+
+        const senderWallet = blockchain.openContract(
+            DomWallet.createFromAddress(senderWalletAddress)
+        );
+
+        await senderWallet.sendTransfer(
+            sender.getSender(),
+            {
+                value: toNano('0.05'),
+                jettonAmount: 100_000_000n,
+                toOwner: receiver.address,
+                queryId: 5n,
+            }
+        );
+
+        const receiverWallet = blockchain.openContract(
+            DomWallet.createFromAddress(receiverWalletAddress)
+        );
+
+        const treasuryWallet = blockchain.openContract(
+            DomWallet.createFromAddress(treasuryWalletAddress)
+        );
+
+        const proxyData = await gasProxy.getProxyData();
+        const poolData = await gasPool.getPoolData();
+        const senderData = await senderWallet.getWalletData();
+        const receiverData =
+            await receiverWallet.getWalletData();
+        const treasuryData =
+            await treasuryWallet.getWalletData();
+
+        expect(
+            proxyData.realGasPoolAddress.toString()
+        ).toEqual(
+            gasPool.address.toString()
+        );
+
+        expect(senderData.balance).toEqual(50_000_000n);
+        expect(receiverData.balance).toEqual(300_000_000n);
+        expect(treasuryData.balance).toEqual(350_000_000n);
+        expect(poolData.domBalance).toEqual(50_000_000n);
+    });
+});
