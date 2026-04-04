@@ -9,7 +9,7 @@ import {
 } from '../core/types';
 
 import { configureGasPipeline } from '../treasury/configureGasPipeline';
-import { configureGiverWallets } from '../management/configureGiverWallets';
+import { configureGiverWallets } from './configureGiverWallets';
 
 export async function configureTokenGraph(
   provider: NetworkProvider,

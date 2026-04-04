@@ -2,11 +2,11 @@ import {
   NetworkProvider,
 } from '@ton/blueprint';
 
-import { compileContracts } from './Dominum/dom/compileContracts';
-import { deployInfrastructure } from './Dominum/dom/deployInfrastructure';
-import { deployTokenGraph } from './Dominum/dom/deployTokenGraph';
-import { configureTokenGraph } from './Dominum/dom/configureTokenGraph';
-import { mintAndReport } from './Dominum/dom/mintAndReport';
+import { compileContracts } from './compileContracts';
+import { deployInfrastructure } from '../foundation/deployInfrastructure';
+import { deployTokenGraph } from './deployTokenGraph';
+import { configureTokenGraph } from '../management/configureTokenGraph';
+import { mintAndReport } from '../foundation/mintAndReport';
 
 export async function run(
   provider: NetworkProvider
