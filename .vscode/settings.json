@@ -1,11 +1,11 @@
 {
-  "workbench.colorTheme": "Quiet Light",
+  "workbench.colorTheme": "Default Light Modern",
   "workbench.preferredHighContrastLightColorTheme": "Cursor Dark Midnight",
   "workbench.preferredLightColorTheme": "Cursor Dark Midnight",
-  "editor.rulers": [180],
+  "editor.rulers": [150],
   "editor.wordWrap": "bounded",
-  "editor.wordWrapColumn": 180,
-  "printWidth": 180,
+  "editor.wordWrapColumn": 150,
+  "printWidth": 150,
   "tabWidth": 2,
   "singleQuote": true
 }
