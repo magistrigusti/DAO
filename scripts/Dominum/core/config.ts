@@ -1,7 +1,11 @@
 export const METADATA_URL =
     'https://raw.githubusercontent.com/magistrigusti/DAO/main/metadata/dom-metadata.json';
 
-export const FIRST_MINT_AMOUNT = 1_000_000_000n;
+// Предыдущее значение: 1_000_000_000n = 1_000 DOM при 6 decimals.
+// Testnet: первый mint = 1_000_000 DOM.
+// 1_000_000 * 10^6 = 1_000_000_000_000
+// Перед выходом в mainnet вернуть production-значение после финального решения по токеномике.
+export const FIRST_MINT_AMOUNT = 1_000_000_000_000n;
 export const TIMELOCK_WAIT_MS = 65_000;
 
 export const DEPLOY_VALUES = {

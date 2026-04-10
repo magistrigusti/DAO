@@ -20,11 +20,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "outDir": "./dist",
-    "rootDir": ".",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"]
-    }
+    "rootDir": "."
   },
   "include": [
     "compilables/**/*",

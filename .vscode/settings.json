@@ -7,5 +7,6 @@
   "editor.wordWrapColumn": 150,
   "printWidth": 150,
   "tabWidth": 2,
-  "singleQuote": true
+  "singleQuote": true,
+  "typescript.tsdk": "node_modules/typescript/lib"
 }

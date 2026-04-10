@@ -7,6 +7,7 @@ import {
   ContractProvider,
   ContractState,
   external,
+  OpenedContract,
   openContract,
   Sender,
   StateInit,
@@ -137,7 +138,7 @@ export class ToncenterV3ContractProvider implements ContractProvider {
     });
   }
 
-  open<T extends Contract>(contract: T) {
+  open<T extends Contract>(contract: T): OpenedContract<T> {
     return openContract(
       contract,
       ({ address, init }) => new ToncenterV3ContractProvider(this.client, address, init ?? null)
