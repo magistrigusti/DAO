@@ -186,6 +186,12 @@ export class DomMaster implements Contract {
         return stack.readBoolean();
     }
 
+    async getCanMintNow(
+        provider: ContractProvider
+    ) {
+        return this.canMintNow(provider);
+    }
+
     async getGiversData(
         provider: ContractProvider
     ) {
