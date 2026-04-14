@@ -35,6 +35,7 @@ describe('DomWallet', () => {
   let sender: SandboxContract<TreasuryContract>;
   let receiver: SandboxContract<TreasuryContract>;
   let treasuryOwner: SandboxContract<TreasuryContract>;
+  let dummyAllodium: SandboxContract<TreasuryContract>;
   let dummyDefi: SandboxContract<TreasuryContract>;
   let dummyDao: SandboxContract<TreasuryContract>;
   let dummyDominum: SandboxContract<TreasuryContract>;
@@ -59,6 +60,7 @@ describe('DomWallet', () => {
     sender = await blockchain.treasury('sender');
     receiver = await blockchain.treasury('receiver');
     treasuryOwner = await blockchain.treasury('treasury-owner');
+    dummyAllodium = await blockchain.treasury('dummy-allodium');
     dummyDefi = await blockchain.treasury('dummy-defi');
     dummyDao = await blockchain.treasury('dummy-dao');
     dummyDominum = await blockchain.treasury('dummy-dominum');
