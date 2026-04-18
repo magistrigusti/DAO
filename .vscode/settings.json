@@ -1,6 +1,6 @@
 {
-  "workbench.colorTheme": "Default Light Modern",
-  "workbench.preferredHighContrastLightColorTheme": "Cursor Dark Midnight",
+  "workbench.colorTheme": "Cursor Light",
+  "workbench.preferredHighContrastLightColorTheme": "3024 Day",
   "workbench.preferredLightColorTheme": "Cursor Dark Midnight",
   "editor.rulers": [150],
   "editor.wordWrap": "bounded",
@@ -10,4 +10,7 @@
   "singleQuote": true,
   "typescript.tsdk": "node_modules/typescript/lib",
   "window.restoreWindows": "all",
+  "workbench.colorCustomizations": {
+    "[Cursor Light]": {}
+  },
 }
