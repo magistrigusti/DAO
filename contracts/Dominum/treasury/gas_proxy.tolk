@@ -2,41 +2,34 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// ========== TOLK MIGRATION v1.2 ==========
-// Контракт переписан с legacy API на новый Tolk API.
-// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
-// Статус: migrated
-// =========================================
-
-// =====================================================
-// GAS PROXY — Прокси для Gas Pool
-// =====================================================
-// Вечный контракт. Wallet ссылается на него навсегда.
-// Пересылает OP_GAS_POOL_EXECUTE на реальный Gas Pool.
-// И принимает обратную команду от реального Gas Pool,
-// после чего делает OP_INTERNAL_TRANSFER в wallet.
-// Админ может менять realGasPoolAddress через timelock.
-//
-// Timelock: 48 часов между запросом и подтверждением.
-// За это время можно заметить взлом и отменить.
-//
-// Контракт максимально простой = минимум багов.
-// =====================================================
+// ========== TOLK MIGRATION v2 ==========
+// GAS PROXY v2:
+// - переводчик между DOM-wallet и реальным gas_pool
+// - хранит адрес realGasPoolAddress (меняется через timelock)
+// - знает новый формат OP_GAS_POOL_EXECUTE:
+//   (amount, toOwner, fromOwner, maxFeeDom)
+// - валидирует что sender — настоящий DOM-wallet
+// - назад из gas_pool получает OP_PROXY_INTERNAL_TRANSFER
+//   и пересылает как OP_INTERNAL_TRANSFER в нужный wallet
+// ========================================
 
 // TESTNET: 60 сек. MAINNET: 172800 (48ч)
 const TIMELOCK_PERIOD: int = 60;
 
+// -----------------------------------------------------
+// STORAGE
+// -----------------------------------------------------
 global adminAddress: address;
 global realGasPoolAddress: address;
 
-// Одноразовая конфигурация для проверки sender Wallet.
-// Это нужно, чтобы разорвать циклическую зависимость
-// на этапе деплоя (master <-> gas_proxy).
+// Одноразовая конфигурация для проверки sender-wallet.
+// Нужно чтобы разорвать циклическую зависимость
+// master ↔ proxy на этапе деплоя.
 global walletConfigReady: bool;
 global masterAddress: address;
 global jettonWalletCode: cell;
 
-// Timelock
+// Timelock смены realGasPoolAddress
 global pendingAddress: address;
 global pendingTime: int;
 global hasPending: bool;
@@ -44,7 +37,6 @@ global hasPending: bool;
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
-
 fun loadData() {
     var ds = contract.getData().beginParse();
 
@@ -95,9 +87,11 @@ fun saveData() {
 // -----------------------------------------------------
 // WALLET ADDRESS HELPERS
 // -----------------------------------------------------
-
 fun assertWalletConfigReady() {
-    assert(walletConfigReady, ERROR_PROXY_NOT_CONFIGURED);
+    assert(
+        walletConfigReady,
+        ERROR_PROXY_NOT_CONFIGURED
+    );
 }
 
 fun buildWalletData(owner: address): cell {
@@ -125,9 +119,15 @@ fun buildWalletStateInit(owner: address): cell {
 
 fun buildWalletAddress(stateInit: cell): address {
     var wc = contract.getAddress().getWorkchain();
-    return address.fromWorkchainAndHash(wc, stateInit.hash());
+    return address.fromWorkchainAndHash(
+        wc,
+        stateInit.hash()
+    );
 }
 
+// -----------------------------------------------------
+// ОТПРАВКА OP_INTERNAL_TRANSFER В WALLET ПОЛУЧАТЕЛЯ
+// -----------------------------------------------------
 fun sendInternalTransfer(
     toOwner: address,
     jettonAmount: int,
@@ -167,7 +167,6 @@ fun sendInternalTransfer(
 // -----------------------------------------------------
 // MAIN
 // -----------------------------------------------------
-
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -185,14 +184,17 @@ fun onInternalMessage(in: InMessage) {
     // =====================================================
     // OP_SET_PROXY_WALLET_CONFIG — одноразовая настройка
     // Только admin. После первого вызова изменить нельзя.
-    // Формат body: op | queryId | masterAddress | walletCodeRef
+    // body: queryId | masterAddress | jettonWalletCode
     // =====================================================
     if (op == OP_SET_PROXY_WALLET_CONFIG) {
         assert(
             senderAddress == adminAddress,
             ERROR_NOT_ADMIN
         );
-        assert(!walletConfigReady, ERROR_ALREADY_INITIALIZED);
+        assert(
+            !walletConfigReady,
+            ERROR_ALREADY_INITIALIZED
+        );
 
         msgBody.loadUint(64);
         masterAddress = msgBody.loadAddress();
@@ -204,19 +206,20 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_GAS_POOL_EXECUTE — от Wallet
-    // Пересылаем на реальный Gas Pool
+    // OP_GAS_POOL_EXECUTE — от DOM-wallet
+    // body v2: queryId | amount | toOwner | fromOwner | maxFeeDom
+    // Пересылаем на realGasPool в таком же формате.
     // =====================================================
     if (op == OP_GAS_POOL_EXECUTE) {
         var queryId = msgBody.loadUint(64);
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
         var fromOwner = msgBody.loadAddress();
-        var treasuryFee = msgBody.loadCoins();
-        var gasPoolFee = msgBody.loadCoins();
+        var maxFeeDom = msgBody.loadCoins();
 
         assertWalletConfigReady();
 
+        // Проверка: sender действительно wallet юзера fromOwner
         var expectedWallet = buildWalletAddress(
             buildWalletStateInit(fromOwner)
         );
@@ -227,10 +230,7 @@ fun onInternalMessage(in: InMessage) {
         );
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-
-        // Фиксированные комиссии без курса.
-        assert(treasuryFee == TAX_AMOUNT, ERROR_INVALID_AMOUNT);
-        assert(gasPoolFee == TAX_HALF, ERROR_INVALID_AMOUNT);
+        assert(maxFeeDom > 0, ERROR_INVALID_AMOUNT);
 
         var fullBody = beginCell()
             .storeUint(OP_GAS_POOL_EXECUTE, 32)
@@ -238,8 +238,7 @@ fun onInternalMessage(in: InMessage) {
             .storeCoins(jettonAmount)
             .storeAddress(toOwner)
             .storeAddress(fromOwner)
-            .storeCoins(treasuryFee)
-            .storeCoins(gasPoolFee)
+            .storeCoins(maxFeeDom)
             .endCell();
 
         var msg = beginCell()
@@ -250,14 +249,15 @@ fun onInternalMessage(in: InMessage) {
             .storeRef(fullBody)
             .endCell();
 
+        // mode 64 — carry remaining value от wallet
         sendRawMessage(msg, 64);
-
         return;
     }
 
     // =====================================================
-    // OP_PROXY_INTERNAL_TRANSFER — от реального Gas Pool
-    // Прокси делает OP_INTERNAL_TRANSFER в нужный wallet
+    // OP_PROXY_INTERNAL_TRANSFER — от реального gas_pool
+    // body: queryId | amount | toOwner | fromOwner | responseDest
+    // Делаем OP_INTERNAL_TRANSFER в wallet получателя.
     // =====================================================
     if (op == OP_PROXY_INTERNAL_TRANSFER) {
         assert(
@@ -272,7 +272,10 @@ fun onInternalMessage(in: InMessage) {
         var responseDestination = msgBody.loadAddressOpt();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assert(
+            msgValue >= MIN_TON_FOR_STORAGE,
+            ERROR_INSUFFICIENT_GAS
+        );
         assertWalletConfigReady();
 
         sendInternalTransfer(
@@ -289,13 +292,17 @@ fun onInternalMessage(in: InMessage) {
     var queryId = msgBody.loadUint(64);
 
     // =====================================================
-    // OP_REQUEST_CHANGE_POOL — запрос смены (48ч timelock)
-    // Только admin
+    // OP_REQUEST_CHANGE_POOL — запрос смены (timelock)
+    // Только admin. Нельзя пока есть предыдущий запрос.
     // =====================================================
     if (op == OP_REQUEST_CHANGE_POOL) {
         assert(
             senderAddress == adminAddress,
             ERROR_NOT_ADMIN
+        );
+        assert(
+            !hasPending,
+            ERROR_ALREADY_INITIALIZED
         );
 
         pendingAddress = msgBody.loadAddress();
@@ -307,8 +314,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_CONFIRM_CHANGE_POOL — подтверждение (после 48ч)
-    // Только admin
+    // OP_CONFIRM_CHANGE_POOL — подтверждение (после таймлока)
     // =====================================================
     if (op == OP_CONFIRM_CHANGE_POOL) {
         assert(
@@ -317,7 +323,10 @@ fun onInternalMessage(in: InMessage) {
         );
 
         assert(hasPending, ERROR_NO_PENDING);
-        assert(blockchain.now() >= pendingTime, ERROR_TOO_EARLY);
+        assert(
+            blockchain.now() >= pendingTime,
+            ERROR_TOO_EARLY
+        );
 
         realGasPoolAddress = pendingAddress;
         hasPending = false;
@@ -328,7 +337,7 @@ fun onInternalMessage(in: InMessage) {
 
     // =====================================================
     // OP_CANCEL_CHANGE_POOL — отмена запроса
-    // Только admin. Можно в любой момент.
+    // Только admin. Можно в любой момент (защита от кражи сида).
     // =====================================================
     if (op == OP_CANCEL_CHANGE_POOL) {
         assert(
@@ -348,7 +357,6 @@ fun onInternalMessage(in: InMessage) {
 // -----------------------------------------------------
 // GETTERS
 // -----------------------------------------------------
-
 get fun getProxyData(): (address, address, bool) {
     loadData();
 
@@ -363,32 +371,18 @@ get fun getWalletConfig(): (bool, address?) {
     loadData();
 
     if (!walletConfigReady) {
-        return (
-            false,
-            null
-        );
+        return (false, null);
     }
 
-    return (
-        true,
-        masterAddress
-    );
+    return (true, masterAddress);
 }
 
 get fun getPendingChange(): (bool, address?, int) {
     loadData();
 
     if (!hasPending) {
-        return (
-            false,
-            null,
-            0
-        );
+        return (false, null, 0);
     }
 
-    return (
-        true,
-        pendingAddress,
-        pendingTime
-    );
+    return (true, pendingAddress, pendingTime);
 }
