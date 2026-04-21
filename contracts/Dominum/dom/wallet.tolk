@@ -2,31 +2,28 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// ========== TOLK MIGRATION v1.2 ==========
-// Контракт переписан с legacy API на новый Tolk API.
-// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
-// Статус: migrated
-// =========================================
+// ========== TOLK MIGRATION v2 ==========
+// DOM WALLET v2:
+// - OP_TRANSFER body: amount | toOwner | responseDest | maxFeeDom
+// - Юзер указывает maxFeeDom — сколько DOM готов отдать
+//   как комиссию (излишек вернётся рефандом из gas_pool)
+// - Wallet снимает (amount + maxFeeDom) с баланса и
+//   отправляет ОДНО сообщение в gas_pool через proxy
+// - Если gas_pool отскочит (bounce) — восстанавливаем баланс
+// ========================================
 
-// =====================================================
-// JETTON WALLET — кошелёк DOM (TEP-74)
-// =====================================================
-// При transfer отправляет ОДНО сообщение на Gas Pool.
-// Gas Pool сам распределяет: получателю + DOM Treasury.
-// Пользователь прикладывает TON для запуска цепочки transfer.
-// Wallet оставляет себе gas, а остаток форвардит в Gas Pool.
-// =====================================================
-
+// -----------------------------------------------------
+// STORAGE
+// -----------------------------------------------------
 global balance: int;
 global ownerAddress: address;
 global masterAddress: address;
-global gasPoolAddress: address;
+global gasPoolAddress: address;  // = адрес proxy
 global jettonWalletCode: cell;
 
 // -----------------------------------------------------
 // LOAD / SAVE
 // -----------------------------------------------------
-
 fun loadData() {
     var ds = contract.getData().beginParse();
 
@@ -50,9 +47,8 @@ fun saveData() {
 }
 
 // -----------------------------------------------------
-// WALLET ADDRESS
+// WALLET ADDRESS HELPERS
 // -----------------------------------------------------
-
 fun buildWalletData(owner: address): cell {
     return beginCell()
         .storeCoins(0)
@@ -76,28 +72,30 @@ fun buildWalletStateInit(owner: address): cell {
 
 fun buildWalletAddress(stateInit: cell): address {
     var wc = contract.getAddress().getWorkchain();
-    return address.fromWorkchainAndHash(wc, stateInit.hash());
+    return address.fromWorkchainAndHash(
+        wc,
+        stateInit.hash()
+    );
 }
 
 // -----------------------------------------------------
 // ВАЛИДАЦИЯ ВНУТРЕННЕГО ОТПРАВИТЕЛЯ
 // -----------------------------------------------------
-
 fun requireInternalSender(
     senderAddress: address,
     fromOwner: address
 ) {
-    // От Master — всегда ок (mint)
+    // От Master — всегда ок (mint через Giver'ов)
     if (senderAddress == masterAddress) {
         return;
     }
 
-    // От Gas Pool — всегда ок (он делает transfers)
+    // От Proxy (gasPoolAddress) — всегда ок (transfer от других)
     if (senderAddress == gasPoolAddress) {
         return;
     }
 
-    // Иначе — проверяем что это wallet отправителя
+    // Иначе — проверяем что sender = wallet отправителя
     var expectedWallet = buildWalletAddress(
         buildWalletStateInit(fromOwner)
     );
@@ -109,10 +107,13 @@ fun requireInternalSender(
 }
 
 // -----------------------------------------------------
-// NOTIFY OWNER (transfer_notification)
+// УВЕДОМЛЕНИЕ OWNER (transfer_notification)
 // -----------------------------------------------------
-
-fun notifyOwner(amount: int, fromOwner: address, queryId: int) {
+fun notifyOwner(
+    amount: int,
+    fromOwner: address,
+    queryId: int
+) {
     var body = beginCell()
         .storeUint(OP_TRANSFER_NOTIFICATION, 32)
         .storeUint(queryId, 64)
@@ -132,13 +133,47 @@ fun notifyOwner(amount: int, fromOwner: address, queryId: int) {
 }
 
 // -----------------------------------------------------
+// ОБРАБОТКА ОТСКОКА (BOUNCE)
+// -----------------------------------------------------
+// Если сообщение в gas_pool отскочило — возвращаем
+// юзеру списанный с баланса DOM (amount).
+// maxFeeDom полностью восстановить из truncated bounce
+// body нельзя (в bounce входит только 256 бит), но
+// в нашей архитектуре proxy валидирует всё ДО gas_pool,
+// так что отскоки по maxFeeDom маловероятны.
+// -----------------------------------------------------
+fun handleBouncedMessage(msgBody: slice) {
+    // Пропускаем префикс 0xffffffff который маркирует bounce
+    msgBody.loadUint(32);
+
+    var op = msgBody.loadUint(32);
+    msgBody.loadUint(64);  // queryId
+
+    if (op == OP_GAS_POOL_EXECUTE) {
+        var amount = msgBody.loadCoins();
+
+        // Защитная проверка — вдруг bounce body битый
+        if (amount > 0) {
+            loadData();
+            balance += amount;
+            saveData();
+        }
+    }
+}
+
+// -----------------------------------------------------
 // MAIN
 // -----------------------------------------------------
-
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
     if (msgBody.isEmpty()) {
+        return;
+    }
+
+    // Обработка отскока от gas_pool / proxy
+    if (in.isBounced) {
+        handleBouncedMessage(msgBody);
         return;
     }
 
@@ -151,7 +186,8 @@ fun onInternalMessage(in: InMessage) {
     var queryId = msgBody.loadUint(64);
 
     // =====================================================
-    // OP_INTERNAL_TRANSFER — получили токены
+    // OP_INTERNAL_TRANSFER — получили DOM
+    // body: amount | fromOwner | responseDest (опц)
     // =====================================================
     if (op == OP_INTERNAL_TRANSFER) {
         var amount = msgBody.loadCoins();
@@ -164,13 +200,12 @@ fun onInternalMessage(in: InMessage) {
         saveData();
 
         notifyOwner(amount, fromOwner, queryId);
-
         return;
     }
 
     // =====================================================
-    // OP_TRANSFER — отправка токенов (только owner)
-    // Одно сообщение на Gas Pool!
+    // OP_TRANSFER v2 — юзер отправляет DOM
+    // body: amount | toOwner | responseDest | maxFeeDom
     // =====================================================
     if (op == OP_TRANSFER) {
         assert(
@@ -181,36 +216,36 @@ fun onInternalMessage(in: InMessage) {
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
         var responseDestination = msgBody.loadAddressOpt();
+        var maxFeeDom = msgBody.loadCoins();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(maxFeeDom > 0, ERROR_INVALID_AMOUNT);
 
-        // Фиксированная модель без курса:
-        // комиссии всегда равны константам.
-        var treasuryFee: int = TAX_AMOUNT;
-        var gasPoolFee: int = TAX_HALF;
+        var totalSpend = jettonAmount + maxFeeDom;
 
-        var totalFee = treasuryFee + gasPoolFee;
-        var totalSpend = jettonAmount + totalFee;
+        assert(
+            balance >= totalSpend,
+            ERROR_INSUFFICIENT_BALANCE
+        );
 
-        assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
-        assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
+        assert(
+            msgValue >= MIN_TON_FOR_TRANSFER,
+            ERROR_INSUFFICIENT_GAS
+        );
 
         balance -= totalSpend;
         saveData();
 
-        // =====================================================
-        // ОДНО СООБЩЕНИЕ НА GAS POOL
-        // Передаём: сумму, получателя, налог, комиссию
-        // Gas Pool сделает 2 сообщения из СВОЕГО TON
-        // =====================================================
+        // ОДНО сообщение в gas_pool через proxy.
+        // Proxy валидирует sender, форвардит в realGasPool.
+        // gas_pool считает комиссию и рассылает DOM.
         var gasPoolBody = beginCell()
             .storeUint(OP_GAS_POOL_EXECUTE, 32)
             .storeUint(queryId, 64)
             .storeCoins(jettonAmount)
             .storeAddress(toOwner)
             .storeAddress(ownerAddress)
-            .storeCoins(treasuryFee)
-            .storeCoins(gasPoolFee)
+            .storeCoins(maxFeeDom)
             .endCell();
 
         var msg = beginCell()
@@ -221,13 +256,13 @@ fun onInternalMessage(in: InMessage) {
             .storeRef(gasPoolBody)
             .endCell();
 
+        // mode 64 — carry весь входящий TON в gas_pool
         sendRawMessage(msg, 64);
-
         return;
     }
 
     // =====================================================
-    // OP_BURN — сжечь токены (только owner)
+    // OP_BURN — сжечь DOM (только owner)
     // =====================================================
     if (op == OP_BURN) {
         assert(
@@ -239,7 +274,10 @@ fun onInternalMessage(in: InMessage) {
         var responseDestination = msgBody.loadAddressOpt();
 
         assert(burnAmount > 0, ERROR_INVALID_AMOUNT);
-        assert(balance >= burnAmount, ERROR_INSUFFICIENT_BALANCE);
+        assert(
+            balance >= burnAmount,
+            ERROR_INSUFFICIENT_BALANCE
+        );
 
         balance -= burnAmount;
         saveData();
@@ -255,13 +293,12 @@ fun onInternalMessage(in: InMessage) {
         var msg = beginCell()
             .storeUint(0x18, 6)
             .storeAddress(masterAddress)
-            .storeCoins(msgValue)
+            .storeCoins(0)
             .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .storeRef(body)
             .endCell();
 
-        sendRawMessage(msg, 1);
-
+        sendRawMessage(msg, 64);
         return;
     }
 
@@ -271,8 +308,9 @@ fun onInternalMessage(in: InMessage) {
 // -----------------------------------------------------
 // GETTERS
 // -----------------------------------------------------
-
-get fun getWalletData(): (int, address, address, address) {
+get fun getWalletData(): (
+    int, address, address, address
+) {
     loadData();
 
     return (

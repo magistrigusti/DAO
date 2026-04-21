@@ -1,31 +1,34 @@
 // =====================================================
 // GIVER DAO — Автораспределение DOM для DAO
 // =====================================================
-// При получении жетонов:
-// • 50% -> Bank DAO
-// • 50% -> DAO Foundation
-// Manager может:
-// • менять whitelist
-// • выставлять walletAddress
+// При получении жетонов от master (через свой wallet):
+//   50% -> Bank DAO
+//   50% -> DAO Foundation
+// Manager может менять whitelist и walletAddress.
+//
+// v2: защита от рекурсии при рефанде из gas_pool.
 // =====================================================
 
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// ========== TOLK MIGRATION v1.2 ==========
-// Контракт переписан с legacy API на новый Tolk API.
-// Цель: совместимость с @ton/tolk-js >= 1.2.0 и Blueprint >= 0.42.0.
-// Статус: migrated
-// =========================================
+// ========== TOLK MIGRATION v2 ==========
 
+// -----------------------------------------------------
+// STORAGE
+// -----------------------------------------------------
 global managerAddress: address;
 global walletAddress: address?;
 global bankDaoAddress: address;
 global daoFoundationAddress: address;
 
+// -----------------------------------------------------
+// LOAD / SAVE
+// -----------------------------------------------------
 fun loadData() {
     var ds = contract.getData().beginParse();
+
     managerAddress = ds.loadAddress();
     walletAddress = ds.loadAddressOpt();
 
@@ -49,6 +52,9 @@ fun saveData() {
     );
 }
 
+// -----------------------------------------------------
+// ОТПРАВКА DOM через свой wallet (новый формат v2)
+// -----------------------------------------------------
 fun sendJettons(
     toAddress: address,
     amount: int,
@@ -68,9 +74,7 @@ fun sendJettons(
         .storeCoins(amount)
         .storeAddress(toAddress)
         .storeAddress(toAddress)
-        .storeBool(false)
-        .storeCoins(0)
-        .storeBool(false)
+        .storeCoins(GIVER_MAX_FEE_DOM)
         .endCell();
 
     var msg = beginCell()
@@ -84,23 +88,36 @@ fun sendJettons(
     sendRawMessage(msg, 1);
 }
 
+// -----------------------------------------------------
+// РАСПРЕДЕЛЕНИЕ 50/50
+// -----------------------------------------------------
 fun autoDistribute(amount: int, queryId: int) {
-    var feeTotal = TAX_AMOUNT + TAX_HALF;
+    var feeReserve = GIVER_MAX_FEE_DOM * 2;
 
-    var half = amount / 2;
-    var remainder = amount - half;
+    assert(
+        amount > feeReserve * 2,
+        ERROR_INVALID_AMOUNT
+    );
 
-    assert(half > feeTotal, ERROR_INVALID_AMOUNT);
-    assert(remainder > feeTotal, ERROR_INVALID_AMOUNT);
+    var distributable = amount - feeReserve;
+    var half = distributable / 2;
+    var remainder = distributable - half;
 
-    sendJettons(bankDaoAddress, half - feeTotal, queryId);
-    sendJettons(daoFoundationAddress, remainder - feeTotal, queryId + 1);
+    sendJettons(bankDaoAddress, half, queryId);
+    sendJettons(daoFoundationAddress, remainder, queryId + 1);
 }
 
+// -----------------------------------------------------
+// MAIN
+// -----------------------------------------------------
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
     if (msgBody.isEmpty()) {
+        return;
+    }
+
+    if (in.isBounced) {
         return;
     }
 
@@ -111,6 +128,9 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
+    // =====================================================
+    // OP_TRANSFER_NOTIFICATION — получили DOM
+    // =====================================================
     if (op == OP_TRANSFER_NOTIFICATION) {
         assert(
             walletAddress != null,
@@ -123,15 +143,19 @@ fun onInternalMessage(in: InMessage) {
         );
 
         var amount = msgBody.loadCoins();
-        msgBody.loadAddress();
-        autoDistribute(amount, queryId);
+        var fromAddress = msgBody.loadAddress();
 
+        // Рефанд от gas_pool — не распределяем повторно
+        if (fromAddress == contract.getAddress()) {
+            return;
+        }
+
+        autoDistribute(amount, queryId);
         return;
     }
 
     // =====================================================
-    // OP_SET_WALLET — только Manager
-    // payload: walletAddress
+    // OP_SET_WALLET — manager only
     // =====================================================
     if (op == OP_SET_WALLET) {
         assert(
@@ -139,33 +163,38 @@ fun onInternalMessage(in: InMessage) {
             ERROR_NOT_MANAGER
         );
 
-        var newWalletAddress = msgBody.loadAddress();
-        walletAddress = newWalletAddress;
+        walletAddress = msgBody.loadAddress();
         saveData();
         return;
     }
 
+    // =====================================================
+    // OP_CHANGE_WHITELIST — manager only
+    // =====================================================
     if (op == OP_CHANGE_WHITELIST) {
         assert(
             senderAddress == managerAddress,
             ERROR_NOT_MANAGER
         );
 
-        var newAddress1 = msgBody.loadAddress();
-        var newAddress2 = msgBody.loadAddress();
+        bankDaoAddress = msgBody.loadAddress();
+        daoFoundationAddress = msgBody.loadAddress();
 
-        bankDaoAddress = newAddress1;
-        daoFoundationAddress = newAddress2;
         saveData();
-
         return;
     }
 
     throw(0xffff);
 }
 
-get fun getGiverData(): (address, address?, address, address) {
+// -----------------------------------------------------
+// GETTERS
+// -----------------------------------------------------
+get fun getGiverData(): (
+    address, address?, address, address
+) {
     loadData();
+
     return (
         managerAddress,
         walletAddress,
