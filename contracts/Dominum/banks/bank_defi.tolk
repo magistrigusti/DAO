@@ -2,134 +2,262 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// =====================================================
-// BANK DEFI — банк DeFi-блока Dominum
-// =====================================================
-// Принимает: DOM и TON
-// Управляется: СИД-фраза (owner)
-// Владельца не меняем.
-// =====================================================
+// ========== TOLK MIGRATION v2 ==========
+// BANK DEFI — банк DeFi-ветки Dominum.
+// ========================================
+// Принимает DOM от Giver DeFi.
+// Хранит DOM на своём jetton wallet.
+// Отправляет DOM/TON только на 2 зашитых адреса:
+//   - defiFoundationAddress
+//   - marketMakerAddress
+//
+// Owner зашит при деплое, не меняется.
+// Динамического whitelist нет.
+// ========================================
 
-global ownerAddress: slice;
-global domWalletAddress: slice;
+// -----------------------------------------------------
+// STORAGE
+// -----------------------------------------------------
+global ownerAddress: address;
+global walletAddress: address;
 
+global defiFoundationAddress: address;
+global marketMakerAddress: address;
+
+global totalReceived: int;
+global totalSent: int;
+
+// -----------------------------------------------------
+// LOAD / SAVE
+// -----------------------------------------------------
 fun loadData() {
-    var ds = getContractData().beginParse();
-    ownerAddress = ds.loadMsgAddress();
-    domWalletAddress = ds.loadMsgAddress();
+    var ds = contract.getData().beginParse();
+
+    ownerAddress = ds.loadAddress();
+    walletAddress = ds.loadAddress();
+
+    var targets = ds.loadRef().beginParse();
+    defiFoundationAddress = targets.loadAddress();
+    marketMakerAddress = targets.loadAddress();
+
+    totalReceived = ds.loadCoins();
+    totalSent = ds.loadCoins();
 }
 
 fun saveData() {
-    setContractData(
+    var targets = beginCell()
+        .storeAddress(defiFoundationAddress)
+        .storeAddress(marketMakerAddress)
+        .endCell();
+
+    contract.setData(
         beginCell()
-            .storeSlice(ownerAddress)
-            .storeSlice(domWalletAddress)
+            .storeAddress(ownerAddress)
+            .storeAddress(walletAddress)
+            .storeRef(targets)
+            .storeCoins(totalReceived)
+            .storeCoins(totalSent)
             .endCell()
     );
 }
 
-fun requireOwner(sender: slice) {
-    assert(sender.equalSlices(ownerAddress), ERROR_NOT_OWNER);
+// -----------------------------------------------------
+// SERVICE
+// -----------------------------------------------------
+fun requireOwner(senderAddress: address) {
+    assert(
+        senderAddress == ownerAddress,
+        ERROR_NOT_OWNER
+    );
 }
 
-fun withdrawTon(toAddress: slice, amount: int) {
-    var msg = beginCell()
-        .storeUint(0x10, 6)
-        .storeSlice(toAddress)
-        .storeCoins(amount)
-        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .endCell();
+fun isAllowedTarget(candidate: address): bool {
+    if (candidate == defiFoundationAddress) {
+        return true;
+    }
 
-    sendRawMessage(msg, 1);
+    if (candidate == marketMakerAddress) {
+        return true;
+    }
+
+    return false;
 }
 
-fun withdrawDomJettons(toAddress: slice, amount: int, queryId: int) {
-    var msgBody = beginCell()
+// -----------------------------------------------------
+// ОТПРАВКА DOM ЧЕРЕЗ СВОЙ WALLET
+// -----------------------------------------------------
+// Новый формат OP_TRANSFER v2:
+// amount | toOwner | responseDestination | maxFeeDom
+// -----------------------------------------------------
+fun sendDom(
+    toAddress: address,
+    amount: int,
+    queryId: int
+) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var body = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
-        .storeSlice(toAddress)
-        .storeSlice(ownerAddress)
-        .storeBool(false)
-        .storeCoins(0)
-        .storeBool(false)
+        .storeAddress(toAddress)
+        .storeAddress(contract.getAddress())
+        .storeCoins(GIVER_MAX_FEE_DOM)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(domWalletAddress)
+        .storeAddress(walletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(msgBody)
+        .storeRef(body)
         .endCell();
 
     sendRawMessage(msg, 1);
 }
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
+// -----------------------------------------------------
+// ОТПРАВКА TON
+// -----------------------------------------------------
+fun sendTon(
+    toAddress: address,
+    amount: int,
+    queryId: int
 ) {
-    if (msgBody.isEndOfSlice()) {
+    if (amount <= 0) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
+    var body = beginCell()
+        .storeUint(OP_EXCESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
 
-    if (flags & 1) {
+    var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeAddress(toAddress)
+        .storeCoins(amount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+// -----------------------------------------------------
+// MAIN
+// -----------------------------------------------------
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var senderAddress = cs.loadMsgAddress();
+    if (in.isBounced) {
+        return;
+    }
+
+    var senderAddress = in.senderAddress;
 
     loadData();
 
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // Получили жетоны DOM
+    // =====================================================
+    // OP_TRANSFER_NOTIFICATION — получили DOM
+    // Только от своего jetton wallet.
+    // =====================================================
     if (op == OP_TRANSFER_NOTIFICATION) {
-        return;
-    }
-
-    // Вывод TON
-    if (op == OP_WITHDRAW) {
-        requireOwner(senderAddress);
+        assert(
+            senderAddress == walletAddress,
+            ERROR_NOT_VALID_WALLET
+        );
 
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
+        var fromAddress = msgBody.loadAddress();
 
-        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        // Рефанд от gas_pool после нашего вывода
+        if (fromAddress == contract.getAddress()) {
+            return;
+        }
 
-        withdrawTon(toAddress, amount);
+        totalReceived = totalReceived + amount;
+        saveData();
+
         return;
     }
 
-    // Вывод жетонов
+    // =====================================================
+    // OP_WITHDRAW_JETTONS — вывести DOM (owner only)
+    // body: amount | toAddress
+    // Только на defiFoundationAddress или marketMakerAddress.
+    // =====================================================
     if (op == OP_WITHDRAW_JETTONS) {
         requireOwner(senderAddress);
 
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
+        var toAddress = msgBody.loadAddress();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(
+            isAllowedTarget(toAddress),
+            ERROR_NOT_IN_WHITELIST
+        );
 
-        withdrawDomJettons(toAddress, amount, queryId);
+        totalSent = totalSent + amount;
+        saveData();
+
+        sendDom(toAddress, amount, queryId);
+        return;
+    }
+
+    // =====================================================
+    // OP_WITHDRAW — вывести TON (owner only)
+    // body: amount | toAddress
+    // Только на defiFoundationAddress или marketMakerAddress.
+    // =====================================================
+    if (op == OP_WITHDRAW) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadAddress();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(
+            isAllowedTarget(toAddress),
+            ERROR_NOT_IN_WHITELIST
+        );
+
+        sendTon(toAddress, amount, queryId);
         return;
     }
 
     throw(0xffff);
 }
 
-get fun getDefiBankData(): (slice, slice, int) {
+// -----------------------------------------------------
+// GETTERS
+// -----------------------------------------------------
+get fun getDefiBankData(): (
+    address, address, address, address, int, int
+) {
     loadData();
 
     return (
         ownerAddress,
-        domWalletAddress,
-        getBalance().0
+        walletAddress,
+        defiFoundationAddress,
+        marketMakerAddress,
+        totalReceived,
+        totalSent
     );
+}
+
+get fun isAddressAllowed(candidate: address): bool {
+    loadData();
+    return isAllowedTarget(candidate);
 }

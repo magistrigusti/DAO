@@ -1,160 +1,191 @@
-// =====================================================
-// ALLODIUM FOUNDATION — Фонд ликвидности Allodium
-// =====================================================
-// Принимает: DOM от Giver Allodium / FRS (при разблокировке)
-// Функция: накапливает DOM для ликвидности Allodium
-// Управляется: СИД-фраза (owner)
-// =====================================================
-
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// =====================================================
-// STORAGE
-// =====================================================
+// ========== TOLK MIGRATION v2 ==========
+// ALLODIUM FOUNDATION — фонд ликвидности Allodium.
+// Принимает DOM от Giver Allodium и FRS.
+// Хранит DOM на своём DOM-wallet.
+// Owner зашит при деплое.
+// ========================================
 
-global ownerAddress: slice;       // СИД-фраза
-global walletAddress: slice;      // Jetton Wallet для DOM
+const DOM_TRANSFER_MAX_FEE: int = 3000000;
 
-// =====================================================
-// LOAD / SAVE DATA
-// =====================================================
+global ownerAddress: address;
+global domWalletAddress: address;
+global allodiumDaoAddress: address;
+global allodiumReserveAddress: address;
+global totalReceived: int;
+global totalSent: int;
 
 fun loadData() {
-    var ds = getContractData().beginParse();
-    ownerAddress = ds.loadMsgAddress();
-    walletAddress = ds.loadMsgAddress();
+    var ds = contract.getData().beginParse();
+
+    ownerAddress = ds.loadAddress();
+    domWalletAddress = ds.loadAddress();
+    allodiumDaoAddress = ds.loadAddress();
+    allodiumReserveAddress = ds.loadAddress();
+    totalReceived = ds.loadCoins();
+    totalSent = ds.loadCoins();
 }
 
 fun saveData() {
-    setContractData(
+    contract.setData(
         beginCell()
-            .storeSlice(ownerAddress)
-            .storeSlice(walletAddress)
+            .storeAddress(ownerAddress)
+            .storeAddress(domWalletAddress)
+            .storeAddress(allodiumDaoAddress)
+            .storeAddress(allodiumReserveAddress)
+            .storeCoins(totalReceived)
+            .storeCoins(totalSent)
             .endCell()
     );
 }
 
-// =====================================================
-// ВЫВОД TON
-// =====================================================
-
-fun withdrawTon(toAddress: slice, amount: int) {
-    var msg = beginCell()
-        .storeUint(0x10, 6)
-        .storeSlice(toAddress)
-        .storeCoins(amount)
-        .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .endCell();
-    
-    sendRawMessage(msg, 1);
+fun requireOwner(senderAddress: address) {
+    assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 }
 
-// =====================================================
-// ВЫВОД ЖЕТОНОВ DOM
-// =====================================================
+fun isAllowedTarget(candidate: address): bool {
+    if (candidate == allodiumDaoAddress) {
+        return true;
+    }
 
-fun withdrawJettons(toAddress: slice, amount: int, queryId: int) {
-    var msgBody = beginCell()
+    if (candidate == allodiumReserveAddress) {
+        return true;
+    }
+
+    return false;
+}
+
+fun sendDom(toAddress: address, amount: int, queryId: int) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var body = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
-        .storeSlice(toAddress)
-        .storeSlice(ownerAddress)
-        .storeBool(false)
-        .storeCoins(0)
-        .storeBool(false)
+        .storeAddress(toAddress)
+        .storeAddress(contract.getAddress())
+        .storeCoins(DOM_TRANSFER_MAX_FEE)
         .endCell();
-    
+
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeAddress(domWalletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(msgBody)
+        .storeRef(body)
         .endCell();
-    
+
     sendRawMessage(msg, 1);
 }
 
-// =====================================================
-// ОБРАБОТКА ВХОДЯЩИХ СООБЩЕНИЙ
-// =====================================================
+fun sendTon(toAddress: address, amount: int, queryId: int) {
+    if (amount <= 0) {
+        return;
+    }
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+    var body = beginCell()
+        .storeUint(OP_EXCESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeAddress(toAddress)
+        .storeCoins(amount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
-    
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-    
-    if (flags & 1) {
+
+    if (in.isBounced) {
         return;
     }
-    
-    var senderAddress = cs.loadMsgAddress();
-    
+
+    var senderAddress = in.senderAddress;
+
     loadData();
-    
+
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
-    
-    // Получение жетонов DOM
+
     if (op == OP_TRANSFER_NOTIFICATION) {
-        // Просто принимаем
-        return;
-    }
-    
-    // Вывод TON (только owner)
-    if (op == OP_WITHDRAW) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
-        
+        assert(senderAddress == domWalletAddress, ERROR_NOT_VALID_WALLET);
+
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
-        
-        withdrawTon(toAddress, amount);
-        
+        var fromAddress = msgBody.loadAddress();
+
+        if (fromAddress == contract.getAddress()) {
+            return;
+        }
+
+        totalReceived = totalReceived + amount;
+        saveData();
+
         return;
     }
-    
-    // Вывод жетонов (только owner)
+
     if (op == OP_WITHDRAW_JETTONS) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
-        
+        requireOwner(senderAddress);
+
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
-        
-        withdrawJettons(toAddress, amount, queryId);
-        
+        var toAddress = msgBody.loadAddress();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
+
+        totalSent = totalSent + amount;
+        saveData();
+
+        sendDom(toAddress, amount, queryId);
         return;
     }
-    
+
+    if (op == OP_WITHDRAW) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadAddress();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
+
+        sendTon(toAddress, amount, queryId);
+        return;
+    }
+
     throw(0xffff);
 }
 
-// =====================================================
-// GETTERS
-// =====================================================
-
-get fun getFoundationData(): (slice, slice, int) {
+get fun getFoundationData(): (
+    address, address, address, address, int, int
+) {
     loadData();
-    
+
     return (
         ownerAddress,
-        walletAddress,
-        getBalance().0
+        domWalletAddress,
+        allodiumDaoAddress,
+        allodiumReserveAddress,
+        totalReceived,
+        totalSent
     );
+}
+
+get fun isAddressAllowed(candidate: address): bool {
+    loadData();
+    return isAllowedTarget(candidate);
 }

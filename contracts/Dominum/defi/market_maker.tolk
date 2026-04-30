@@ -2,112 +2,94 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// =====================================================
-// MARKET MAKER — Головной контракт рыночных операций
-// =====================================================
-// Принимает: DOM от Giver DeFi (50% split)
-// Хранит: DOM на балансе
-// Отправляет: ТОЛЬКО на адреса из whitelist (dict)
-//
-// Whitelist динамический — owner добавляет/убирает
-// адреса контрактов (пулы, продажи, биржи и т.д.)
-//
-// Потом эти контракты будут управляться нейронками.
-// Market Maker — их "банк" и точка входа.
-//
-// Owner менять НЕЛЬЗЯ (жёстко при деплое).
-// =====================================================
+// ========== TOLK MIGRATION v2 ==========
+// MARKET MAKER — резерв DeFi-ветки DOM.
+// Принимает DOM, хранит ликвидность, выводит только owner.
+// Для MVP это безопасная казна DeFi, без AMM-математики.
+// ========================================
 
-global ownerAddress: slice;
-global walletAddress: slice;
-global whitelistDict: cell;
-global whitelistCount: int;
+global ownerAddress: address;
+global walletAddress: address;
 
-// -----------------------------------------------------
-// LOAD / SAVE
-// -----------------------------------------------------
+global defiBankAddress: address;
+global defiFoundationAddress: address;
+
+global totalReceived: int;
+global totalSent: int;
 
 fun loadData() {
-    var ds = getContractData().beginParse();
+    var ds = contract.getData().beginParse();
 
-    ownerAddress = ds.loadMsgAddress();
-    walletAddress = ds.loadMsgAddress();
-    whitelistCount = ds.loadUint(16);
-    whitelistDict = ds.loadDict();
+    ownerAddress = ds.loadAddress();
+    walletAddress = ds.loadAddress();
+
+    var targets = ds.loadRef().beginParse();
+    defiBankAddress = targets.loadAddress();
+    defiFoundationAddress = targets.loadAddress();
+
+    totalReceived = ds.loadCoins();
+    totalSent = ds.loadCoins();
 }
 
 fun saveData() {
-    setContractData(
+    var targets = beginCell()
+        .storeAddress(defiBankAddress)
+        .storeAddress(defiFoundationAddress)
+        .endCell();
+
+    contract.setData(
         beginCell()
-            .storeSlice(ownerAddress)
-            .storeSlice(walletAddress)
-            .storeUint(whitelistCount, 16)
-            .storeDict(whitelistDict)
+            .storeAddress(ownerAddress)
+            .storeAddress(walletAddress)
+            .storeRef(targets)
+            .storeCoins(totalReceived)
+            .storeCoins(totalSent)
             .endCell()
     );
 }
 
-// -----------------------------------------------------
-// WHITELIST HELPERS
-// -----------------------------------------------------
-
-// Получить 256-bit hash из адреса
-fun getAddrHash(addr: slice): int {
-    var (_, hash) = parseStdAddr(addr);
-    return hash;
+fun requireOwner(senderAddress: address) {
+    assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 }
 
-// Проверить есть ли адрес в whitelist
-fun isWhitelisted(addr: slice): int {
-    var hash = getAddrHash(addr);
-    var (_, found) = whitelistDict.udictGet(256, hash);
-    return found;
+fun isAllowedTarget(candidate: address): bool {
+    if (candidate == defiBankAddress) {
+        return true;
+    }
+
+    if (candidate == defiFoundationAddress) {
+        return true;
+    }
+
+    return false;
 }
 
-// -----------------------------------------------------
-// ОТПРАВКА DOM (через Jetton Wallet)
-// -----------------------------------------------------
-
-fun sendDom(
-    toAddress: slice,
-    amount: int,
-    queryId: int
-) {
+fun sendDom(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
 
-    var msgBody = beginCell()
+    var body = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
-        .storeSlice(toAddress)
-        .storeSlice(ownerAddress)
-        .storeBool(false)
-        .storeCoins(0)
-        .storeBool(false)
+        .storeAddress(toAddress)
+        .storeAddress(contract.getAddress())
+        .storeCoins(GIVER_MAX_FEE_DOM)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeAddress(walletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(msgBody)
+        .storeRef(body)
         .endCell();
 
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// ОТПРАВКА TON
-// -----------------------------------------------------
-
-fun sendTon(
-    toAddress: slice,
-    amount: int,
-    queryId: int
-) {
+fun sendTon(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
@@ -119,7 +101,7 @@ fun sendTon(
 
     var msg = beginCell()
         .storeUint(0x10, 6)
-        .storeSlice(toAddress)
+        .storeAddress(toAddress)
         .storeCoins(amount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
@@ -128,164 +110,88 @@ fun sendTon(
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// MAIN
-// -----------------------------------------------------
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
 
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
+    if (in.isBounced) {
         return;
     }
 
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
 
     loadData();
 
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // =====================================================
-    // OP_TRANSFER_NOTIFICATION — получили DOM
-    // Просто принимаем и храним
-    // =====================================================
     if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(senderAddress == walletAddress, ERROR_NOT_VALID_WALLET);
+
+        var amount = msgBody.loadCoins();
+        var fromAddress = msgBody.loadAddress();
+
+        if (fromAddress == contract.getAddress()) {
+            return;
+        }
+
+        totalReceived = totalReceived + amount;
+        saveData();
+
         return;
     }
 
-    // =====================================================
-    // OP_WITHDRAW_JETTONS — отправить DOM (только owner)
-    // Только на whitelist адреса!
-    // =====================================================
     if (op == OP_WITHDRAW_JETTONS) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
 
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
+        var toAddress = msgBody.loadAddress();
 
-        assert(
-            isWhitelisted(toAddress),
-            ERROR_NOT_IN_WHITELIST
-        );
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
+
+        totalSent = totalSent + amount;
+        saveData();
 
         sendDom(toAddress, amount, queryId);
-
         return;
     }
 
-    // =====================================================
-    // OP_WITHDRAW — отправить TON (только owner)
-    // Только на whitelist адреса!
-    // =====================================================
     if (op == OP_WITHDRAW) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
 
         var amount = msgBody.loadCoins();
-        var toAddress = msgBody.loadMsgAddress();
+        var toAddress = msgBody.loadAddress();
 
-        assert(
-            isWhitelisted(toAddress),
-            ERROR_NOT_IN_WHITELIST
-        );
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
 
         sendTon(toAddress, amount, queryId);
-
-        return;
-    }
-
-    // =====================================================
-    // OP_ADD_WHITELIST — добавить адрес (только owner)
-    // =====================================================
-    if (op == OP_ADD_WHITELIST) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
-
-        var newAddress = msgBody.loadMsgAddress();
-        var hash = getAddrHash(newAddress);
-
-        // Проверяем что ещё не в whitelist
-        var (_, alreadyExists) = whitelistDict
-            .udictGet(256, hash);
-
-        if (!alreadyExists) {
-            // Сохраняем адрес в значение dict
-            // чтобы потом можно было получить
-            whitelistDict = whitelistDict.udictSet(
-                256,
-                hash,
-                newAddress
-            );
-
-            whitelistCount += 1;
-        }
-
-        saveData();
-
-        return;
-    }
-
-    // =====================================================
-    // OP_REMOVE_WHITELIST — убрать адрес (только owner)
-    // =====================================================
-    if (op == OP_REMOVE_WHITELIST) {
-        assert(
-            senderAddress.equalSlices(ownerAddress),
-            ERROR_NOT_OWNER
-        );
-
-        var removeAddress = msgBody.loadMsgAddress();
-        var hash = getAddrHash(removeAddress);
-
-        var (newDict, deleted) = whitelistDict
-            .udictDelete(256, hash);
-
-        if (deleted) {
-            whitelistDict = newDict;
-            whitelistCount -= 1;
-        }
-
-        saveData();
-
         return;
     }
 
     throw(0xffff);
 }
 
-// -----------------------------------------------------
-// GETTERS
-// -----------------------------------------------------
-
-get fun getMarketData(): (slice, slice, int) {
+get fun getMarketData(): (
+    address, address, address, address, int, int
+) {
     loadData();
 
     return (
         ownerAddress,
         walletAddress,
-        whitelistCount
+        defiBankAddress,
+        defiFoundationAddress,
+        totalReceived,
+        totalSent
     );
 }
 
-get fun isAddressWhitelisted(addr: slice): int {
+get fun isAddressAllowed(candidate: address): bool {
     loadData();
-    return isWhitelisted(addr);
+    return isAllowedTarget(candidate);
 }
