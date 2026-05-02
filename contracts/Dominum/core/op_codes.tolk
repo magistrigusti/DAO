@@ -54,8 +54,11 @@ const OP_WITHDRAW_TON: int = 0xA3;
 const OP_SET_RESERVE: int = 0xA4;
 const OP_CHANGE_TREASURY: int = 0xA5;
 
-// v2: обновление курса DOM/TON (admin only)
+// v2: обновление курса DOM/TON (manager only)
 const OP_UPDATE_RATE: int = 0xA6;
+
+// v2: смена налоговой формулы через timelock (manager only)
+const OP_CHANGE_TAX: int = 0xA7;
 
 // =====================================================
 // GAS PROXY ОПЕРАЦИИ
