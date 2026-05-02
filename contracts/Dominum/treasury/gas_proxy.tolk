@@ -19,7 +19,7 @@ const TIMELOCK_PERIOD: int = 60;
 // -----------------------------------------------------
 // STORAGE
 // -----------------------------------------------------
-global adminAddress: address;
+global managerAddress: address;
 global realGasPoolAddress: address;
 
 // Одноразовая конфигурация для проверки sender-wallet.
@@ -40,7 +40,7 @@ global hasPending: bool;
 fun loadData() {
     var ds = contract.getData().beginParse();
 
-    adminAddress = ds.loadAddress();
+    managerAddress = ds.loadAddress();
     realGasPoolAddress = ds.loadAddress();
     walletConfigReady = ds.loadBool();
 
@@ -48,7 +48,7 @@ fun loadData() {
         masterAddress = ds.loadAddress();
         jettonWalletCode = ds.loadRef();
     } else {
-        masterAddress = adminAddress;
+        masterAddress = managerAddress;
         jettonWalletCode = beginCell().endCell();
     }
 
@@ -58,14 +58,14 @@ fun loadData() {
         pendingAddress = ds.loadAddress();
         pendingTime = ds.loadUint(64);
     } else {
-        pendingAddress = adminAddress;
+        pendingAddress = managerAddress;
         pendingTime = 0;
     }
 }
 
 fun saveData() {
     var b = beginCell()
-        .storeAddress(adminAddress)
+        .storeAddress(managerAddress)
         .storeAddress(realGasPoolAddress)
         .storeBool(walletConfigReady);
 
@@ -183,13 +183,13 @@ fun onInternalMessage(in: InMessage) {
 
     // =====================================================
     // OP_SET_PROXY_WALLET_CONFIG — одноразовая настройка
-    // Только admin. После первого вызова изменить нельзя.
+    // Только manager. После первого вызова изменить нельзя.
     // body: queryId | masterAddress | jettonWalletCode
     // =====================================================
     if (op == OP_SET_PROXY_WALLET_CONFIG) {
         assert(
-            senderAddress == adminAddress,
-            ERROR_NOT_ADMIN
+            senderAddress == managerAddress,
+            ERROR_NOT_MANAGER
         );
         assert(
             !walletConfigReady,
@@ -293,12 +293,12 @@ fun onInternalMessage(in: InMessage) {
 
     // =====================================================
     // OP_REQUEST_CHANGE_POOL — запрос смены (timelock)
-    // Только admin. Нельзя пока есть предыдущий запрос.
+    // Только manager. Нельзя пока есть предыдущий запрос.
     // =====================================================
     if (op == OP_REQUEST_CHANGE_POOL) {
         assert(
-            senderAddress == adminAddress,
-            ERROR_NOT_ADMIN
+            senderAddress == managerAddress,
+            ERROR_NOT_MANAGER
         );
         assert(
             !hasPending,
@@ -318,8 +318,8 @@ fun onInternalMessage(in: InMessage) {
     // =====================================================
     if (op == OP_CONFIRM_CHANGE_POOL) {
         assert(
-            senderAddress == adminAddress,
-            ERROR_NOT_ADMIN
+            senderAddress == managerAddress,
+            ERROR_NOT_MANAGER
         );
 
         assert(hasPending, ERROR_NO_PENDING);
@@ -337,12 +337,12 @@ fun onInternalMessage(in: InMessage) {
 
     // =====================================================
     // OP_CANCEL_CHANGE_POOL — отмена запроса
-    // Только admin. Можно в любой момент (защита от кражи сида).
+    // Только manager. Можно в любой момент (защита от кражи сида).
     // =====================================================
     if (op == OP_CANCEL_CHANGE_POOL) {
         assert(
-            senderAddress == adminAddress,
-            ERROR_NOT_ADMIN
+            senderAddress == managerAddress,
+            ERROR_NOT_MANAGER
         );
 
         hasPending = false;
@@ -361,7 +361,7 @@ get fun getProxyData(): (address, address, bool) {
     loadData();
 
     return (
-        adminAddress,
+        managerAddress,
         realGasPoolAddress,
         hasPending
     );

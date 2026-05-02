@@ -117,10 +117,6 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    if (in.isBounced) {
-        return;
-    }
-
     var senderAddress = in.senderAddress;
 
     loadData();

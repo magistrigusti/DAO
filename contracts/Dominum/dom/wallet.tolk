@@ -171,12 +171,6 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // Обработка отскока от gas_pool / proxy
-    if (in.isBounced) {
-        handleBouncedMessage(msgBody);
-        return;
-    }
-
     var senderAddress = in.senderAddress;
     var msgValue = in.valueCoins;
 

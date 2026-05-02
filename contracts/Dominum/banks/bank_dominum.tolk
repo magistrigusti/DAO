@@ -4,7 +4,7 @@ import "../core/constants.tolk";
 
 // ========== TOLK MIGRATION v2 ==========
 // BANK DOMINUM — главный банк экосистемы DOM.
-// Управляет своим DOM-wallet и может управлять gas_pool.
+// Управляет своим DOM-wallet и может пополнять gas_pool.
 // Владелец зашит при деплое, не меняется.
 // ========================================
 
@@ -173,10 +173,6 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    if (in.isBounced) {
-        return;
-    }
-
     var senderAddress = in.senderAddress;
     var msgValue = in.valueCoins;
     var myBalance = contract.getOriginalBalance();
@@ -195,19 +191,6 @@ fun onInternalMessage(in: InMessage) {
             senderAddress == domWalletAddress,
             ERROR_NOT_VALID_WALLET
         );
-
-        return;
-    }
-
-    // =====================================================
-    // OP_UPDATE_GAS_POOL — обновить адрес gas_pool
-    // Только owner.
-    // =====================================================
-    if (op == OP_UPDATE_GAS_POOL) {
-        requireOwner(senderAddress);
-
-        gasPoolAddress = msgBody.loadAddress();
-        saveData();
 
         return;
     }
