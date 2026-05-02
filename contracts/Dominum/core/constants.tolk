@@ -62,6 +62,11 @@ const BASE_TON_COST: int = 50000000;          // 0.05 TON
 const TAX_MULTIPLIER: int = 300;
 const TAX_MULTIPLIER_DENOM: int = 100;
 
+// Границы налога для manager/timelock в gas_pool.
+// 100 = x1.00, 1000 = x10.00.
+const MIN_TAX_MULTIPLIER: int = 100;
+const MAX_TAX_MULTIPLIER: int = 1000;
+
 // Как делим «навар» (всё что сверх BASE_TON_COST):
 // 1x базы в gas_pool (на будущие TON-расходы)
 // 1x базы в DAO treasury (наш доход)
