@@ -2,10 +2,10 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// ========== GAS POOL v2 ==========
+// ========== GAS POOL v2.2 ==========
 // Пул TON-газа и DOM-комиссий.
 // Пользователь платит комиссию в DOM, пул оплачивает TON.
-// Настройки меняет только manager через безопасные операции.
+// Fee config лежит в ref, чтобы можно было менять налог и TON-бюджет.
 // =================================
 
 // TESTNET: 60 сек. MAINNET: 172800 (48ч)
@@ -24,15 +24,61 @@ global tonReserve: int;
 global domPerTonRate: int;
 global baseTonCost: int;
 global taxMultiplier: int;
+global messageTonAmount: int;
 
 global hasPendingTreasury: bool;
 global pendingTreasury: address;
 global pendingTreasuryTime: int;
 
-global hasPendingTax: bool;
+global hasPendingFeeConfig: bool;
 global pendingBaseTonCost: int;
 global pendingTaxMultiplier: int;
-global pendingTaxTime: int;
+global pendingMessageTonAmount: int;
+global pendingFeeConfigTime: int;
+
+// -----------------------------------------------------
+// FEE CONFIG
+// -----------------------------------------------------
+fun setDefaultFeeConfig() {
+    domPerTonRate = INITIAL_DOM_PER_TON;
+    baseTonCost = BASE_TON_COST;
+    taxMultiplier = TAX_MULTIPLIER;
+    messageTonAmount = MIN_TON_FOR_STORAGE;
+}
+
+fun loadFeeConfig(feeConfig: cell) {
+    var fs = feeConfig.beginParse();
+    domPerTonRate = fs.loadCoins();
+    baseTonCost = fs.loadCoins();
+    taxMultiplier = fs.loadUint(16);
+    messageTonAmount = fs.loadCoins();
+}
+
+fun buildFeeConfig(): cell {
+    return beginCell()
+        .storeCoins(domPerTonRate)
+        .storeCoins(baseTonCost)
+        .storeUint(taxMultiplier, 16)
+        .storeCoins(messageTonAmount)
+        .endCell();
+}
+
+fun loadPendingFeeConfig(pendingFeeConfig: cell) {
+    var ps = pendingFeeConfig.beginParse();
+    pendingBaseTonCost = ps.loadCoins();
+    pendingTaxMultiplier = ps.loadUint(16);
+    pendingMessageTonAmount = ps.loadCoins();
+    pendingFeeConfigTime = ps.loadUint(64);
+}
+
+fun buildPendingFeeConfig(): cell {
+    return beginCell()
+        .storeCoins(pendingBaseTonCost)
+        .storeUint(pendingTaxMultiplier, 16)
+        .storeCoins(pendingMessageTonAmount)
+        .storeUint(pendingFeeConfigTime, 64)
+        .endCell();
+}
 
 // -----------------------------------------------------
 // LOAD / SAVE
@@ -46,28 +92,40 @@ fun loadData() {
 
     domBalance = ds.loadCoins();
     tonReserve = ds.loadCoins();
-    domPerTonRate = ds.loadCoins();
-    baseTonCost = ds.loadCoins();
-    taxMultiplier = ds.loadUint(16);
+
+    if (ds.remainingRefsCount() > 0) {
+        loadFeeConfig(ds.loadRef());
+    } else {
+        setDefaultFeeConfig();
+    }
 
     hasPendingTreasury = ds.loadBool();
     if (hasPendingTreasury) {
-        pendingTreasury = ds.loadAddress();
-        pendingTreasuryTime = ds.loadUint(64);
+        var pendingRef = ds.loadRef().beginParse();
+        pendingTreasury = pendingRef.loadAddress();
+        pendingTreasuryTime = pendingRef.loadUint(64);
     } else {
         pendingTreasury = domTreasuryAddress;
         pendingTreasuryTime = 0;
     }
 
-    hasPendingTax = ds.loadBool();
-    if (hasPendingTax) {
-        pendingBaseTonCost = ds.loadCoins();
-        pendingTaxMultiplier = ds.loadUint(16);
-        pendingTaxTime = ds.loadUint(64);
+    var (bitsLeft, refsLeft) = ds.remainingBitsAndRefsCount();
+    if ((bitsLeft > 0) | (refsLeft > 0)) {
+        hasPendingFeeConfig = ds.loadBool();
+        if (hasPendingFeeConfig) {
+            loadPendingFeeConfig(ds.loadRef());
+        } else {
+            pendingBaseTonCost = baseTonCost;
+            pendingTaxMultiplier = taxMultiplier;
+            pendingMessageTonAmount = messageTonAmount;
+            pendingFeeConfigTime = 0;
+        }
     } else {
+        hasPendingFeeConfig = false;
         pendingBaseTonCost = baseTonCost;
         pendingTaxMultiplier = taxMultiplier;
-        pendingTaxTime = 0;
+        pendingMessageTonAmount = messageTonAmount;
+        pendingFeeConfigTime = 0;
     }
 }
 
@@ -78,22 +136,22 @@ fun saveData() {
         .storeAddress(domTreasuryAddress)
         .storeCoins(domBalance)
         .storeCoins(tonReserve)
-        .storeCoins(domPerTonRate)
-        .storeCoins(baseTonCost)
-        .storeUint(taxMultiplier, 16)
+        .storeRef(buildFeeConfig())
         .storeBool(hasPendingTreasury);
 
     if (hasPendingTreasury) {
-        b = b.storeAddress(pendingTreasury)
-             .storeUint(pendingTreasuryTime, 64);
+        var pendingRef = beginCell()
+            .storeAddress(pendingTreasury)
+            .storeUint(pendingTreasuryTime, 64)
+            .endCell();
+
+        b = b.storeRef(pendingRef);
     }
 
-    b = b.storeBool(hasPendingTax);
+    b = b.storeBool(hasPendingFeeConfig);
 
-    if (hasPendingTax) {
-        b = b.storeCoins(pendingBaseTonCost)
-             .storeUint(pendingTaxMultiplier, 16)
-             .storeUint(pendingTaxTime, 64);
+    if (hasPendingFeeConfig) {
+        b = b.storeRef(buildPendingFeeConfig());
     }
 
     contract.setData(b.endCell());
@@ -106,10 +164,15 @@ fun requireManager(senderAddress: address) {
     assert(senderAddress == managerAddress, ERROR_NOT_MANAGER);
 }
 
-fun validateTax(newBaseTonCost: int, newTaxMultiplier: int) {
+fun validateFeeConfig(
+    newBaseTonCost: int,
+    newTaxMultiplier: int,
+    newMessageTonAmount: int
+) {
     assert(newBaseTonCost > 0, ERROR_INVALID_AMOUNT);
     assert(newTaxMultiplier >= MIN_TAX_MULTIPLIER, ERROR_INVALID_AMOUNT);
     assert(newTaxMultiplier <= MAX_TAX_MULTIPLIER, ERROR_LIMIT_EXCEEDED);
+    assert(newMessageTonAmount > 0, ERROR_INVALID_AMOUNT);
 }
 
 fun calculateDomFee(): int {
@@ -205,7 +268,7 @@ fun onInternalMessage(in: InMessage) {
 
         var treasuryShare = actualFee / 3;
         var poolShare = actualFee - treasuryShare;
-        var tonForEach = MIN_TON_FOR_STORAGE;
+        var tonForEach = messageTonAmount;
 
         assert(myBalance - tonReserve >= tonForEach * 3, ERROR_INSUFFICIENT_GAS);
 
@@ -241,28 +304,31 @@ fun onInternalMessage(in: InMessage) {
 
         var subOp = msgBody.loadUint(8);
         if (subOp == 1) {
-            assert(!hasPendingTax, ERROR_ALREADY_INITIALIZED);
+            assert(!hasPendingFeeConfig, ERROR_ALREADY_INITIALIZED);
             var newBaseTonCost = msgBody.loadCoins();
             var newTaxMultiplier = msgBody.loadUint(16);
-            validateTax(newBaseTonCost, newTaxMultiplier);
+            var newMessageTonAmount = msgBody.loadCoins();
+            validateFeeConfig(newBaseTonCost, newTaxMultiplier, newMessageTonAmount);
             pendingBaseTonCost = newBaseTonCost;
             pendingTaxMultiplier = newTaxMultiplier;
-            pendingTaxTime = blockchain.now() + TIMELOCK_PERIOD;
-            hasPendingTax = true;
+            pendingMessageTonAmount = newMessageTonAmount;
+            pendingFeeConfigTime = blockchain.now() + TIMELOCK_PERIOD;
+            hasPendingFeeConfig = true;
             saveData();
             return;
         }
         if (subOp == 2) {
-            assert(hasPendingTax, ERROR_NO_PENDING);
-            assert(blockchain.now() >= pendingTaxTime, ERROR_TOO_EARLY);
+            assert(hasPendingFeeConfig, ERROR_NO_PENDING);
+            assert(blockchain.now() >= pendingFeeConfigTime, ERROR_TOO_EARLY);
             baseTonCost = pendingBaseTonCost;
             taxMultiplier = pendingTaxMultiplier;
-            hasPendingTax = false;
+            messageTonAmount = pendingMessageTonAmount;
+            hasPendingFeeConfig = false;
             saveData();
             return;
         }
         if (subOp == 3) {
-            hasPendingTax = false;
+            hasPendingFeeConfig = false;
             saveData();
             return;
         }
@@ -329,12 +395,13 @@ fun onInternalMessage(in: InMessage) {
 // -----------------------------------------------------
 // GETTERS
 // -----------------------------------------------------
-get fun getPoolData(): (address, address, address, int, int, int, int, int, int) {
+get fun getPoolData(): (address, address, address, int, int, int, int, int, int, int) {
     loadData();
     return (
         managerAddress, proxyAddress, domTreasuryAddress,
         domBalance, tonReserve, domPerTonRate,
-        baseTonCost, taxMultiplier, contract.getOriginalBalance() - tonReserve
+        baseTonCost, taxMultiplier, messageTonAmount,
+        contract.getOriginalBalance() - tonReserve
     );
 }
 
@@ -351,10 +418,16 @@ get fun getPendingTreasury(): (bool, address?, int) {
     return (true, pendingTreasury, pendingTreasuryTime);
 }
 
-get fun getPendingTax(): (bool, int, int, int) {
+get fun getPendingFeeConfig(): (bool, int, int, int, int) {
     loadData();
-    if (!hasPendingTax) {
-        return (false, 0, 0, 0);
+    if (!hasPendingFeeConfig) {
+        return (false, 0, 0, 0, 0);
     }
-    return (true, pendingBaseTonCost, pendingTaxMultiplier, pendingTaxTime);
+    return (
+        true,
+        pendingBaseTonCost,
+        pendingTaxMultiplier,
+        pendingMessageTonAmount,
+        pendingFeeConfigTime
+    );
 }

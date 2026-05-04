@@ -74,7 +74,7 @@ const PROFIT_SHARE_GAS_POOL: int = 1;
 const PROFIT_SHARE_TREASURY: int = 1;
 
 // -----------------------------------------------------
-// КУРС DOM <-> TON (хранится в gas_pool, меняется owner)
+// КУРС DOM <-> TON (стартовое значение для fee-config gas_pool)
 // -----------------------------------------------------
 // Единица: сколько min-units DOM даёт 1 TON (в нанотонах)
 // Стартовый курс: 1 TON = 10 DOM (цена DOM ≈ $0.10)
@@ -108,7 +108,7 @@ const EXCHANGE_RATE_DOM_TO_ALLOD: int = 100;
 //        = 50_000_000 * 300 / 100 = 150_000_000 nanoTON (0.15 TON)
 //
 // domFee = tonFee * domPerTonRate / NANO_TON
-//        (domPerTonRate хранится в gas_pool)
+//        (domPerTonRate хранится в fee-config gas_pool)
 //
 // При стартовом курсе 1 TON = 10 DOM:
 //   domFee = 150_000_000 * 10_000_000 / 1_000_000_000

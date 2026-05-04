@@ -272,10 +272,9 @@ fun onInternalMessage(in: InMessage) {
         var responseDestination = msgBody.loadAddressOpt();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-        assert(
-            msgValue >= MIN_TON_FOR_STORAGE,
-            ERROR_INSUFFICIENT_GAS
-        );
+        // GasPool owns the exact per-hop TON budget. Validators can lower
+        // network fees, so proxy should not hard-code an old threshold here.
+        assert(msgValue > 0, ERROR_INSUFFICIENT_GAS);
         assertWalletConfigReady();
 
         sendInternalTransfer(
