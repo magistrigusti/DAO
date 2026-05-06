@@ -5,6 +5,7 @@ import {
     Contract,
     contractAddress,
     ContractProvider,
+    Dictionary,
     Sender,
 } from '@ton/core';
 import { OP_BURN, OP_TRANSFER } from '../core/op_code';
@@ -15,55 +16,42 @@ export type DomWalletConfig = {
     masterAddress: Address;
     gasPoolAddress: Address;
     jettonWalletCode: Cell;
+    pendingTransfers?: Dictionary<bigint, Cell> | null;
 };
 
-export function domWalletConfigToCell(
-    config: DomWalletConfig
-): Cell {
+export function domWalletConfigToCell(config: DomWalletConfig): Cell {
+    const pendingTransfers =
+        config.pendingTransfers ??
+        Dictionary.empty(Dictionary.Keys.BigUint(64), Dictionary.Values.Cell());
+
     return beginCell()
         .storeCoins(config.balance)
         .storeAddress(config.ownerAddress)
         .storeAddress(config.masterAddress)
         .storeAddress(config.gasPoolAddress)
         .storeRef(config.jettonWalletCode)
+        .storeDict(pendingTransfers)
         .endCell();
 }
 
 export class DomWallet implements Contract {
     constructor(
         readonly address: Address,
-        readonly init?: {
-            code: Cell;
-            data: Cell;
-        }
+        readonly init?: { code: Cell; data: Cell }
     ) {}
 
-    static createFromConfig(
-        config: DomWalletConfig,
-        code: Cell,
-        workchain = 0
-    ) {
+    static createFromConfig(config: DomWalletConfig, code: Cell, workchain = 0) {
         const data = domWalletConfigToCell(config);
         const init = { code, data };
-
-        return new DomWallet(
-            contractAddress(workchain, init),
-            init
-        );
+        return new DomWallet(contractAddress(workchain, init), init);
     }
 
     static createFromAddress(address: Address) {
         return new DomWallet(address);
     }
 
-    async sendDeploy(
-        provider: ContractProvider,
-        via: Sender,
-        value: bigint
-    ) {
-        await provider.internal(via, {
-            value,
-        });
+    async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
+        await provider.internal(via, { value });
     }
 
     async sendTransfer(
@@ -73,22 +61,18 @@ export class DomWallet implements Contract {
             value: bigint;
             jettonAmount: bigint;
             toOwner: Address;
+            maxFeeDom: bigint;
             responseDestination?: Address | null;
             queryId?: bigint;
         }
     ) {
-        // ВАЖНО:
-        // твой wallet.tolk читает только:
-        // amount -> toOwner -> responseDestination
-        // без custom_payload / forward_payload.
         const body = beginCell()
             .storeUint(OP_TRANSFER, 32)
             .storeUint(opts.queryId ?? 0n, 64)
             .storeCoins(opts.jettonAmount)
             .storeAddress(opts.toOwner)
-            .storeAddress(
-                opts.responseDestination ?? null
-            )
+            .storeAddress(opts.responseDestination ?? null)
+            .storeCoins(opts.maxFeeDom)
             .endCell();
 
         await provider.internal(via, {
@@ -111,9 +95,7 @@ export class DomWallet implements Contract {
             .storeUint(OP_BURN, 32)
             .storeUint(opts.queryId ?? 0n, 64)
             .storeCoins(opts.amount)
-            .storeAddress(
-                opts.responseDestination ?? null
-            )
+            .storeAddress(opts.responseDestination ?? null)
             .endCell();
 
         await provider.internal(via, {
@@ -122,19 +104,25 @@ export class DomWallet implements Contract {
         });
     }
 
-    async getWalletData(
-        provider: ContractProvider
-    ) {
-        const { stack } = await provider.get(
-            'getWalletData',
-            []
-        );
+    async getWalletData(provider: ContractProvider) {
+        const { stack } = await provider.get('getWalletData', []);
 
         return {
             balance: stack.readBigNumber(),
             ownerAddress: stack.readAddress(),
             masterAddress: stack.readAddress(),
             gasPoolAddress: stack.readAddress(),
+        };
+    }
+
+    async getPendingTransfer(provider: ContractProvider, queryId: bigint) {
+        const { stack } = await provider.get('getPendingTransfer', [
+            { type: 'int', value: queryId },
+        ]);
+
+        return {
+            totalSpend: stack.readBigNumber(),
+            found: stack.readBoolean(),
         };
     }
 }

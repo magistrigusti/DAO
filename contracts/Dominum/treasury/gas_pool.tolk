@@ -2,83 +2,26 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// ========== GAS POOL v2.2 ==========
-// Пул TON-газа и DOM-комиссий.
-// Пользователь платит комиссию в DOM, пул оплачивает TON.
-// Fee config лежит в ref, чтобы можно было менять налог и TON-бюджет.
-// =================================
-
-// TESTNET: 60 сек. MAINNET: 172800 (48ч)
-const TIMELOCK_PERIOD: int = 60;
+// ========== DOM WALLET v2.3 ==========
+// User transfer body:
+// OP_TRANSFER | queryId | amount | toOwner | responseDest | maxFeeDom
+//
+// Wallet debits amount + maxFeeDom.
+// If the message bounces before GasPool settlement, wallet restores full debit
+// from pendingTransfers by queryId.
+// =====================================
 
 // -----------------------------------------------------
 // STORAGE
 // -----------------------------------------------------
-global managerAddress: address;
-global proxyAddress: address;
-global domTreasuryAddress: address;
+global balance: int;
+global ownerAddress: address;
+global masterAddress: address;
+global gasPoolAddress: address; // proxy address
+global jettonWalletCode: cell;
 
-global domBalance: int;
-global tonReserve: int;
-
-global domPerTonRate: int;
-global baseTonCost: int;
-global taxMultiplier: int;
-global messageTonAmount: int;
-
-global hasPendingTreasury: bool;
-global pendingTreasury: address;
-global pendingTreasuryTime: int;
-
-global hasPendingFeeConfig: bool;
-global pendingBaseTonCost: int;
-global pendingTaxMultiplier: int;
-global pendingMessageTonAmount: int;
-global pendingFeeConfigTime: int;
-
-// -----------------------------------------------------
-// FEE CONFIG
-// -----------------------------------------------------
-fun setDefaultFeeConfig() {
-    domPerTonRate = INITIAL_DOM_PER_TON;
-    baseTonCost = BASE_TON_COST;
-    taxMultiplier = TAX_MULTIPLIER;
-    messageTonAmount = MIN_TON_FOR_STORAGE;
-}
-
-fun loadFeeConfig(feeConfig: cell) {
-    var fs = feeConfig.beginParse();
-    domPerTonRate = fs.loadCoins();
-    baseTonCost = fs.loadCoins();
-    taxMultiplier = fs.loadUint(16);
-    messageTonAmount = fs.loadCoins();
-}
-
-fun buildFeeConfig(): cell {
-    return beginCell()
-        .storeCoins(domPerTonRate)
-        .storeCoins(baseTonCost)
-        .storeUint(taxMultiplier, 16)
-        .storeCoins(messageTonAmount)
-        .endCell();
-}
-
-fun loadPendingFeeConfig(pendingFeeConfig: cell) {
-    var ps = pendingFeeConfig.beginParse();
-    pendingBaseTonCost = ps.loadCoins();
-    pendingTaxMultiplier = ps.loadUint(16);
-    pendingMessageTonAmount = ps.loadCoins();
-    pendingFeeConfigTime = ps.loadUint(64);
-}
-
-fun buildPendingFeeConfig(): cell {
-    return beginCell()
-        .storeCoins(pendingBaseTonCost)
-        .storeUint(pendingTaxMultiplier, 16)
-        .storeCoins(pendingMessageTonAmount)
-        .storeUint(pendingFeeConfigTime, 64)
-        .endCell();
-}
+// queryId -> totalSpend
+global pendingTransfers: cell;
 
 // -----------------------------------------------------
 // LOAD / SAVE
@@ -86,154 +29,188 @@ fun buildPendingFeeConfig(): cell {
 fun loadData() {
     var ds = contract.getData().beginParse();
 
-    managerAddress = ds.loadAddress();
-    proxyAddress = ds.loadAddress();
-    domTreasuryAddress = ds.loadAddress();
-
-    domBalance = ds.loadCoins();
-    tonReserve = ds.loadCoins();
-
-    if (ds.remainingRefsCount() > 0) {
-        loadFeeConfig(ds.loadRef());
-    } else {
-        setDefaultFeeConfig();
-    }
-
-    hasPendingTreasury = ds.loadBool();
-    if (hasPendingTreasury) {
-        var pendingRef = ds.loadRef().beginParse();
-        pendingTreasury = pendingRef.loadAddress();
-        pendingTreasuryTime = pendingRef.loadUint(64);
-    } else {
-        pendingTreasury = domTreasuryAddress;
-        pendingTreasuryTime = 0;
-    }
+    balance = ds.loadCoins();
+    ownerAddress = ds.loadAddress();
+    masterAddress = ds.loadAddress();
+    gasPoolAddress = ds.loadAddress();
+    jettonWalletCode = ds.loadRef();
 
     var (bitsLeft, refsLeft) = ds.remainingBitsAndRefsCount();
     if ((bitsLeft > 0) | (refsLeft > 0)) {
-        hasPendingFeeConfig = ds.loadBool();
-        if (hasPendingFeeConfig) {
-            loadPendingFeeConfig(ds.loadRef());
-        } else {
-            pendingBaseTonCost = baseTonCost;
-            pendingTaxMultiplier = taxMultiplier;
-            pendingMessageTonAmount = messageTonAmount;
-            pendingFeeConfigTime = 0;
-        }
+        pendingTransfers = ds.loadDict();
     } else {
-        hasPendingFeeConfig = false;
-        pendingBaseTonCost = baseTonCost;
-        pendingTaxMultiplier = taxMultiplier;
-        pendingMessageTonAmount = messageTonAmount;
-        pendingFeeConfigTime = 0;
+        pendingTransfers = beginCell().endCell();
     }
 }
 
 fun saveData() {
-    var b = beginCell()
-        .storeAddress(managerAddress)
-        .storeAddress(proxyAddress)
-        .storeAddress(domTreasuryAddress)
-        .storeCoins(domBalance)
-        .storeCoins(tonReserve)
-        .storeRef(buildFeeConfig())
-        .storeBool(hasPendingTreasury);
-
-    if (hasPendingTreasury) {
-        var pendingRef = beginCell()
-            .storeAddress(pendingTreasury)
-            .storeUint(pendingTreasuryTime, 64)
-            .endCell();
-
-        b = b.storeRef(pendingRef);
-    }
-
-    b = b.storeBool(hasPendingFeeConfig);
-
-    if (hasPendingFeeConfig) {
-        b = b.storeRef(buildPendingFeeConfig());
-    }
-
-    contract.setData(b.endCell());
+    contract.setData(
+        beginCell()
+            .storeCoins(balance)
+            .storeAddress(ownerAddress)
+            .storeAddress(masterAddress)
+            .storeAddress(gasPoolAddress)
+            .storeRef(jettonWalletCode)
+            .storeDict(pendingTransfers)
+            .endCell()
+    );
 }
 
 // -----------------------------------------------------
-// SERVICE
+// PENDING TRANSFERS
 // -----------------------------------------------------
-fun requireManager(senderAddress: address) {
-    assert(senderAddress == managerAddress, ERROR_NOT_MANAGER);
+fun setPendingTransfer(queryId: int, totalSpend: int) {
+    var value = beginCell()
+        .storeCoins(totalSpend)
+        .endCell()
+        .beginParse();
+
+    pendingTransfers = pendingTransfers.udictSet(64, queryId, value);
 }
 
-fun validateFeeConfig(
-    newBaseTonCost: int,
-    newTaxMultiplier: int,
-    newMessageTonAmount: int
+fun getPendingTransfer(queryId: int): (int, bool) {
+    var (value, found) = pendingTransfers.udictGet(64, queryId);
+    if (!found) {
+        return (0, false);
+    }
+
+    return (value.loadCoins(), true);
+}
+
+fun deletePendingTransfer(queryId: int) {
+    var (newDict, deleted) = pendingTransfers.udictDelete(64, queryId);
+    if (deleted) {
+        pendingTransfers = newDict;
+    }
+}
+
+fun tryClearSettledPending(queryId: int, senderAddress: address) {
+    if (senderAddress != gasPoolAddress) {
+        return;
+    }
+
+    if (queryId < 2) {
+        return;
+    }
+
+    var originalQueryId = queryId - 2;
+    var (_, found) = getPendingTransfer(originalQueryId);
+
+    if (found) {
+        deletePendingTransfer(originalQueryId);
+    }
+}
+
+// -----------------------------------------------------
+// WALLET ADDRESS HELPERS
+// -----------------------------------------------------
+fun buildWalletData(owner: address): cell {
+    return beginCell()
+        .storeCoins(0)
+        .storeAddress(owner)
+        .storeAddress(masterAddress)
+        .storeAddress(gasPoolAddress)
+        .storeRef(jettonWalletCode)
+        .endCell();
+}
+
+fun buildWalletStateInit(owner: address): cell {
+    var walletData = buildWalletData(owner);
+
+    return beginCell()
+        .storeUint(0, 2)
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
+        .storeUint(0, 1)
+        .endCell();
+}
+
+fun buildWalletAddress(stateInit: cell): address {
+    var wc = contract.getAddress().getWorkchain();
+
+    return address.fromWorkchainAndHash(
+        wc,
+        stateInit.hash()
+    );
+}
+
+// -----------------------------------------------------
+// VALIDATION
+// -----------------------------------------------------
+fun requireInternalSender(
+    senderAddress: address,
+    fromOwner: address
 ) {
-    assert(newBaseTonCost > 0, ERROR_INVALID_AMOUNT);
-    assert(newTaxMultiplier >= MIN_TAX_MULTIPLIER, ERROR_INVALID_AMOUNT);
-    assert(newTaxMultiplier <= MAX_TAX_MULTIPLIER, ERROR_LIMIT_EXCEEDED);
-    assert(newMessageTonAmount > 0, ERROR_INVALID_AMOUNT);
-}
+    if (senderAddress == masterAddress) {
+        return;
+    }
 
-fun calculateDomFee(): int {
-    var tonFee = baseTonCost * taxMultiplier / TAX_MULTIPLIER_DENOM;
-    return tonFee * domPerTonRate / NANO_TON;
+    if (senderAddress == gasPoolAddress) {
+        return;
+    }
+
+    var expectedWallet = buildWalletAddress(
+        buildWalletStateInit(fromOwner)
+    );
+
+    assert(senderAddress == expectedWallet, ERROR_NOT_VALID_WALLET);
 }
 
 // -----------------------------------------------------
-// SEND HELPERS
+// OWNER NOTIFICATION
 // -----------------------------------------------------
-fun sendInternalTransfer(
-    toOwner: address,
-    jettonAmount: int,
+fun notifyOwner(
+    amount: int,
     fromOwner: address,
-    responseDestination: address,
-    queryId: int,
-    msgValue: int
+    queryId: int
 ) {
-    if (jettonAmount <= 0) {
-        return;
-    }
-
     var body = beginCell()
-        .storeUint(OP_PROXY_INTERNAL_TRANSFER, 32)
+        .storeUint(OP_TRANSFER_NOTIFICATION, 32)
         .storeUint(queryId, 64)
-        .storeCoins(jettonAmount)
-        .storeAddress(toOwner)
+        .storeCoins(amount)
         .storeAddress(fromOwner)
-        .storeAddress(responseDestination)
-        .endCell();
-
-    var msg = beginCell()
-        .storeUint(0x18, 6)
-        .storeAddress(proxyAddress)
-        .storeCoins(msgValue)
-        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(body)
-        .endCell();
-
-    sendRawMessage(msg, 1);
-}
-
-fun sendTon(to: address, amount: int, queryId: int) {
-    if (amount <= 0) {
-        return;
-    }
-
-    var body = beginCell()
-        .storeUint(OP_EXCESSES, 32)
-        .storeUint(queryId, 64)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x10, 6)
-        .storeAddress(to)
-        .storeCoins(amount)
+        .storeAddress(ownerAddress)
+        .storeCoins(0)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
 
-    sendRawMessage(msg, 1);
+    sendRawMessage(msg, 64);
+}
+
+// -----------------------------------------------------
+// BOUNCE HANDLER
+// -----------------------------------------------------
+fun handleBouncedMessage(msgBody: slice) {
+    var bouncedOp = msgBody.loadUint(32);
+    var bouncedQueryId = msgBody.loadUint(64);
+
+    if (bouncedOp == OP_GAS_POOL_EXECUTE) {
+        var (totalSpend, found) = getPendingTransfer(bouncedQueryId);
+
+        if (found) {
+            balance += totalSpend;
+            deletePendingTransfer(bouncedQueryId);
+            saveData();
+        }
+
+        return;
+    }
+
+    if (bouncedOp == OP_BURN_NOTIFICATION) {
+        var burnAmount = msgBody.loadCoins();
+
+        if (burnAmount > 0) {
+            balance += burnAmount;
+            saveData();
+        }
+
+        return;
+    }
 }
 
 // -----------------------------------------------------
@@ -241,152 +218,130 @@ fun sendTon(to: address, amount: int, queryId: int) {
 // -----------------------------------------------------
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
+
     if (msgBody.isEmpty()) {
         return;
     }
 
     var senderAddress = in.senderAddress;
-    var myBalance = contract.getOriginalBalance();
+    var msgValue = in.valueCoins;
 
     loadData();
 
     var op = msgBody.loadUint(32);
+
+    if (op == 0xffffffff) {
+        handleBouncedMessage(msgBody);
+        return;
+    }
+
     var queryId = msgBody.loadUint(64);
 
-    if (op == OP_GAS_POOL_EXECUTE) {
-        assert(senderAddress == proxyAddress, ERROR_NOT_MANAGER);
+    // =====================================================
+    // OP_INTERNAL_TRANSFER
+    // body: amount | fromOwner | responseDest
+    // =====================================================
+    if (op == OP_INTERNAL_TRANSFER) {
+        var amount = msgBody.loadCoins();
+        var fromOwner = msgBody.loadAddress();
+        var responseDestination = msgBody.loadAddressOpt();
+
+        requireInternalSender(senderAddress, fromOwner);
+
+        balance += amount;
+
+        // GasPool sends refund/settlement with queryId + 2.
+        tryClearSettledPending(queryId, senderAddress);
+
+        saveData();
+
+        notifyOwner(amount, fromOwner, queryId);
+        return;
+    }
+
+    // =====================================================
+    // OP_TRANSFER
+    // body: amount | toOwner | responseDest | maxFeeDom
+    // =====================================================
+    if (op == OP_TRANSFER) {
+        assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
-        var fromOwner = msgBody.loadAddress();
+        var responseDestination = msgBody.loadAddressOpt();
         var maxFeeDom = msgBody.loadCoins();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(maxFeeDom > 0, ERROR_INVALID_AMOUNT);
 
-        var actualFee = calculateDomFee();
-        assert(maxFeeDom >= actualFee, ERROR_LIMIT_EXCEEDED);
+        var totalSpend = jettonAmount + maxFeeDom;
 
-        var treasuryShare = actualFee / 3;
-        var poolShare = actualFee - treasuryShare;
-        var tonForEach = messageTonAmount;
+        assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
+        assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
 
-        assert(myBalance - tonReserve >= tonForEach * 3, ERROR_INSUFFICIENT_GAS);
+        var (_, pendingExists) = getPendingTransfer(queryId);
+        assert(!pendingExists, ERROR_ALREADY_INITIALIZED);
 
-        domBalance = domBalance + poolShare;
+        setPendingTransfer(queryId, totalSpend);
+
+        balance -= totalSpend;
         saveData();
 
-        sendInternalTransfer(toOwner, jettonAmount, fromOwner, fromOwner, queryId, tonForEach);
-        sendInternalTransfer(domTreasuryAddress, treasuryShare, fromOwner, fromOwner, queryId + 1, tonForEach);
+        var gasPoolBody = beginCell()
+            .storeUint(OP_GAS_POOL_EXECUTE, 32)
+            .storeUint(queryId, 64)
+            .storeCoins(jettonAmount)
+            .storeAddress(toOwner)
+            .storeAddress(ownerAddress)
+            .storeCoins(maxFeeDom)
+            .endCell();
 
-        var refund = maxFeeDom - actualFee;
-        if (refund > 0) {
-            sendInternalTransfer(fromOwner, refund, fromOwner, fromOwner, queryId + 2, tonForEach);
-        }
+        var msg = beginCell()
+            .storeUint(0x18, 6)
+            .storeAddress(gasPoolAddress)
+            .storeCoins(0)
+            .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .storeRef(gasPoolBody)
+            .endCell();
+
+        sendRawMessage(msg, 64);
         return;
     }
 
-    if (op == OP_TOP_UP) {
-        requireManager(senderAddress);
-        return;
-    }
+    // =====================================================
+    // OP_BURN
+    // body: amount | responseDest
+    // =====================================================
+    if (op == OP_BURN) {
+        assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 
-    if (op == OP_UPDATE_RATE) {
-        requireManager(senderAddress);
-        var newRate = msgBody.loadCoins();
-        assert(newRate > 0, ERROR_INVALID_AMOUNT);
-        domPerTonRate = newRate;
+        var burnAmount = msgBody.loadCoins();
+        var responseDestination = msgBody.loadAddressOpt();
+
+        assert(burnAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(balance >= burnAmount, ERROR_INSUFFICIENT_BALANCE);
+
+        balance -= burnAmount;
         saveData();
+
+        var body = beginCell()
+            .storeUint(OP_BURN_NOTIFICATION, 32)
+            .storeUint(queryId, 64)
+            .storeCoins(burnAmount)
+            .storeAddress(ownerAddress)
+            .storeAddressOpt(responseDestination)
+            .endCell();
+
+        var msg = beginCell()
+            .storeUint(0x18, 6)
+            .storeAddress(masterAddress)
+            .storeCoins(0)
+            .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .storeRef(body)
+            .endCell();
+
+        sendRawMessage(msg, 64);
         return;
-    }
-
-    if (op == OP_CHANGE_TAX) {
-        requireManager(senderAddress);
-
-        var subOp = msgBody.loadUint(8);
-        if (subOp == 1) {
-            assert(!hasPendingFeeConfig, ERROR_ALREADY_INITIALIZED);
-            var newBaseTonCost = msgBody.loadCoins();
-            var newTaxMultiplier = msgBody.loadUint(16);
-            var newMessageTonAmount = msgBody.loadCoins();
-            validateFeeConfig(newBaseTonCost, newTaxMultiplier, newMessageTonAmount);
-            pendingBaseTonCost = newBaseTonCost;
-            pendingTaxMultiplier = newTaxMultiplier;
-            pendingMessageTonAmount = newMessageTonAmount;
-            pendingFeeConfigTime = blockchain.now() + TIMELOCK_PERIOD;
-            hasPendingFeeConfig = true;
-            saveData();
-            return;
-        }
-        if (subOp == 2) {
-            assert(hasPendingFeeConfig, ERROR_NO_PENDING);
-            assert(blockchain.now() >= pendingFeeConfigTime, ERROR_TOO_EARLY);
-            baseTonCost = pendingBaseTonCost;
-            taxMultiplier = pendingTaxMultiplier;
-            messageTonAmount = pendingMessageTonAmount;
-            hasPendingFeeConfig = false;
-            saveData();
-            return;
-        }
-        if (subOp == 3) {
-            hasPendingFeeConfig = false;
-            saveData();
-            return;
-        }
-        throw(0xffff);
-    }
-
-    if (op == OP_WITHDRAW_DOM) {
-        requireManager(senderAddress);
-        var amount = msgBody.loadCoins();
-        var toOwner = msgBody.loadAddress();
-        assert(amount <= domBalance, ERROR_INSUFFICIENT_BALANCE);
-        domBalance = domBalance - amount;
-        saveData();
-        sendInternalTransfer(toOwner, amount, contract.getAddress(), managerAddress, queryId, MIN_TON_FOR_STORAGE);
-        return;
-    }
-
-    if (op == OP_WITHDRAW_TON) {
-        requireManager(senderAddress);
-        var amount = msgBody.loadCoins();
-        var to = msgBody.loadAddress();
-        assert(amount <= myBalance - tonReserve, ERROR_INSUFFICIENT_BALANCE);
-        sendTon(to, amount, queryId);
-        return;
-    }
-
-    if (op == OP_SET_RESERVE) {
-        requireManager(senderAddress);
-        tonReserve = msgBody.loadCoins();
-        saveData();
-        return;
-    }
-
-    if (op == OP_CHANGE_TREASURY) {
-        requireManager(senderAddress);
-        var subOp = msgBody.loadUint(8);
-        if (subOp == 1) {
-            assert(!hasPendingTreasury, ERROR_ALREADY_INITIALIZED);
-            pendingTreasury = msgBody.loadAddress();
-            pendingTreasuryTime = blockchain.now() + TIMELOCK_PERIOD;
-            hasPendingTreasury = true;
-            saveData();
-            return;
-        }
-        if (subOp == 2) {
-            assert(hasPendingTreasury, ERROR_NO_PENDING);
-            assert(blockchain.now() >= pendingTreasuryTime, ERROR_TOO_EARLY);
-            domTreasuryAddress = pendingTreasury;
-            hasPendingTreasury = false;
-            saveData();
-            return;
-        }
-        if (subOp == 3) {
-            hasPendingTreasury = false;
-            saveData();
-            return;
-        }
-        throw(0xffff);
     }
 
     throw(0xffff);
@@ -395,39 +350,20 @@ fun onInternalMessage(in: InMessage) {
 // -----------------------------------------------------
 // GETTERS
 // -----------------------------------------------------
-get fun getPoolData(): (address, address, address, int, int, int, int, int, int, int) {
+get fun getWalletData(): (
+    int, address, address, address
+) {
     loadData();
+
     return (
-        managerAddress, proxyAddress, domTreasuryAddress,
-        domBalance, tonReserve, domPerTonRate,
-        baseTonCost, taxMultiplier, messageTonAmount,
-        contract.getOriginalBalance() - tonReserve
+        balance,
+        ownerAddress,
+        masterAddress,
+        gasPoolAddress
     );
 }
 
-get fun getCurrentDomFee(): int {
+get fun getPendingTransfer(queryId: int): (int, bool) {
     loadData();
-    return calculateDomFee();
-}
-
-get fun getPendingTreasury(): (bool, address?, int) {
-    loadData();
-    if (!hasPendingTreasury) {
-        return (false, null, 0);
-    }
-    return (true, pendingTreasury, pendingTreasuryTime);
-}
-
-get fun getPendingFeeConfig(): (bool, int, int, int, int) {
-    loadData();
-    if (!hasPendingFeeConfig) {
-        return (false, 0, 0, 0, 0);
-    }
-    return (
-        true,
-        pendingBaseTonCost,
-        pendingTaxMultiplier,
-        pendingMessageTonAmount,
-        pendingFeeConfigTime
-    );
+    return getPendingTransfer(queryId);
 }
