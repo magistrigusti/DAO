@@ -1,118 +1,80 @@
-// =====================================================
-// GIVER DEFI — Автораспределение DOM для DeFi-блока
-// =====================================================
-// При получении жетонов от master (через свой wallet):
-//   50% -> DeFi Bank
-//   50% -> DeFi Dual-Sign / Foundry
-// Manager может менять whitelist и walletAddress.
-//
-// v2: защита от рекурсии при рефанде из gas_pool.
-// =====================================================
-
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// ========== TOLK MIGRATION v2 ==========
-
-// -----------------------------------------------------
-// STORAGE
-// -----------------------------------------------------
-global managerAddress: address;
 global walletAddress: address?;
-global defiBankAddress: address;
-global defiDualAddress: address;
+global marketAddress: address;
+global foundryAddress: address;
+global defiTreasuryAddress: address;
 
-// -----------------------------------------------------
-// LOAD / SAVE
-// -----------------------------------------------------
 fun loadData() {
     var ds = contract.getData().beginParse();
-
-    managerAddress = ds.loadAddress();
     walletAddress = ds.loadAddressOpt();
 
     var targets = ds.loadRef().beginParse();
-    defiBankAddress = targets.loadAddress();
-    defiDualAddress = targets.loadAddress();
+    marketAddress = targets.loadAddress();
+    foundryAddress = targets.loadAddress();
+    defiTreasuryAddress = targets.loadAddress();
 }
 
 fun saveData() {
     var targets = beginCell()
-        .storeAddress(defiBankAddress)
-        .storeAddress(defiDualAddress)
+        .storeAddress(marketAddress)
+        .storeAddress(foundryAddress)
+        .storeAddress(defiTreasuryAddress)
         .endCell();
 
     contract.setData(
         beginCell()
-            .storeAddress(managerAddress)
             .storeAddressOpt(walletAddress)
             .storeRef(targets)
             .endCell()
     );
 }
 
-// -----------------------------------------------------
-// ОТПРАВКА DOM через свой wallet (новый формат v2)
-// -----------------------------------------------------
-fun sendJettons(
-    toAddress: address,
-    amount: int,
-    queryId: int
-) {
+fun sendJettons(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
 
     assert(walletAddress != null, ERROR_NOT_VALID_WALLET);
 
-    var currentWalletAddress = walletAddress!;
-
-    var msgBody = beginCell()
-        .storeUint(OP_TRANSFER, 32)
-        .storeUint(queryId, 64)
+    var body = beginCell()
+        .storeUnit(OP_TRANSFER, 32)
+        .storeUnit(queryId, 64)
         .storeCoins(amount)
         .storeAddress(toAddress)
-        .storeAddress(toAddress)
+        .storeAddress(contract.getAddress())
         .storeCoins(GIVER_MAX_FEE_DOM)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeAddress(currentWalletAddress)
+        .storeAddress(walletAddress!)
         .storeCoins(MIN_TON_FOR_TRANSFER)
-        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(msgBody)
+        .storeRef(body)
         .endCell();
 
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// РАСПРЕДЕЛЕНИЕ 50/50
-// -----------------------------------------------------
 fun autoDistribute(amount: int, queryId: int) {
-    var feeReserve = GIVER_MAX_FEE_DOM * 2;
-
-    assert(
-        amount > feeReserve * 2,
-        ERROR_INVALID_AMOUNT
-    );
+    var feeReserve = GIVER_MAX_FEE_DOM * 3;
+    asert(amount > feeReserve, ERROR_INVALID_AMOUNT);
 
     var distributable = amount - feeReserve;
-    var half = distributable / 2;
-    var remainder = distributable - half;
 
-    sendJettons(defiBankAddress, half, queryId);
-    sendJettons(defiDualAddress, remainder, queryId + 1);
+    var marketPart = distributable * 20 / 100;
+    var foundryPart = distributable * 40 / 100;
+    var defiPart = distributable - marketPart - foundryPart;
+
+    sendJettons(marketAddress, marketPart, queryId);
+    sendJettons(foundryAddress, foundryPart, queryId + 1);
+    sendJettons(defiTreasuryAddress, defiPart, queryId + 2);
 }
 
-// -----------------------------------------------------
-// MAIN
-// -----------------------------------------------------
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
-
     if (msgBody.isEmpty()) {
         return;
     }
@@ -124,25 +86,13 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // =====================================================
-    // OP_TRANSFER_NOTIFICATION — получили DOM
-    // body: amount | fromOwner
-    // =====================================================
     if (op == OP_TRANSFER_NOTIFICATION) {
-        assert(
-            walletAddress != null,
-            ERROR_NOT_VALID_WALLET
-        );
-
-        assert(
-            senderAddress == walletAddress!,
-            ERROR_NOT_OWNER
-        );
+        assert(walletAddress != null, ERROR_NOT_VALID_WALLET);
+        assert(senderAddress == walletAddress!, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
         var fromAddress = msgBody.loadAddress();
 
-        // Рефанд от gas_pool — не распределяем повторно
         if (fromAddress == contract.getAddress()) {
             return;
         }
@@ -151,51 +101,22 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_SET_WALLET — manager only
-    // =====================================================
     if (op == OP_SET_WALLET) {
-        assert(
-            senderAddress == managerAddress,
-            ERROR_NOT_MANAGER
-        );
-
+        assert(senderAddress == managerAddress, ERROR_NOT_MANAGER);
         walletAddress = msgBody.loadAddress();
         saveData();
         return;
     }
 
-    // =====================================================
-    // OP_CHANGE_WHITELIST — manager only
-    // =====================================================
-    if (op == OP_CHANGE_WHITELIST) {
-        assert(
-            senderAddress == managerAddress,
-            ERROR_NOT_MANAGER
-        );
-
-        defiBankAddress = msgBody.loadAddress();
-        defiDualAddress = msgBody.loadAddress();
-
-        saveData();
-        return;
-    }
-
-    throw(0xffff);
 }
 
-// -----------------------------------------------------
-// GETTERS
-// -----------------------------------------------------
-get fun getGiverData(): (
-    address, address?, address, address
-) {
+get fun getGiverData(): (address, address?, address, address, address) {
     loadData();
 
     return (
-        managerAddress,
         walletAddress,
-        defiBankAddress,
-        defiDualAddress
+        marketAddress,
+        foundryAddress,
+        defiTreasuryAddress
     );
 }

@@ -20,10 +20,11 @@ const MAX_SUPPLY: int = 1000000000000000;
 // РАСПРЕДЕЛЕНИЕ МИНТА МЕЖДУ 4 ГИВЕРАМИ
 // -----------------------------------------------------
 const GIVERS_COUNT: int = 4;
-const SHARE_ALLODIUM: int = 30;
-const SHARE_DEFI: int = 20;
+const SHARE_ALLODIUM: int = 25;
+const SHARE_DEFI: int = 25;
 const SHARE_DAO: int = 25;
 const SHARE_DOMINUM: int = 25;
+
 
 // -----------------------------------------------------
 // ПАРАМЕТРЫ МИНТА DOM
@@ -44,16 +45,13 @@ const MAX_MINT_AMOUNT: int = 1000000000000;
 // TON — то что физически берёт блокчейн
 // -----------------------------------------------------
 
-// Минимум TON который юзер прикладывает к transfer
-// Излишек возвращается через responseDestination
-const MIN_TON_FOR_TRANSFER: int = 50000000;  // 0.05 TON
+const MIN_TON_FOR_STORAGE: int = 5000000;    // 0.005 TON
+const BASE_TON_COST: int = 5000000;          // 0.005 TON
+const MIN_TON_FOR_TRANSFER: int = 20000000;  // запас на цепочку сообщений
 
-// Минимум для служебных сообщений (set, update и т.д.)
-const MIN_TON_FOR_STORAGE: int = 10000000;   // 0.01 TON
+const MIN_DOM_TRANSFER_FEE: int = ONE_DOM;       // 1 DOM
+const MAX_DOM_TRANSFER_FEE: int = ONE_DOM * 3;   // 3 DOM
 
-// Базовая цена блокчейна за 1 transfer
-// gas_pool реально платит эту сумму за цепь сообщений
-const BASE_TON_COST: int = 50000000;          // 0.05 TON
 
 // -----------------------------------------------------
 // НАЛОГ СИСТЕМЫ — берём в 3 раза больше чем блокчейн
@@ -101,21 +99,8 @@ const GIVER_MAX_FEE_DOM: int = 3000000;
 // Курс обмена: 1 DOM = 100 ALLOD
 const EXCHANGE_RATE_DOM_TO_ALLOD: int = 100;
 
-// =====================================================
-// ФОРМУЛА КОМИССИИ (для справки, кодом считает wallet/gas_pool)
-// =====================================================
-// tonFee = BASE_TON_COST * TAX_MULTIPLIER / TAX_MULTIPLIER_DENOM
-//        = 50_000_000 * 300 / 100 = 150_000_000 nanoTON (0.15 TON)
-//
-// domFee = tonFee * domPerTonRate / NANO_TON
-//        (domPerTonRate хранится в fee-config gas_pool)
-//
-// При стартовом курсе 1 TON = 10 DOM:
-//   domFee = 150_000_000 * 10_000_000 / 1_000_000_000
-//          = 1_500_000 min-units = 1.5 DOM за transfer
-//
-// Распределение этой комиссии (юзер отдал 1.5 DOM):
-//   0.5 DOM эквивалент → расход на блокчейн (потом конверт в TON)
-//   0.5 DOM            → gas_pool buffer
-//   0.5 DOM            → DAO treasury
-// =====================================================
+const LOCK_MONTHS: int = 12;
+const SECONDS_PER_MONTH: int = 2592000;
+
+const OP_UNLOCK_MONTH: int = 0xF0;
+const OP_SET_RELEASE: int = 0xF1;
