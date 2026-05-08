@@ -18,7 +18,6 @@ import "../core/constants.tolk";
 // -----------------------------------------------------
 // STORAGE
 // -----------------------------------------------------
-global managerAddress: address;
 global walletAddress: address?;
 global bankDaoAddress: address;
 global daoFoundationAddress: address;
@@ -28,8 +27,6 @@ global daoFoundationAddress: address;
 // -----------------------------------------------------
 fun loadData() {
     var ds = contract.getData().beginParse();
-
-    managerAddress = ds.loadAddress();
     walletAddress = ds.loadAddressOpt();
 
     var targets = ds.loadRef().beginParse();
@@ -45,7 +42,6 @@ fun saveData() {
 
     contract.setData(
         beginCell()
-            .storeAddress(managerAddress)
             .storeAddressOpt(walletAddress)
             .storeRef(targets)
             .endCell()
@@ -150,37 +146,6 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_SET_WALLET — manager only
-    // =====================================================
-    if (op == OP_SET_WALLET) {
-        assert(
-            senderAddress == managerAddress,
-            ERROR_NOT_MANAGER
-        );
-
-        walletAddress = msgBody.loadAddress();
-        saveData();
-        return;
-    }
-
-    // =====================================================
-    // OP_CHANGE_WHITELIST — manager only
-    // =====================================================
-    if (op == OP_CHANGE_WHITELIST) {
-        assert(
-            senderAddress == managerAddress,
-            ERROR_NOT_MANAGER
-        );
-
-        bankDaoAddress = msgBody.loadAddress();
-        daoFoundationAddress = msgBody.loadAddress();
-
-        saveData();
-        return;
-    }
-
-    throw(0xffff);
 }
 
 // -----------------------------------------------------
@@ -192,7 +157,7 @@ get fun getGiverData(): (
     loadData();
 
     return (
-        managerAddress,
+    
         walletAddress,
         bankDaoAddress,
         daoFoundationAddress

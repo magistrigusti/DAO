@@ -80,3 +80,23 @@ fun lockIncoming(amount: int) {
     totalReceived += amount;
     totalLocked += amount;
 }
+
+fun sendDom(toAddress: address, amount: int, queryId: int) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var body = beginCell()
+        .storeUint(OP_TRANSFER, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeAddress(toAddress)
+        .storeAddress(contract.getAddress())
+        .storeCoins(GIVER_MAX_FEE_DOM)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(walletAddress)
+        .storeCoins(MIN_TON_FOR_TRANSFER)
+}

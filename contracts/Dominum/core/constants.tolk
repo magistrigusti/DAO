@@ -25,6 +25,15 @@ const SHARE_DEFI: int = 25;
 const SHARE_DAO: int = 25;
 const SHARE_DOMINUM: int = 25;
 
+// -----------------------------------------------------
+// Слоты активных гиверов в Master.
+// GiverManager меняет адрес самого гивера по номеру слота.
+// -----------------------------------------------------
+const GIVER_SLOT_ALLODIUM: int = 1;
+const GIVER_SLOT_DEFI: int = 2;
+const GIVER_SLOT_DAO: int = 3;
+const GIVER_SLOT_DOMINUM: int = 4;
+
 
 // -----------------------------------------------------
 // ПАРАМЕТРЫ МИНТА DOM
@@ -88,7 +97,9 @@ const NANO_TON: int = 1000000000;
 // -----------------------------------------------------
 // Giver'ы не знают текущего курса gas_pool, поэтому
 // при отправке трансфера указывают консервативный
-// maxFeeDom. Излишек вернётся рефандом в giver-wallet.
+// maxFeeDom. Излишек вернётся рефандом в gigiver_manager.tolk
+
+переписал под замену гивера через Master.ver-wallet.
 // 3 DOM = 2x от ожидаемой комиссии при стартовом курсе
 // (1.5 DOM * 2). Защита от резкого роста курса DOM/TON.
 const GIVER_MAX_FEE_DOM: int = 3000000;

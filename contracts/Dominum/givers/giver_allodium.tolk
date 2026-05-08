@@ -28,8 +28,6 @@ global allodiumFoundationAddress: address;
 // -----------------------------------------------------
 fun loadData() {
     var ds = contract.getData().beginParse();
-
-    managerAddress = ds.loadAddress();
     walletAddress = ds.loadAddressOpt();
 
     var targets = ds.loadRef().beginParse();
@@ -45,7 +43,6 @@ fun saveData() {
 
     contract.setData(
         beginCell()
-            .storeAddress(managerAddress)
             .storeAddressOpt(walletAddress)
             .storeRef(targets)
             .endCell()
@@ -160,37 +157,6 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_SET_WALLET — выставить walletAddress (manager only)
-    // =====================================================
-    if (op == OP_SET_WALLET) {
-        assert(
-            senderAddress == managerAddress,
-            ERROR_NOT_MANAGER
-        );
-
-        walletAddress = msgBody.loadAddress();
-        saveData();
-        return;
-    }
-
-    // =====================================================
-    // OP_CHANGE_WHITELIST — сменить получателей (manager only)
-    // =====================================================
-    if (op == OP_CHANGE_WHITELIST) {
-        assert(
-            senderAddress == managerAddress,
-            ERROR_NOT_MANAGER
-        );
-
-        frsAllodiumAddress = msgBody.loadAddress();
-        allodiumFoundationAddress = msgBody.loadAddress();
-
-        saveData();
-        return;
-    }
-
-    throw(0xffff);
 }
 
 // -----------------------------------------------------
@@ -202,7 +168,6 @@ get fun getGiverData(): (
     loadData();
 
     return (
-        managerAddress,
         walletAddress,
         frsAllodiumAddress,
         allodiumFoundationAddress

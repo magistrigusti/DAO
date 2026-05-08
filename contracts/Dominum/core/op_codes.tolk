@@ -23,6 +23,7 @@ const OP_MINT: int = 0x15;
 const OP_SEND_JETTONS: int = 0x20;
 const OP_CHANGE_WHITELIST: int = 0x40;
 const OP_SET_WALLET: int = 0x41;
+const OP_REPLACE_GIVER: int = 0x42;
 
 // =====================================================
 // TREASURY / BANK ОПЕРАЦИИ
