@@ -2,6 +2,16 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
+// =====================================================
+// MASTER DOM
+// =====================================================
+// Master минтит DOM и распределяет mint между 4 активными гиверами.
+// GiverManager не меняет адреса внутри гиверов.
+// GiverManager только шлет запрос:
+// oldGiverAddress -> newGiverAddress.
+// Master сам подтверждает, что oldGiverAddress сейчас активный.
+// =====================================================
+
 global totalSupply: int;
 global ownerAddress: address;
 global lastMintTime: int;
@@ -21,22 +31,22 @@ global jettonWalletCode: cell;
 fun loadData() {
     var ds = contract.getData().beginParse();
 
-    totalSupply = ds.loadCoiuns();
+    totalSupply = ds.loadCoins();
     ownerAddress = ds.loadAddress();
     lastMintTime = ds.loadUint(64);
     isStarted = ds.loadBool();
 
-    gaspoolAddress = ds.loadAddress();
+    gasPoolAddress = ds.loadAddress();
     giverManagerAddress = ds.loadAddress();
 
     var giversFirst = ds.loadRef().beginParse();
-    var giverSecond = ds.loadRef().beginParse();
+    var giversSecond = ds.loadRef().beginParse();
 
     giverAllodiumAddress = giversFirst.loadAddress();
     giverDefiAddress = giversFirst.loadAddress();
 
-    giverDaoAddress = giverSecond.loadAddress();
-    giverDominumAddress = giverSecond.loadAddress();
+    giverDaoAddress = giversSecond.loadAddress();
+    giverDominumAddress = giversSecond.loadAddress();
 
     content = ds.loadRef();
     jettonWalletCode = ds.loadRef();
@@ -53,7 +63,7 @@ fun saveData() {
         .storeAddress(giverDominumAddress)
         .endCell();
 
-    constract.setData(
+    contract.setData(
         beginCell()
             .storeCoins(totalSupply)
             .storeAddress(ownerAddress)
@@ -121,7 +131,7 @@ fun replaceGiverAddress(
         return;
     }
 
-    if (oldGiverAddress == giverDoaAddress) {
+    if (oldGiverAddress == giverDaoAddress) {
         giverDaoAddress = newGiverAddress;
         return;
     }
@@ -139,7 +149,7 @@ fun canMintInternal(): bool {
         return true;
     }
 
-    return blockchain.now() >= lastMintTime + MINT_INTERNAL;
+    return blockchain.now() >= lastMintTime + MINT_INTERVAL;
 }
 
 fun sendToWallet(
@@ -175,7 +185,7 @@ fun sendToWallet(
 
 fun mintJettons(
     amount: int,
-    quryId: int,
+    queryId: int,
     msgValue: int
 ) {
     assert(
@@ -191,13 +201,14 @@ fun mintJettons(
     var amountDefi = amount * SHARE_DEFI / 100;
     var amountDao = amount * SHARE_DAO / 100;
 
-    var amountDominum = amount - amountAllodium - amountDefi - amountDao;
+    var amountDominum =
+        amount - amountAllodium - amountDefi - amountDao;
 
-    var tonPer = msgValue /GIVERS_COUNT;
+    var tonPer = msgValue / GIVERS_COUNT;
     var tonRemainder = msgValue - tonPer * GIVERS_COUNT;
 
     sendToWallet(
-        giverAlodiumAddress,
+        giverAllodiumAddress,
         amountAllodium,
         queryId,
         tonPer + tonRemainder
@@ -225,7 +236,7 @@ fun mintJettons(
     );
 }
 
-fun onInternalMessage(id: InMessage) {
+fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
     if (msgBody.isEmpty()) {
@@ -261,5 +272,123 @@ fun onInternalMessage(id: InMessage) {
         var amount = msgBody.loadCoins();
 
         assert(amount >= MIN_MINT_AMOUNT, ERROR_INVALID_AMOUNT);
+        assert(amount <= MAX_MINT_AMOUNT, ERROR_LIMIT_EXCEEDED);
+        assert(canMintInternal(), ERROR_TOO_EARLY);
+
+        var requiredTon = MIN_TON_FOR_TRANSFER * GIVERS_COUNT;
+        assert(msgValue >= requiredTon, ERROR_INSUFFICIENT_GAS);
+
+        if (!isStarted) {
+            isStarted = true;
+        }
+
+        lastMintTime = blockchain.now();
+
+        mintJettons(
+            amount,
+            queryId,
+            msgValue
+        );
+
+        saveData();
+        return;
     }
+
+    if (op == OP_BURN_NOTIFICATION) {
+        var burnAmount = msgBody.loadCoins();
+        var fromOwner = msgBody.loadAddress();
+
+        var expectedWallet = calculateWalletAddress(
+            calculateWalletStateInit(fromOwner)
+        );
+
+        assert(senderAddress == expectedWallet, ERROR_NOT_VALID_WALLET);
+        assert(totalSupply >= burnAmount, ERROR_INSUFFICIENT_BALANCE);
+
+        totalSupply = totalSupply - burnAmount;
+        saveData();
+
+        var responseAddress = msgBody.loadAddressOpt();
+
+        if (responseAddress != null) {
+            var msg = beginCell()
+                .storeUint(0x10, 6)
+                .storeAddress(responseAddress)
+                .storeCoins(0)
+                .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                .storeUint(OP_EXCESSES, 32)
+                .storeUint(queryId, 64)
+                .endCell();
+
+            sendRawMessage(msg, 64 + 2);
+        }
+
+        return;
+    }
+
+    throw(0xffff);
+}
+
+get fun getJettonData(): (int, int, address, cell, cell) {
+    loadData();
+
+    return (
+        totalSupply,
+        -1,
+        ownerAddress,
+        content,
+        jettonWalletCode
+    );
+}
+
+get fun getWalletAddress(ownerAddress: address): address {
+    loadData();
+
+    return calculateWalletAddress(
+        calculateWalletStateInit(ownerAddress)
+    );
+}
+
+get fun getMasterData(): (address, address, address, int, int, bool) {
+    loadData();
+
+    var nextMintTime = 0;
+
+    if (isStarted) {
+        nextMintTime = lastMintTime + MINT_INTERVAL;
+    }
+
+    return (
+        ownerAddress,
+        gasPoolAddress,
+        giverManagerAddress,
+        lastMintTime,
+        nextMintTime,
+        isStarted
+    );
+}
+
+get fun getMintRules(): (int, int, int) {
+    return (
+        MIN_MINT_AMOUNT,
+        MAX_MINT_AMOUNT,
+        MINT_INTERVAL
+    );
+}
+
+get fun canMintNow(): bool {
+    loadData();
+
+    return canMintInternal();
+}
+
+get fun getGiversData(): (address, address, address, address) {
+    loadData();
+
+    return (
+        giverAllodiumAddress,
+        giverDefiAddress,
+        giverDaoAddress,
+        giverDominumAddress
+    );
 }
