@@ -5,11 +5,10 @@ import "../core/constants.tolk";
 // =====================================================
 // MASTER DOM
 // =====================================================
-// Master минтит DOM и распределяет mint между 4 активными гиверами.
-// GiverManager не меняет адреса внутри гиверов.
-// GiverManager только шлет запрос:
-// oldGiverAddress -> newGiverAddress.
-// Master сам подтверждает, что oldGiverAddress сейчас активный.
+// Mint разрешён только от текущего Minter.
+// MinterManager может заменить Minter только через проверку old -> new.
+// GiverManager может заменить активный Giver только через проверку old -> new.
+// Получатели внутри гиверов не меняются никогда.
 // =====================================================
 
 global totalSupply: int;
@@ -18,6 +17,9 @@ global lastMintTime: int;
 global isStarted: bool;
 
 global gasPoolAddress: address;
+
+global minterAddress: address;
+global minterManagerAddress: address;
 global giverManagerAddress: address;
 
 global giverAllodiumAddress: address;
@@ -37,6 +39,9 @@ fun loadData() {
     isStarted = ds.loadBool();
 
     gasPoolAddress = ds.loadAddress();
+
+    minterAddress = ds.loadAddress();
+    minterManagerAddress = ds.loadAddress();
     giverManagerAddress = ds.loadAddress();
 
     var giversFirst = ds.loadRef().beginParse();
@@ -70,6 +75,8 @@ fun saveData() {
             .storeUint(lastMintTime, 64)
             .storeBool(isStarted)
             .storeAddress(gasPoolAddress)
+            .storeAddress(minterAddress)
+            .storeAddress(minterManagerAddress)
             .storeAddress(giverManagerAddress)
             .storeRef(giversFirst)
             .storeRef(giversSecond)
@@ -109,12 +116,25 @@ fun calculateWalletAddress(stateInit: cell): address {
     );
 }
 
-fun requireOwner(senderAddress: address) {
-    assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+fun requireMinter(senderAddress: address) {
+    assert(senderAddress == minterAddress, ERROR_NOT_MINTER);
+}
+
+fun requireMinterManager(senderAddress: address) {
+    assert(senderAddress == minterManagerAddress, ERROR_NOT_MANAGER);
 }
 
 fun requireGiverManager(senderAddress: address) {
     assert(senderAddress == giverManagerAddress, ERROR_NOT_MANAGER);
+}
+
+fun replaceMinterAddress(
+    oldMinterAddress: address,
+    newMinterAddress: address
+) {
+    assert(oldMinterAddress == minterAddress, ERROR_NOT_MINTER);
+
+    minterAddress = newMinterAddress;
 }
 
 fun replaceGiverAddress(
@@ -207,33 +227,10 @@ fun mintJettons(
     var tonPer = msgValue / GIVERS_COUNT;
     var tonRemainder = msgValue - tonPer * GIVERS_COUNT;
 
-    sendToWallet(
-        giverAllodiumAddress,
-        amountAllodium,
-        queryId,
-        tonPer + tonRemainder
-    );
-
-    sendToWallet(
-        giverDefiAddress,
-        amountDefi,
-        queryId + 1,
-        tonPer
-    );
-
-    sendToWallet(
-        giverDaoAddress,
-        amountDao,
-        queryId + 2,
-        tonPer
-    );
-
-    sendToWallet(
-        giverDominumAddress,
-        amountDominum,
-        queryId + 3,
-        tonPer
-    );
+    sendToWallet(giverAllodiumAddress, amountAllodium, queryId, tonPer + tonRemainder);
+    sendToWallet(giverDefiAddress, amountDefi, queryId + 1, tonPer);
+    sendToWallet(giverDaoAddress, amountDao, queryId + 2, tonPer);
+    sendToWallet(giverDominumAddress, amountDominum, queryId + 3, tonPer);
 }
 
 fun onInternalMessage(in: InMessage) {
@@ -251,23 +248,8 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    if (op == OP_REPLACE_GIVER) {
-        requireGiverManager(senderAddress);
-
-        var oldGiverAddress = msgBody.loadAddress();
-        var newGiverAddress = msgBody.loadAddress();
-
-        replaceGiverAddress(
-            oldGiverAddress,
-            newGiverAddress
-        );
-
-        saveData();
-        return;
-    }
-
     if (op == OP_MINT) {
-        requireOwner(senderAddress);
+        requireMinter(senderAddress);
 
         var amount = msgBody.loadCoins();
 
@@ -284,10 +266,35 @@ fun onInternalMessage(in: InMessage) {
 
         lastMintTime = blockchain.now();
 
-        mintJettons(
-            amount,
-            queryId,
-            msgValue
+        mintJettons(amount, queryId, msgValue);
+        saveData();
+        return;
+    }
+
+    if (op == OP_REPLACE_MINTER) {
+        requireMinterManager(senderAddress);
+
+        var oldMinterAddress = msgBody.loadAddress();
+        var newMinterAddress = msgBody.loadAddress();
+
+        replaceMinterAddress(
+            oldMinterAddress,
+            newMinterAddress
+        );
+
+        saveData();
+        return;
+    }
+
+    if (op == OP_REPLACE_GIVER) {
+        requireGiverManager(senderAddress);
+
+        var oldGiverAddress = msgBody.loadAddress();
+        var newGiverAddress = msgBody.loadAddress();
+
+        replaceGiverAddress(
+            oldGiverAddress,
+            newGiverAddress
         );
 
         saveData();
@@ -349,7 +356,16 @@ get fun getWalletAddress(ownerAddress: address): address {
     );
 }
 
-get fun getMasterData(): (address, address, address, int, int, bool) {
+get fun getMasterData(): (
+    address,
+    address,
+    address,
+    address,
+    address,
+    int,
+    int,
+    bool
+) {
     loadData();
 
     var nextMintTime = 0;
@@ -361,6 +377,8 @@ get fun getMasterData(): (address, address, address, int, int, bool) {
     return (
         ownerAddress,
         gasPoolAddress,
+        minterAddress,
+        minterManagerAddress,
         giverManagerAddress,
         lastMintTime,
         nextMintTime,

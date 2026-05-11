@@ -1,117 +1,85 @@
 // =====================================================
-// КОНСТАНТЫ — Параметры системы DOM
-// =====================================================
-// v2 — комиссия в DOM, считается от текущего курса DOM/TON
+// КОНСТАНТЫ — параметры системы DOM
 // =====================================================
 
 // -----------------------------------------------------
-// ТОКЕН DOM (6 знаков после запятой)
+// TOKEN DOM
 // -----------------------------------------------------
 const DECIMALS: int = 6;
-
-// 1 DOM в минимальных единицах
 const ONE_DOM: int = 1000000;
 
-// Лимит эмиссии: 1 миллиард DOM (в min units)
-// 1_000_000_000 * 10^6 = 1_000_000_000_000_000
+// 1_000_000_000 DOM в минимальных единицах.
 const MAX_SUPPLY: int = 1000000000000000;
 
 // -----------------------------------------------------
-// РАСПРЕДЕЛЕНИЕ МИНТА МЕЖДУ 4 ГИВЕРАМИ
+// РАСПРЕДЕЛЕНИЕ MINT МЕЖДУ 4 ГИВЕРАМИ
 // -----------------------------------------------------
 const GIVERS_COUNT: int = 4;
+
 const SHARE_ALLODIUM: int = 25;
 const SHARE_DEFI: int = 25;
 const SHARE_DAO: int = 25;
 const SHARE_DOMINUM: int = 25;
 
 // -----------------------------------------------------
-// Слоты активных гиверов в Master.
-// GiverManager меняет адрес самого гивера по номеру слота.
+// MINT LIMITS
 // -----------------------------------------------------
-const GIVER_SLOT_ALLODIUM: int = 1;
-const GIVER_SLOT_DEFI: int = 2;
-const GIVER_SLOT_DAO: int = 3;
-const GIVER_SLOT_DOMINUM: int = 4;
+const MIN_MINT_AMOUNT: int = ONE_DOM;
 
-
-// -----------------------------------------------------
-// ПАРАМЕТРЫ МИНТА DOM
-// -----------------------------------------------------
-
-// TESTNET: 1 час между минтами
-// MAINNET: 30 дней = 2_592_000 сек
-const MINT_INTERVAL: int = 3600;
-
-// Минимум за один минт: 1 DOM
-const MIN_MINT_AMOUNT: int = 1000000;
-
-// TESTNET: 1_000_000 DOM за минт
-// MAINNET: 10_000_000 DOM — вернуть перед прод!
+// 1_000_000 DOM за один mint.
 const MAX_MINT_AMOUNT: int = 1000000000000;
 
-// -----------------------------------------------------
-// TON — то что физически берёт блокчейн
-// -----------------------------------------------------
+// Testnet: 1 час.
+// Mainnet: 30 дней.
+// Перед mainnet меняем MINT_INTERVAL на MAINNET_MINT_INTERVAL.
+const TESTNET_MINT_INTERVAL: int = 3600;
+const MAINNET_MINT_INTERVAL: int = 2592000;
 
-const MIN_TON_FOR_STORAGE: int = 5000000;    // 0.005 TON
-const BASE_TON_COST: int = 5000000;          // 0.005 TON
-const MIN_TON_FOR_TRANSFER: int = 20000000;  // запас на цепочку сообщений
-
-const MIN_DOM_TRANSFER_FEE: int = ONE_DOM;       // 1 DOM
-const MAX_DOM_TRANSFER_FEE: int = ONE_DOM * 3;   // 3 DOM
-
+const MINT_INTERVAL: int = TESTNET_MINT_INTERVAL;
 
 // -----------------------------------------------------
-// НАЛОГ СИСТЕМЫ — берём в 3 раза больше чем блокчейн
+// TON GAS / STORAGE
 // -----------------------------------------------------
-// Множитель в сотых (300 = x3.00), чтобы менять без пересчёта
+const MIN_TON_FOR_STORAGE: int = 5000000;
+const BASE_TON_COST: int = 5000000;
+const MIN_TON_FOR_TRANSFER: int = 20000000;
+
+// -----------------------------------------------------
+// DOM FEE
+// -----------------------------------------------------
+const MIN_DOM_TRANSFER_FEE: int = ONE_DOM;
+const MAX_DOM_TRANSFER_FEE: int = ONE_DOM * 3;
+
+// -----------------------------------------------------
+// TAX SYSTEM
+// -----------------------------------------------------
 const TAX_MULTIPLIER: int = 300;
 const TAX_MULTIPLIER_DENOM: int = 100;
 
-// Границы налога для manager/timelock в gas_pool.
-// 100 = x1.00, 1000 = x10.00.
 const MIN_TAX_MULTIPLIER: int = 100;
 const MAX_TAX_MULTIPLIER: int = 1000;
 
-// Как делим «навар» (всё что сверх BASE_TON_COST):
-// 1x базы в gas_pool (на будущие TON-расходы)
-// 1x базы в DAO treasury (наш доход)
 const PROFIT_SHARE_GAS_POOL: int = 1;
 const PROFIT_SHARE_TREASURY: int = 1;
 
 // -----------------------------------------------------
-// КУРС DOM <-> TON (стартовое значение для fee-config gas_pool)
+// DOM / TON RATE
 // -----------------------------------------------------
-// Единица: сколько min-units DOM даёт 1 TON (в нанотонах)
-// Стартовый курс: 1 TON = 10 DOM (цена DOM ≈ $0.10)
-// 10 DOM = 10 * 1_000_000 = 10_000_000 min-units за 1 TON
-// Позже заменим на чтение из market_maker AMM pool
 const INITIAL_DOM_PER_TON: int = 10000000;
-
-// Делитель: 1 TON = 10^9 нанотонов
 const NANO_TON: int = 1000000000;
 
 // -----------------------------------------------------
-// GIVER — консервативный потолок комиссии в DOM
+// GIVER
 // -----------------------------------------------------
-// Giver'ы не знают текущего курса gas_pool, поэтому
-// при отправке трансфера указывают консервативный
-// maxFeeDom. Излишек вернётся рефандом в gigiver_manager.tolk
-
-переписал под замену гивера через Master.ver-wallet.
-// 3 DOM = 2x от ожидаемой комиссии при стартовом курсе
-// (1.5 DOM * 2). Защита от резкого роста курса DOM/TON.
 const GIVER_MAX_FEE_DOM: int = 3000000;
 
 // -----------------------------------------------------
-// FRS — Fractional Reserve System (DOM ↔ ALLOD)
+// FRS — DOM <-> ALLOD
 // -----------------------------------------------------
-// Курс обмена: 1 DOM = 100 ALLOD
 const EXCHANGE_RATE_DOM_TO_ALLOD: int = 100;
 
+// -----------------------------------------------------
+// LOCK
+// -----------------------------------------------------
 const LOCK_MONTHS: int = 12;
 const SECONDS_PER_MONTH: int = 2592000;
-
-const OP_UNLOCK_MONTH: int = 0xF0;
-const OP_SET_RELEASE: int = 0xF1;
