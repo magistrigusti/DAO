@@ -83,3 +83,8 @@ const EXCHANGE_RATE_DOM_TO_ALLOD: int = 100;
 // -----------------------------------------------------
 const LOCK_MONTHS: int = 12;
 const SECONDS_PER_MONTH: int = 2592000;
+
+
+const PENDING_NONE: int = 0;
+const PENDING_ADDRESS: int = 1;
+const PENDING_TAX: int = 2;

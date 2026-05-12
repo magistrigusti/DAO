@@ -85,3 +85,8 @@ const OP_REMOVE_WHITELIST: int = 0xE1;
 // =====================================================
 const OP_UNLOCK_MONTH: int = 0xF0;
 const OP_SET_RELEASE: int = 0xF1;
+
+const OP_REPLACE_TREASURY_ADDRESS: int = 0x56;
+const OP_CONFIRM_TREASURY_REQUEST: int = 0x57;
+const OP_CANCEL_TREASURY_REQUEST: int = 0x58;
+
