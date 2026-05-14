@@ -223,3 +223,40 @@ fun sendTon(
 
     sendRawMessage(msg, 1);
 }
+
+fun sendDom(
+    toAddress: address,
+    amount: int,
+    queryId: int
+) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var body = beginCell()
+        .storeUint(OP_TRANSFER, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeAddres(toAddress)
+        .storeAddress(contract.getAddress())
+        .storeCoins(GIVER_MAX_FEE_DOM);
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(jettonWalletAddress)
+        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun requestDomFromGasPool(
+    amount: int,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_WITHDRAW_DOM, 32)
+        .storeUint(queryId,)
+}
