@@ -2,8 +2,18 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
+// =====================================================
+// TREASURY POOL — казна налогов DOM.
+// =====================================================
+// Хранит DOM и TON.
+// Принимает DOM-налог только от активного GasPool.
+// Выводит DOM/TON только в банки или в GasPool.
+// TreasuryManager не меняет state напрямую: он отправляет распоряжение.
+// Owner TreasuryPool подтверждает или отменяет распоряжение.
+// =====================================================
+
 global ownerAddress: address;
-global treasuryManagerddress: address;
+global treasuryManagerAddress: address;
 global jettonWalletAddress: address;
 
 global bankDaoAddress: address;
@@ -15,12 +25,12 @@ global taxMultiplier: int;
 
 global totalReceivedDom: int;
 global totalSentDom: int;
-global totalSetTon: int;
+global totalSentTon: int;
 
 global hasPending: bool;
 global pendingKind: int;
-global pendingOldAddress: address;
-global pendingNewAddress: address;
+global pendingOldAddress: address?;
+global pendingNewAddress: address?;
 global pendingOldValue: int;
 global pendingNewValue: int;
 
@@ -31,9 +41,9 @@ fun loadData() {
     treasuryManagerAddress = ds.loadAddress();
     jettonWalletAddress = ds.loadAddress();
 
-    var target = ds.loadRef().baeginParse();
+    var targets = ds.loadRef().beginParse();
     bankDaoAddress = targets.loadAddress();
-    bankDefiAddres = targets.loadAddress();
+    bankDefiAddress = targets.loadAddress();
     bankDominumAddress = targets.loadAddress();
     gasPoolAddress = targets.loadAddress();
 
@@ -46,8 +56,8 @@ fun loadData() {
     var pending = ds.loadRef().beginParse();
     hasPending = pending.loadBool();
     pendingKind = pending.loadUint(8);
-    pendingOldAddress = pending.loadAddress();
-    pendingNewAddress = pending.loadAddress();
+    pendingOldAddress = pending.loadAddressOpt();
+    pendingNewAddress = pending.loadAddressOpt();
     pendingOldValue = pending.loadUint(32);
     pendingNewValue = pending.loadUint(32);
 }
@@ -70,8 +80,8 @@ fun saveData() {
     var pending = beginCell()
         .storeBool(hasPending)
         .storeUint(pendingKind, 8)
-        .storeAddress(pendingOldAddress)
-        .storeAddress(pendingNewAddress)
+        .storeAddressOpt(pendingOldAddress)
+        .storeAddressOpt(pendingNewAddress)
         .storeUint(pendingOldValue, 32)
         .storeUint(pendingNewValue, 32)
         .endCell();
@@ -93,7 +103,7 @@ fun requireOwner(senderAddress: address) {
 }
 
 fun requireTreasuryManager(senderAddress: address) {
-    asert(senderAddress == treasuryManagerAddress, ERROR_NOT_MANAGER);
+    assert(senderAddress == treasuryManagerAddress, ERROR_NOT_MANAGER);
 }
 
 fun isAllowedTarget(candidate: address): bool {
@@ -105,7 +115,7 @@ fun isAllowedTarget(candidate: address): bool {
         return true;
     }
 
-    if (candidate = bankDominumAddress) {
+    if (candidate == bankDominumAddress) {
         return true;
     }
 
@@ -116,13 +126,11 @@ fun isAllowedTarget(candidate: address): bool {
     return false;
 }
 
-fun isKnownTreasuryAddress(candidate: address): bool {
-    return isAllowedTarget(candidate);
-}
-
-fun clearPeding() {
+fun clearPending() {
     hasPending = false;
     pendingKind = PENDING_NONE;
+    pendingOldAddress = null;
+    pendingNewAddress = null;
     pendingOldValue = 0;
     pendingNewValue = 0;
 }
@@ -132,7 +140,7 @@ fun requestAddressChange(
     newAddress: address
 ) {
     assert(!hasPending, ERROR_ALREADY_INITIALIZED);
-    assert(isKnowTreasuryAddress(oldAddress), ERROR_NOT_IN_WHITELIST);
+    assert(isAllowedTarget(oldAddress), ERROR_NOT_IN_WHITELIST);
 
     hasPending = true;
     pendingKind = PENDING_ADDRESS;
@@ -143,45 +151,53 @@ fun requestAddressChange(
 }
 
 fun requestTaxChange(
-    oldTaxMultiplier: int;
+    oldTaxMultiplier: int,
     newTaxMultiplier: int
 ) {
     assert(!hasPending, ERROR_ALREADY_INITIALIZED);
     assert(oldTaxMultiplier == taxMultiplier, ERROR_INVALID_AMOUNT);
     assert(newTaxMultiplier >= MIN_TAX_MULTIPLIER, ERROR_INVALID_AMOUNT);
-    asert(newTaxMultiplier <= MAX_TAX_MULTIPLIER, ERROR_LIMIT_EXCEEDED);
+    assert(newTaxMultiplier <= MAX_TAX_MULTIPLIER, ERROR_LIMIT_EXCEEDED);
 
     hasPending = true;
     pendingKind = PENDING_TAX;
+    pendingOldAddress = null;
+    pendingNewAddress = null;
     pendingOldValue = oldTaxMultiplier;
     pendingNewValue = newTaxMultiplier;
 }
 
 fun applyAddressChange() {
-    if (pendingOldAddress == bankDaoAddress) {
-        bankDaoAddress = pendingNewAddress;
+    assert(pendingOldAddress != null, ERROR_NO_PENDING);
+    assert(pendingNewAddress != null, ERROR_NO_PENDING);
+
+    var oldAddress = pendingOldAddress!;
+    var newAddress = pendingNewAddress!;
+
+    if (oldAddress == bankDaoAddress) {
+        bankDaoAddress = newAddress;
         return;
     }
 
-    if (pendingOldAddress = bankDefiAddress) {
-        bankDefiAddress = pendingNewAddress;
+    if (oldAddress == bankDefiAddress) {
+        bankDefiAddress = newAddress;
         return;
     }
 
-    if (pendingOldAddress == bankDominumAddress) {
-        bankDominumAddress = pendingNewAddress;
+    if (oldAddress == bankDominumAddress) {
+        bankDominumAddress = newAddress;
         return;
     }
 
-    if (pendingOldAddress == gasPoolAddress) {
-        gasPoolAddress = pendingNewAddress;
+    if (oldAddress == gasPoolAddress) {
+        gasPoolAddress = newAddress;
         return;
     }
 
     throw(ERROR_NOT_IN_WHITELIST);
 }
 
-fun sendTasToGasPool(queryId: int) {
+fun sendTaxToGasPool(queryId: int) {
     var body = beginCell()
         .storeUint(OP_CHANGE_TAX, 32)
         .storeUint(queryId, 64)
@@ -195,7 +211,7 @@ fun sendTasToGasPool(queryId: int) {
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
-    
+
     sendRawMessage(msg, 1);
 }
 
@@ -237,15 +253,36 @@ fun sendDom(
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
-        .storeAddres(toAddress)
+        .storeAddress(toAddress)
         .storeAddress(contract.getAddress())
-        .storeCoins(GIVER_MAX_FEE_DOM);
+        .storeCoins(GIVER_MAX_FEE_DOM)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(jettonWalletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun refillGasPool(
+    amount: int,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_TOP_UP, 32)
+        .storeUint(queryId, 64)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(gasPoolAddress)
+        .storeCoins(amount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
 
@@ -258,5 +295,203 @@ fun requestDomFromGasPool(
 ) {
     var body = beginCell()
         .storeUint(OP_WITHDRAW_DOM, 32)
-        .storeUint(queryId,)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(gasPoolAddress)
+        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
+        return;
+    }
+
+    var senderAddress = in.senderAddress;
+    var msgValue = in.valueCoins;
+    var myBalance = contract.getOriginalBalance();
+
+    loadData();
+
+    var op = msgBody.loadUint(32);
+    var queryId = msgBody.loadUint(64);
+
+    if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(senderAddress == jettonWalletAddress, ERROR_NOT_VALID_WALLET);
+
+        var amount = msgBody.loadCoins();
+        var fromAddress = msgBody.loadAddress();
+
+        if (fromAddress == contract.getAddress()) {
+            return;
+        }
+
+        assert(fromAddress == gasPoolAddress, ERROR_NOT_IN_WHITELIST);
+
+        totalReceivedDom = totalReceivedDom + amount;
+        saveData();
+        return;
+    }
+
+    if (op == OP_REPLACE_TREASURY_ADDRESS) {
+        requireTreasuryManager(senderAddress);
+
+        var oldAddress = msgBody.loadAddress();
+        var newAddress = msgBody.loadAddress();
+
+        requestAddressChange(oldAddress, newAddress);
+        saveData();
+        return;
+    }
+
+    if (op == OP_CHANGE_TAX) {
+        requireTreasuryManager(senderAddress);
+
+        var oldTaxMultiplier = msgBody.loadUint(16);
+        var newTaxMultiplier = msgBody.loadUint(16);
+
+        requestTaxChange(oldTaxMultiplier, newTaxMultiplier);
+        saveData();
+        return;
+    }
+
+    if (op == OP_CONFIRM_TREASURY_REQUEST) {
+        requireOwner(senderAddress);
+        assert(hasPending, ERROR_NO_PENDING);
+
+        if (pendingKind == PENDING_ADDRESS) {
+            applyAddressChange();
+        }
+
+        if (pendingKind == PENDING_TAX) {
+            taxMultiplier = pendingNewValue;
+            sendTaxToGasPool(queryId);
+        }
+
+        clearPending();
+        saveData();
+        return;
+    }
+
+    if (op == OP_CANCEL_TREASURY_REQUEST) {
+        requireOwner(senderAddress);
+        assert(hasPending, ERROR_NO_PENDING);
+
+        clearPending();
+        saveData();
+        return;
+    }
+
+    if (op == OP_WITHDRAW) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadAddress();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
+        assert(amount + MIN_TON_FOR_STORAGE <= myBalance, ERROR_INSUFFICIENT_BALANCE);
+
+        totalSentTon = totalSentTon + amount;
+        saveData();
+
+        sendTon(toAddress, amount, queryId);
+        return;
+    }
+
+    if (op == OP_WITHDRAW_JETTONS) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadAddress();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
+        assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
+
+        totalSentDom = totalSentDom + amount;
+        saveData();
+
+        sendDom(toAddress, amount, queryId);
+        return;
+    }
+
+    if (op == OP_REFILL_POOL) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(amount + MIN_TON_FOR_STORAGE <= myBalance, ERROR_INSUFFICIENT_BALANCE);
+
+        totalSentTon = totalSentTon + amount;
+        saveData();
+
+        refillGasPool(amount, queryId);
+        return;
+    }
+
+    if (op == OP_WITHDRAW_FROM_POOL) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+
+        requestDomFromGasPool(amount, queryId);
+        return;
+    }
+
+    throw(0xffff);
+}
+
+get fun getTreasuryPoolData(): (
+    address, address, address, address, address, address, address, int, int, int, int
+) {
+    loadData();
+
+    return (
+        ownerAddress,
+        treasuryManagerAddress,
+        jettonWalletAddress,
+        bankDaoAddress,
+        bankDefiAddress,
+        bankDominumAddress,
+        gasPoolAddress,
+        taxMultiplier,
+        totalReceivedDom,
+        totalSentDom,
+        totalSentTon
+    );
+}
+
+get fun getTreasuryPendingData(): (
+    bool, int, address?, address?, int, int
+) {
+    loadData();
+
+    return (
+        hasPending,
+        pendingKind,
+        pendingOldAddress,
+        pendingNewAddress,
+        pendingOldValue,
+        pendingNewValue
+    );
+}
+
+get fun isTreasuryTargetAllowed(candidate: address): bool {
+    loadData();
+    return isAllowedTarget(candidate);
 }
