@@ -1,6 +1,7 @@
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+import "@stdlib/tvm-dicts";
 
 // ========== DOM WALLET v2.3 ==========
 // User transfer body:
@@ -21,7 +22,7 @@ global gasPoolAddress: address; // proxy address
 global jettonWalletCode: cell;
 
 // queryId -> totalSpend
-global pendingTransfers: cell;
+global pendingTransfers: dict;
 
 // -----------------------------------------------------
 // LOAD / SAVE
@@ -39,7 +40,7 @@ fun loadData() {
     if ((bitsLeft > 0) | (refsLeft > 0)) {
         pendingTransfers = ds.loadDict();
     } else {
-        pendingTransfers = beginCell().endCell();
+        pendingTransfers = createEmptyDict();
     }
 }
 
@@ -65,23 +66,22 @@ fun setPendingTransfer(queryId: int, totalSpend: int) {
         .endCell()
         .beginParse();
 
-    pendingTransfers = pendingTransfers.udictSet(64, queryId, value);
+    pendingTransfers.uDictSet(64, queryId, value);
 }
 
-fun getPendingTransfer(queryId: int): (int, bool) {
-    var (value, found) = pendingTransfers.udictGet(64, queryId);
+fun readPendingTransfer(queryId: int): (int, bool) {
+    var (value, found) = pendingTransfers.uDictGet(64, queryId);
     if (!found) {
         return (0, false);
     }
 
-    return (value.loadCoins(), true);
+    var valueSlice = value!;
+
+    return (valueSlice.loadCoins(), true);
 }
 
 fun deletePendingTransfer(queryId: int) {
-    var (newDict, deleted) = pendingTransfers.udictDelete(64, queryId);
-    if (deleted) {
-        pendingTransfers = newDict;
-    }
+    pendingTransfers.uDictDelete(64, queryId);
 }
 
 fun tryClearSettledPending(queryId: int, senderAddress: address) {
@@ -94,7 +94,7 @@ fun tryClearSettledPending(queryId: int, senderAddress: address) {
     }
 
     var originalQueryId = queryId - 2;
-    var (_, found) = getPendingTransfer(originalQueryId);
+    var (_, found) = readPendingTransfer(originalQueryId);
 
     if (found) {
         deletePendingTransfer(originalQueryId);
@@ -190,7 +190,7 @@ fun handleBouncedMessage(msgBody: slice) {
     var bouncedQueryId = msgBody.loadUint(64);
 
     if (bouncedOp == OP_GAS_POOL_EXECUTE) {
-        var (totalSpend, found) = getPendingTransfer(bouncedQueryId);
+        var (totalSpend, found) = readPendingTransfer(bouncedQueryId);
 
         if (found) {
             balance += totalSpend;
@@ -279,7 +279,7 @@ fun onInternalMessage(in: InMessage) {
         assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
         assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
 
-        var (_, pendingExists) = getPendingTransfer(queryId);
+        var (_, pendingExists) = readPendingTransfer(queryId);
         assert(!pendingExists, ERROR_ALREADY_INITIALIZED);
 
         setPendingTransfer(queryId, totalSpend);
@@ -365,5 +365,5 @@ get fun getWalletData(): (
 
 get fun getPendingTransfer(queryId: int): (int, bool) {
     loadData();
-    return getPendingTransfer(queryId);
+    return readPendingTransfer(queryId);
 }

@@ -1,112 +1,104 @@
-// =====================================================
-// GIVER DOMINUM — Автораспределение DOM для Dominum
-// =====================================================
-// При получении жетонов от master (через свой wallet):
-//   50% -> Bank Dominum
-//   50% -> Dominum Foundation
-// Manager может менять whitelist и walletAddress.
-//
-// v2: защита от рекурсии при рефанде из gas_pool.
-// =====================================================
-
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// ========== TOLK MIGRATION v2 ==========
+// GIVER DOMINUM
+// Автоматический сепаратор DOM.
+// Никаких manager/admin внутри нет.
+// Адреса получателей задаются при деплое и не меняются.
 
-// -----------------------------------------------------
-// STORAGE
-// -----------------------------------------------------
-global managerAddress: address;
-global walletAddress: address?;
+global masterAddress: address;
+global gasPoolAddress: address;
+global jettonWalletCode: cell;
+
 global bankDominumAddress: address;
 global dominumFoundationAddress: address;
 
-// -----------------------------------------------------
-// LOAD / SAVE
-// -----------------------------------------------------
 fun loadData() {
     var ds = contract.getData().beginParse();
-    walletAddress = ds.loadAddressOpt();
+
+    masterAddress = ds.loadAddress();
+    gasPoolAddress = ds.loadAddress();
+    jettonWalletCode = ds.loadRef();
 
     var targets = ds.loadRef().beginParse();
+
     bankDominumAddress = targets.loadAddress();
     dominumFoundationAddress = targets.loadAddress();
 }
 
-fun saveData() {
-    var targets = beginCell()
-        .storeAddress(bankDominumAddress)
-        .storeAddress(dominumFoundationAddress)
+fun buildWalletData(owner: address): cell {
+    return beginCell()
+        .storeCoins(0)
+        .storeAddress(owner)
+        .storeAddress(masterAddress)
+        .storeAddress(gasPoolAddress)
+        .storeRef(jettonWalletCode)
         .endCell();
+}
 
-    contract.setData(
-        beginCell()
-            .storeAddressOpt(walletAddress)
-            .storeRef(targets)
-            .endCell()
+fun buildWalletStateInit(owner: address): cell {
+    var walletData = buildWalletData(owner);
+
+    return beginCell()
+        .storeUint(0, 2)
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
+        .storeUint(0, 1)
+        .endCell();
+}
+
+fun buildWalletAddress(owner: address): address {
+    var stateInit = buildWalletStateInit(owner);
+    var workchain = contract.getAddress().getWorkchain();
+
+    return address.fromWorkchainAndHash(
+        workchain,
+        stateInit.hash()
     );
 }
 
-// -----------------------------------------------------
-// ОТПРАВКА DOM через свой wallet (новый формат v2)
-// -----------------------------------------------------
-fun sendJettons(
-    toAddress: address,
-    amount: int,
-    queryId: int
-) {
+fun sendJettons(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
 
-    assert(walletAddress != null, ERROR_NOT_VALID_WALLET);
+    var walletAddress = buildWalletAddress(contract.getAddress());
 
-    var currentWalletAddress = walletAddress!;
-
-    var msgBody = beginCell()
+    var body = beginCell()
         .storeUint(OP_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeAddress(toAddress)
-        .storeAddress(toAddress)
+        .storeAddress(contract.getAddress())
         .storeCoins(GIVER_MAX_FEE_DOM)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeAddress(currentWalletAddress)
+        .storeAddress(walletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(msgBody)
+        .storeRef(body)
         .endCell();
 
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// РАСПРЕДЕЛЕНИЕ 50/50
-// -----------------------------------------------------
 fun autoDistribute(amount: int, queryId: int) {
     var feeReserve = GIVER_MAX_FEE_DOM * 2;
 
-    assert(
-        amount > feeReserve * 2,
-        ERROR_INVALID_AMOUNT
-    );
+    assert(amount > feeReserve, ERROR_INVALID_AMOUNT);
 
     var distributable = amount - feeReserve;
-    var half = distributable / 2;
-    var remainder = distributable - half;
 
-    sendJettons(bankDominumAddress, half, queryId);
-    sendJettons(dominumFoundationAddress, remainder, queryId + 1);
+    var bankPart = distributable / 2;
+    var foundationPart = distributable - bankPart;
+
+    sendJettons(bankDominumAddress, bankPart, queryId);
+    sendJettons(dominumFoundationAddress, foundationPart, queryId + 1);
 }
 
-// -----------------------------------------------------
-// MAIN
-// -----------------------------------------------------
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -121,24 +113,14 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // =====================================================
-    // OP_TRANSFER_NOTIFICATION — получили DOM
-    // =====================================================
     if (op == OP_TRANSFER_NOTIFICATION) {
-        assert(
-            walletAddress != null,
-            ERROR_NOT_VALID_WALLET
-        );
+        var expectedWallet = buildWalletAddress(contract.getAddress());
 
-        assert(
-            senderAddress == walletAddress!,
-            ERROR_NOT_OWNER
-        );
+        assert(senderAddress == expectedWallet, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
         var fromAddress = msgBody.loadAddress();
 
-        // Рефанд от gas_pool — не распределяем повторно
         if (fromAddress == contract.getAddress()) {
             return;
         }
@@ -146,19 +128,23 @@ fun onInternalMessage(in: InMessage) {
         autoDistribute(amount, queryId);
         return;
     }
+
+    throw(0xffff);
 }
 
-// -----------------------------------------------------
-// GETTERS
-// -----------------------------------------------------
 get fun getGiverData(): (
-    address, address?, address, address
+    address,
+    address,
+    address,
+    address,
+    address
 ) {
     loadData();
 
     return (
-       
-        walletAddress,
+        masterAddress,
+        gasPoolAddress,
+        buildWalletAddress(contract.getAddress()),
         bankDominumAddress,
         dominumFoundationAddress
     );

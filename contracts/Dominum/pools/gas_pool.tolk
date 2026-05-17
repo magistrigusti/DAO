@@ -6,7 +6,7 @@ global treasuryPoolAddress: address;
 global masterAddress: address;
 global jettonWalletCode: cell;
 
-global taxMultiplier: int,
+global taxMultiplier: int;
 
 global totalReceivedDom: int;
 global totalSpentTon: int;
@@ -41,7 +41,7 @@ fun saveData() {
 }
 
 fun requireTreasuryPool(senderAddress: address) {
-    assert(senderAddress = treasuryPoolAddress, ERROR_NOT_OWNER);
+    assert(senderAddress == treasuryPoolAddress, ERROR_NOT_OWNER);
 }
 
 fun buildWalletData(owner: address): cell {
@@ -112,7 +112,7 @@ fun sendInternalTransfer(
         .storeAddress(fromOwner)
         .storeCoins(0)
         .storeBool(false)
-        .endell();
+        .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
@@ -121,7 +121,7 @@ fun sendInternalTransfer(
         .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
         .storeRef(stateInit)
         .storeRef(body)
-        .endell();
+        .endCell();
 
     sendRawMessage(msg, 1);
 }
@@ -177,11 +177,11 @@ fun executeTransfer(
         toOwner,
         jettonAmount,
         fromOwner,
-        query + 1
+        queryId + 1
     );
 
     sendInternalTransfer(
-        contract.getAdress(),
+        contract.getAddress(),
         feeDom,
         fromOwner,
         queryId + 2
@@ -196,7 +196,7 @@ fun executeTransfer(
         );
     }
 
-    totalSpendTon = totalSpentTon + tonBudget;
+    totalSpentTon = totalSpentTon + tonBudget;
     totalExecuted = totalExecuted + 1;
 
     saveData();
@@ -235,9 +235,9 @@ fun onInternalMessage(in: InMessage) {
     }
 
     if (op == OP_TRANSFER_NOTIFICATION) {
-        var poolWallet = buildWalletAddress(contract.getAdress());
+        var poolWallet = buildWalletAddress(contract.getAddress());
 
-        assert(senderAddress == poolWallet, ERROR_NOTVALID_WALLET);
+        assert(senderAddress == poolWallet, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
         var fromAddress = msgBody.loadAddress();
@@ -273,7 +273,7 @@ fun onInternalMessage(in: InMessage) {
         requireTreasuryPool(senderAddress);
         var amount = msgBody.loadCoins();
 
-        assert(amount > 0, ERROR_INVALIUD_AMOUNT);
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
 
         sendDomFromPoolWallet(amount, queryId);
         return;
@@ -293,7 +293,7 @@ get fun getGasPoolData(): (
         taxMultiplier,
         totalReceivedDom,
         totalSpentTon,
-        totalExcuted,
+        totalExecuted,
         contract.getOriginalBalance()
     );
 }

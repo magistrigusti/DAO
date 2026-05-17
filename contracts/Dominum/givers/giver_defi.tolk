@@ -2,33 +2,66 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-global walletAddress: address?;
+// GIVER DEFI
+// Автоматический сепаратор DOM.
+// Никаких manager/admin внутри нет.
+// Адреса получателей задаются при деплое и не меняются.
+//
+// Текущая доля:
+// 20% -> Market
+// 40% -> Foundry
+// 40% -> DeFi Treasury
+
+global masterAddress: address;
+global gasPoolAddress: address;
+global jettonWalletCode: cell;
+
 global marketAddress: address;
 global foundryAddress: address;
 global defiTreasuryAddress: address;
 
 fun loadData() {
     var ds = contract.getData().beginParse();
-    walletAddress = ds.loadAddressOpt();
+
+    masterAddress = ds.loadAddress();
+    gasPoolAddress = ds.loadAddress();
+    jettonWalletCode = ds.loadRef();
 
     var targets = ds.loadRef().beginParse();
+
     marketAddress = targets.loadAddress();
     foundryAddress = targets.loadAddress();
     defiTreasuryAddress = targets.loadAddress();
 }
 
-fun saveData() {
-    var targets = beginCell()
-        .storeAddress(marketAddress)
-        .storeAddress(foundryAddress)
-        .storeAddress(defiTreasuryAddress)
+fun buildWalletData(owner: address): cell {
+    return beginCell()
+        .storeCoins(0)
+        .storeAddress(owner)
+        .storeAddress(masterAddress)
+        .storeAddress(gasPoolAddress)
+        .storeRef(jettonWalletCode)
         .endCell();
+}
 
-    contract.setData(
-        beginCell()
-            .storeAddressOpt(walletAddress)
-            .storeRef(targets)
-            .endCell()
+fun buildWalletStateInit(owner: address): cell {
+    var walletData = buildWalletData(owner);
+
+    return beginCell()
+        .storeUint(0, 2)
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
+        .storeUint(0, 1)
+        .endCell();
+}
+
+fun buildWalletAddress(owner: address): address {
+    var stateInit = buildWalletStateInit(owner);
+    var workchain = contract.getAddress().getWorkchain();
+
+    return address.fromWorkchainAndHash(
+        workchain,
+        stateInit.hash()
     );
 }
 
@@ -37,11 +70,11 @@ fun sendJettons(toAddress: address, amount: int, queryId: int) {
         return;
     }
 
-    assert(walletAddress != null, ERROR_NOT_VALID_WALLET);
+    var walletAddress = buildWalletAddress(contract.getAddress());
 
     var body = beginCell()
-        .storeUnit(OP_TRANSFER, 32)
-        .storeUnit(queryId, 64)
+        .storeUint(OP_TRANSFER, 32)
+        .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeAddress(toAddress)
         .storeAddress(contract.getAddress())
@@ -50,8 +83,9 @@ fun sendJettons(toAddress: address, amount: int, queryId: int) {
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeAddress(walletAddress!)
+        .storeAddress(walletAddress)
         .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
 
@@ -60,21 +94,23 @@ fun sendJettons(toAddress: address, amount: int, queryId: int) {
 
 fun autoDistribute(amount: int, queryId: int) {
     var feeReserve = GIVER_MAX_FEE_DOM * 3;
-    asert(amount > feeReserve, ERROR_INVALID_AMOUNT);
+
+    assert(amount > feeReserve, ERROR_INVALID_AMOUNT);
 
     var distributable = amount - feeReserve;
 
     var marketPart = distributable * 20 / 100;
     var foundryPart = distributable * 40 / 100;
-    var defiPart = distributable - marketPart - foundryPart;
+    var treasuryPart = distributable - marketPart - foundryPart;
 
     sendJettons(marketAddress, marketPart, queryId);
     sendJettons(foundryAddress, foundryPart, queryId + 1);
-    sendJettons(defiTreasuryAddress, defiPart, queryId + 2);
+    sendJettons(defiTreasuryAddress, treasuryPart, queryId + 2);
 }
 
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
+
     if (msgBody.isEmpty()) {
         return;
     }
@@ -87,8 +123,9 @@ fun onInternalMessage(in: InMessage) {
     var queryId = msgBody.loadUint(64);
 
     if (op == OP_TRANSFER_NOTIFICATION) {
-        assert(walletAddress != null, ERROR_NOT_VALID_WALLET);
-        assert(senderAddress == walletAddress!, ERROR_NOT_VALID_WALLET);
+        var expectedWallet = buildWalletAddress(contract.getAddress());
+
+        assert(senderAddress == expectedWallet, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
         var fromAddress = msgBody.loadAddress();
@@ -101,20 +138,23 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    if (op == OP_SET_WALLET) {
-        assert(senderAddress == managerAddress, ERROR_NOT_MANAGER);
-        walletAddress = msgBody.loadAddress();
-        saveData();
-        return;
-    }
-
+    throw(0xffff);
 }
 
-get fun getGiverData(): (address, address?, address, address, address) {
+get fun getGiverData(): (
+    address,
+    address,
+    address,
+    address,
+    address,
+    address
+) {
     loadData();
 
     return (
-        walletAddress,
+        masterAddress,
+        gasPoolAddress,
+        buildWalletAddress(contract.getAddress()),
         marketAddress,
         foundryAddress,
         defiTreasuryAddress

@@ -1,6 +1,7 @@
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+import "@stdlib/tvm-dicts";
 
 // ========== TOLK MIGRATION v2 ==========
 // DOMINUM FOUNDATION v2 — КОРЕНЬ ЭКОСИСТЕМЫ
@@ -21,7 +22,7 @@ import "../core/constants.tolk";
 // -----------------------------------------------------
 global ownerAddress: address;
 global walletAddress: address;
-global whitelistDict: cell;
+global whitelistDict: dict;
 global whitelistCount: int;
 
 // Статистика (только для getter'ов)
@@ -72,14 +73,13 @@ fun saveData() {
 // было потом получить обратно через getter).
 // -----------------------------------------------------
 fun getAddrHash(addr: address): int {
-    var s = beginCell().storeAddress(addr).endCell().beginParse();
-    var (_, hash) = parseStdAddr(s);
+    var (_, hash) = addr.getWorkchainAndHash();
     return hash;
 }
 
 fun isWhitelisted(addr: address): bool {
     var hash = getAddrHash(addr);
-    var (_, found) = whitelistDict.udictGet(256, hash);
+    var (_, found) = whitelistDict.uDictGet(256, hash);
 
     if (found) {
         return true;
@@ -271,7 +271,7 @@ fun onInternalMessage(in: InMessage) {
         var newAddress = msgBody.loadAddress();
         var hash = getAddrHash(newAddress);
 
-        var (_, exists) = whitelistDict.udictGet(256, hash);
+        var (_, exists) = whitelistDict.uDictGet(256, hash);
 
         if (!exists) {
             var addrSlice = beginCell()
@@ -279,7 +279,7 @@ fun onInternalMessage(in: InMessage) {
                 .endCell()
                 .beginParse();
 
-            whitelistDict = whitelistDict.udictSet(
+            whitelistDict.uDictSet(
                 256,
                 hash,
                 addrSlice
@@ -302,11 +302,9 @@ fun onInternalMessage(in: InMessage) {
         var removeAddress = msgBody.loadAddress();
         var hash = getAddrHash(removeAddress);
 
-        var (newDict, deleted) = whitelistDict
-            .udictDelete(256, hash);
+        var deleted = whitelistDict.uDictDelete(256, hash);
 
         if (deleted) {
-            whitelistDict = newDict;
             whitelistCount = whitelistCount - 1;
             saveData();
         }
