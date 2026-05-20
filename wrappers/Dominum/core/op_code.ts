@@ -8,8 +8,6 @@ export const OP_TRANSFER_NOTIFICATION = 0x7362d09cn;
 export const OP_EXCESSES = 0xd53276dbn;
 
 export const OP_MINT = 0x15n;
-
-export const OP_SEND_JETTONS = 0x20n;
 export const OP_CHANGE_WHITELIST = 0x40n;
 export const OP_SET_WALLET = 0x41n;
 
@@ -47,3 +45,18 @@ export const OP_MINT_NFT = 0x1n;
 
 export const OP_ADD_WHITELIST = 0xe0n;
 export const OP_REMOVE_WHITELIST = 0xe1n;
+
+export const OP_REPLACE_GIVER = 0x42n;
+export const OP_REPLACE_MINTER = 0x43n;
+
+export const OP_REPLACE_TREASURY_ADDRESS = 0x56n;
+export const OP_CONFIRM_TREASURY_REQUEST = 0x57n;
+export const OP_CANCEL_TREASURY_REQUEST = 0x58n;
+
+export const OP_SEND_JETTONS = 0x59n;
+
+export const OP_UPDATE_RATE = 0xa6n;
+export const OP_CHANGE_TAX = 0xa7n;
+
+export const OP_UNLOCK_MONTH = 0xf0n;
+export const OP_SET_RELEASE = 0xf1n;
