@@ -14,7 +14,7 @@ import {
   
   import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
   import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
-  import { GasPool } from '../../../wrappers/Dominum/treasury/GasPool';
+  import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
   import { GasProxy } from '../../../wrappers/Dominum/treasury/GasProxy';
   
   const DOM_MASTER = 'Dominum/dom/DomMaster' as const;

@@ -13,7 +13,7 @@ import {
 } from '../core/types';
 
 import { GasProxy } from '../../../wrappers/Dominum/treasury/GasProxy';
-import { GasPool } from '../../../wrappers/Dominum/treasury/GasPool';
+import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
 
 export async function deployInfrastructure(
   provider: NetworkProvider,

@@ -5,7 +5,7 @@ import {
 } from '@ton/core';
 
 import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
-import { GasPool } from '../../../wrappers/Dominum/treasury/GasPool';
+import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
 import { GasProxy } from '../../../wrappers/Dominum/treasury/GasProxy';
 
 import {

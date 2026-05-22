@@ -14,7 +14,7 @@ import { compile } from '@ton/blueprint';
 
 import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
 import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
-import { GasPool } from '../../../wrappers/Dominum/treasury/GasPool';
+import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
 import { GasProxy } from '../../../wrappers/Dominum/treasury/GasProxy';
 import { GiverDominum } from '../../../wrappers/Dominum/givers/GiverDominum';
 
