@@ -56,8 +56,8 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
   const pending = beginCell()
     .storeBit(config.hasPending ?? false)
     .storeUint(config.pendingKind ?? 0, 8)
-    .storeAddressOpt(config.pendingOldAddress ?? null)
-    .storeAddressOpt(config.pendingNewAddress ?? null)
+    .storeAddress(config.pendingOldAddress ?? null)
+    .storeAddress(config.pendingNewAddress ?? null)
     .storeUint(config.pendingOldValue ?? 0, 32)
     .storeUint(config.pendingNewValue ?? 0, 32)
     .endCell();

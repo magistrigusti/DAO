@@ -1,210 +1,256 @@
 import {
-    Address,
-    beginCell,
-    Cell,
-    Contract,
-    contractAddress,
-    ContractProvider,
-    Sender,
+  Address,
+  beginCell,
+  Cell,
+  Contract,
+  contractAddress,
+  ContractProvider,
+  Sender,
 } from '@ton/core';
-import { OP_MINT } from '../core/op_code';
+
+import {
+  OP_MINT,
+  OP_REPLACE_GIVER,
+  OP_REPLACE_MINTER,
+} from '../core/op_code';
 
 export type DomMasterConfig = {
-    totalSupply: bigint;
-    ownerAddress: Address;
-    lastMintTime: bigint;
-    isStarted: boolean;
-    gasPoolAddress: Address;
-    giverAllodiumAddress: Address;
-    giverDefiAddress: Address;
-    giverDaoAddress: Address;
-    giverDominumAddress: Address;
-    content: Cell;
-    jettonWalletCode: Cell;
+  totalSupply: bigint;
+  ownerAddress: Address;
+  lastMintTime: bigint;
+  isStarted: boolean;
+  gasPoolAddress: Address;
+  minterAddress: Address;
+  minterManagerAddress: Address;
+  giverManagerAddress: Address;
+  giverAllodiumAddress: Address;
+  giverDefiAddress: Address;
+  giverDaoAddress: Address;
+  giverDominumAddress: Address;
+  content: Cell;
+  jettonWalletCode: Cell;
 };
 
 export function domMasterConfigToCell(
-    config: DomMasterConfig
+  config: DomMasterConfig
 ): Cell {
-    const giversFirst = beginCell()
-        .storeAddress(config.giverAllodiumAddress)
-        .storeAddress(config.giverDefiAddress)
-        .endCell();
+  const giversFirst = beginCell()
+    .storeAddress(config.giverAllodiumAddress)
+    .storeAddress(config.giverDefiAddress)
+    .endCell();
 
-    const giversSecond = beginCell()
-        .storeAddress(config.giverDaoAddress)
-        .storeAddress(config.giverDominumAddress)
-        .endCell();
+  const giversSecond = beginCell()
+    .storeAddress(config.giverDaoAddress)
+    .storeAddress(config.giverDominumAddress)
+    .endCell();
 
-    return beginCell()
-        .storeCoins(config.totalSupply)
-        .storeAddress(config.ownerAddress)
-        .storeUint(config.lastMintTime, 64)
-        .storeBit(config.isStarted)
-        .storeAddress(config.gasPoolAddress)
-        .storeRef(giversFirst)
-        .storeRef(giversSecond)
-        .storeRef(config.content)
-        .storeRef(config.jettonWalletCode)
-        .endCell();
+  return beginCell()
+    .storeCoins(config.totalSupply)
+    .storeAddress(config.ownerAddress)
+    .storeUint(config.lastMintTime, 64)
+    .storeBit(config.isStarted)
+    .storeAddress(config.gasPoolAddress)
+    .storeAddress(config.minterAddress)
+    .storeAddress(config.minterManagerAddress)
+    .storeAddress(config.giverManagerAddress)
+    .storeRef(giversFirst)
+    .storeRef(giversSecond)
+    .storeRef(config.content)
+    .storeRef(config.jettonWalletCode)
+    .endCell();
 }
 
 export class DomMaster implements Contract {
-    constructor(
-        readonly address: Address,
-        readonly init?: {
-            code: Cell;
-            data: Cell;
-        }
-    ) {}
-
-    static createFromConfig(
-        config: DomMasterConfig,
-        code: Cell,
-        workchain = 0
-    ) {
-        const data = domMasterConfigToCell(config);
-        const init = { code, data };
-
-        return new DomMaster(
-            contractAddress(workchain, init),
-            init
-        );
+  constructor(
+    readonly address: Address,
+    readonly init?: {
+      code: Cell;
+      data: Cell;
     }
+  ) {}
 
-    static createFromAddress(address: Address) {
-        return new DomMaster(address);
+  static createFromConfig(
+    config: DomMasterConfig,
+    code: Cell,
+    workchain = 0
+  ) {
+    const data = domMasterConfigToCell(config);
+    const init = { code, data };
+
+    return new DomMaster(
+      contractAddress(workchain, init),
+      init
+    );
+  }
+
+  static createFromAddress(address: Address) {
+    return new DomMaster(address);
+  }
+
+  async sendDeploy(
+    provider: ContractProvider,
+    via: Sender,
+    value: bigint
+  ) {
+    await provider.internal(via, { value });
+  }
+
+  async sendMint(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      amount: bigint;
+      queryId?: bigint;
     }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_MINT, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeCoins(opts.amount)
+      .endCell();
 
-    async sendDeploy(
-        provider: ContractProvider,
-        via: Sender,
-        value: bigint
-    ) {
-        await provider.internal(via, {
-            value,
-        });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
+  async sendReplaceMinter(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      oldMinterAddress: Address;
+      newMinterAddress: Address;
+      queryId?: bigint;
     }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_REPLACE_MINTER, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.oldMinterAddress)
+      .storeAddress(opts.newMinterAddress)
+      .endCell();
 
-    async sendMint(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            value: bigint;
-            amount: bigint;
-            queryId?: bigint;
-        }
-    ) {
-        const body = beginCell()
-            .storeUint(OP_MINT, 32)
-            .storeUint(opts.queryId ?? 0n, 64)
-            .storeCoins(opts.amount)
-            .endCell();
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
 
-        await provider.internal(via, {
-            value: opts.value,
-            body,
-        });
+  async sendReplaceGiver(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      oldGiverAddress: Address;
+      newGiverAddress: Address;
+      queryId?: bigint;
     }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_REPLACE_GIVER, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.oldGiverAddress)
+      .storeAddress(opts.newGiverAddress)
+      .endCell();
 
-    async getJettonData(
-        provider: ContractProvider
-    ) {
-        const { stack } = await provider.get(
-            'getJettonData',
-            []
-        );
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
 
-        return {
-            totalSupply: stack.readBigNumber(),
-            mintable: stack.readBigNumber(),
-            ownerAddress: stack.readAddress(),
-            content: stack.readCell(),
-            jettonWalletCode: stack.readCell(),
-        };
-    }
+  async getJettonData(provider: ContractProvider) {
+    const { stack } = await provider.get(
+      'getJettonData',
+      []
+    );
 
-    async getWalletAddress(
-        provider: ContractProvider,
-        ownerAddress: Address
-    ) {
-        const { stack } = await provider.get(
-            'getWalletAddress',
-            [
-                {
-                    type: 'slice',
-                    cell: beginCell()
-                        .storeAddress(ownerAddress)
-                        .endCell(),
-                },
-            ]
-        );
+    return {
+      totalSupply: stack.readBigNumber(),
+      mintable: stack.readBigNumber(),
+      ownerAddress: stack.readAddress(),
+      content: stack.readCell(),
+      jettonWalletCode: stack.readCell(),
+    };
+  }
 
-        return stack.readAddress();
-    }
+  async getWalletAddress(
+    provider: ContractProvider,
+    ownerAddress: Address
+  ) {
+    const { stack } = await provider.get(
+      'getWalletAddress',
+      [
+        {
+          type: 'slice',
+          cell: beginCell()
+            .storeAddress(ownerAddress)
+            .endCell(),
+        },
+      ]
+    );
 
-    async getMasterData(
-        provider: ContractProvider
-    ) {
-        const { stack } = await provider.get(
-            'getMasterData',
-            []
-        );
+    return stack.readAddress();
+  }
 
-        return {
-            ownerAddress: stack.readAddress(),
-            gasPoolAddress: stack.readAddress(),
-            lastMintTime: stack.readBigNumber(),
-            nextMintTime: stack.readBigNumber(),
-            isStarted: stack.readBoolean(),
-        };
-    }
+  async getMasterData(provider: ContractProvider) {
+    const { stack } = await provider.get(
+      'getMasterData',
+      []
+    );
 
-    async getMintRules(
-        provider: ContractProvider
-    ) {
-        const { stack } = await provider.get(
-            'getMintRules',
-            []
-        );
+    return {
+      ownerAddress: stack.readAddress(),
+      gasPoolAddress: stack.readAddress(),
+      minterAddress: stack.readAddress(),
+      minterManagerAddress: stack.readAddress(),
+      giverManagerAddress: stack.readAddress(),
+      lastMintTime: stack.readBigNumber(),
+      nextMintTime: stack.readBigNumber(),
+      isStarted: stack.readBoolean(),
+    };
+  }
 
-        return {
-            minMintAmount: stack.readBigNumber(),
-            maxMintAmount: stack.readBigNumber(),
-            mintInterval: stack.readBigNumber(),
-        };
-    }
+  async getMintRules(provider: ContractProvider) {
+    const { stack } = await provider.get(
+      'getMintRules',
+      []
+    );
 
-    async canMintNow(
-        provider: ContractProvider
-    ) {
-        const { stack } = await provider.get(
-            'canMintNow',
-            []
-        );
+    return {
+      minMintAmount: stack.readBigNumber(),
+      maxMintAmount: stack.readBigNumber(),
+      mintInterval: stack.readBigNumber(),
+    };
+  }
 
-        return stack.readBoolean();
-    }
+  async canMintNow(provider: ContractProvider) {
+    const { stack } = await provider.get(
+      'canMintNow',
+      []
+    );
 
-    async getCanMintNow(
-        provider: ContractProvider
-    ) {
-        return this.canMintNow(provider);
-    }
+    return stack.readBoolean();
+  }
 
-    async getGiversData(
-        provider: ContractProvider
-    ) {
-        const { stack } = await provider.get(
-            'getGiversData',
-            []
-        );
+  async getCanMintNow(provider: ContractProvider) {
+    return this.canMintNow(provider);
+  }
 
-        return {
-            giverAllodiumAddress: stack.readAddress(),
-            giverDefiAddress: stack.readAddress(),
-            giverDaoAddress: stack.readAddress(),
-            giverDominumAddress: stack.readAddress(),
-        };
-    }
+  async getGiversData(provider: ContractProvider) {
+    const { stack } = await provider.get(
+      'getGiversData',
+      []
+    );
+
+    return {
+      giverAllodiumAddress: stack.readAddress(),
+      giverDefiAddress: stack.readAddress(),
+      giverDaoAddress: stack.readAddress(),
+      giverDominumAddress: stack.readAddress(),
+    };
+  }
 }
