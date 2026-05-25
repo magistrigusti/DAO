@@ -11,6 +11,7 @@ import {
   OP_CANCEL_TREASURY_REQUEST,
   OP_CHANGE_TAX,
   OP_CONFIRM_TREASURY_REQUEST,
+  OP_INIT_MASTER_CONFIG,
   OP_REFILL_POOL,
   OP_REPLACE_TREASURY_ADDRESS,
   OP_WITHDRAW,
@@ -88,6 +89,26 @@ export class TreasuryPool implements Contract {
 
   async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
     await provider.internal(via, { value });
+  }
+
+  async sendInitMasterConfig(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      masterAddress: Address;
+      jettonWalletCode: Cell;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_MASTER_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.masterAddress)
+      .storeRef(opts.jettonWalletCode)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
   }
 
   async sendReplaceAddressRequest(

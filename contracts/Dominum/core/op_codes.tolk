@@ -45,7 +45,7 @@ const OP_SET_RESERVE: int = 0xA4;
 const OP_CHANGE_TREASURY: int = 0xA5;
 const OP_UPDATE_RATE: int = 0xA6;
 const OP_CHANGE_TAX: int = 0xA7;
-
+const OP_INIT_MASTER_CONFIG: int = 0xA8;
 // =====================================================
 // treasury_pool
 // =====================================================

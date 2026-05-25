@@ -5,6 +5,7 @@ import "../core/constants.tolk";
 global treasuryPoolAddress: address;
 global masterAddress: address;
 global jettonWalletCode: cell;
+global masterConfigured: bool;
 
 global taxMultiplier: int;
 
@@ -18,6 +19,7 @@ fun loadData() {
     treasuryPoolAddress = ds.loadAddress();
     masterAddress = ds.loadAddress();
     jettonWalletCode = ds.loadRef();
+    masterConfigured = ds.loadBool();
 
     taxMultiplier = ds.loadUint(16);
 
@@ -32,6 +34,7 @@ fun saveData() {
             .storeAddress(treasuryPoolAddress)
             .storeAddress(masterAddress)
             .storeRef(jettonWalletCode)
+            .storeBool(masterConfigured)
             .storeUint(taxMultiplier, 16)
             .storeCoins(totalReceivedDom)
             .storeCoins(totalSpentTon)
@@ -42,6 +45,26 @@ fun saveData() {
 
 fun requireTreasuryPool(senderAddress: address) {
     assert(senderAddress == treasuryPoolAddress, ERROR_NOT_OWNER);
+}
+
+fun requireMasterConfigured() {
+    assert(masterConfigured, ERROR_PROXY_NOT_CONFIGURED);
+}
+
+fun initMasterConfig(
+    newMasterAddress: address,
+    newJettonWalletCode: cell
+) {
+    assert(!masterConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceivedDom == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSpentTon == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalExecuted == 0, ERROR_ALREADY_INITIALIZED);
+
+    masterAddress = newMasterAddress;
+    jettonWalletCode = newJettonWalletCode;
+    masterConfigured = true;
+
+    saveData();
 }
 
 fun buildWalletData(owner: address): cell {
@@ -160,6 +183,8 @@ fun executeTransfer(
     maxFeeDom: int,
     queryId: int
 ) {
+    requireMasterConfigured();
+
     var expectedWallet = buildWalletAddress(fromOwner);
     var myBalance = contract.getOriginalBalance();
 
@@ -216,6 +241,20 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
+    if (op == OP_INIT_MASTER_CONFIG) {
+        requireTreasuryPool(senderAddress);
+
+        var newMasterAddress = msgBody.loadAddress();
+        var newJettonWalletCode = msgBody.loadRef();
+
+        initMasterConfig(
+            newMasterAddress,
+            newJettonWalletCode
+        );
+
+        return;
+    }
+
     if (op == OP_GAS_POOL_EXECUTE) {
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
@@ -235,6 +274,8 @@ fun onInternalMessage(in: InMessage) {
     }
 
     if (op == OP_TRANSFER_NOTIFICATION) {
+        requireMasterConfigured();
+
         var poolWallet = buildWalletAddress(contract.getAddress());
 
         assert(senderAddress == poolWallet, ERROR_NOT_VALID_WALLET);
@@ -271,6 +312,8 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_WITHDRAW_DOM) {
         requireTreasuryPool(senderAddress);
+        requireMasterConfigured();
+
         var amount = msgBody.loadCoins();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
@@ -283,13 +326,14 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getGasPoolData(): (
-    address, address, int, int, int, int, int
+    address, address, bool, int, int, int, int, int
 ) {
     loadData();
 
     return (
         treasuryPoolAddress,
         masterAddress,
+        masterConfigured,
         taxMultiplier,
         totalReceivedDom,
         totalSpentTon,

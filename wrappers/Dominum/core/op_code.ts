@@ -57,6 +57,7 @@ export const OP_SEND_JETTONS = 0x59n;
 
 export const OP_UPDATE_RATE = 0xa6n;
 export const OP_CHANGE_TAX = 0xa7n;
+export const OP_INIT_MASTER_CONFIG = 0xa8n;
 
 export const OP_UNLOCK_MONTH = 0xf0n;
 export const OP_SET_RELEASE = 0xf1n;

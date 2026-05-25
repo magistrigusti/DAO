@@ -11,6 +11,7 @@ import {
 import {
   OP_CHANGE_TAX,
   OP_GAS_POOL_EXECUTE,
+  OP_INIT_MASTER_CONFIG,
   OP_TOP_UP,
   OP_WITHDRAW_DOM,
 } from '../core/op_code';
@@ -19,6 +20,7 @@ export type GasPoolConfig = {
   treasuryPoolAddress: Address;
   masterAddress: Address;
   jettonWalletCode: Cell;
+  masterConfigured?: boolean;
   taxMultiplier?: number;
   totalReceivedDom?: bigint;
   totalSpentTon?: bigint;
@@ -32,6 +34,7 @@ export function gasPoolConfigToCell(
     .storeAddress(config.treasuryPoolAddress)
     .storeAddress(config.masterAddress)
     .storeRef(config.jettonWalletCode)
+    .storeBit(config.masterConfigured ?? false)
     .storeUint(config.taxMultiplier ?? 300, 16)
     .storeCoins(config.totalReceivedDom ?? 0n)
     .storeCoins(config.totalSpentTon ?? 0n)
@@ -72,6 +75,29 @@ export class GasPool implements Contract {
     value: bigint
   ) {
     await provider.internal(via, { value });
+  }
+
+  async sendInitMasterConfig(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      masterAddress: Address;
+      jettonWalletCode: Cell;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_MASTER_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.masterAddress)
+      .storeRef(opts.jettonWalletCode)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendGasPoolExecute(
@@ -171,6 +197,7 @@ export class GasPool implements Contract {
     return {
       treasuryPoolAddress: stack.readAddress(),
       masterAddress: stack.readAddress(),
+      masterConfigured: stack.readBoolean(),
       taxMultiplier: stack.readBigNumber(),
       totalReceivedDom: stack.readBigNumber(),
       totalSpentTon: stack.readBigNumber(),

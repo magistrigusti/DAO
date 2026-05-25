@@ -215,6 +215,29 @@ fun sendTaxToGasPool(queryId: int) {
     sendRawMessage(msg, 1);
 }
 
+fun sendInitMasterConfigToGasPool(
+    newMasterAddress: address,
+    newJettonWalletCode: cell,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_INIT_MASTER_CONFIG, 32)
+        .storeUint(queryId, 64)
+        .storeAddress(newMasterAddress)
+        .storeRef(newJettonWalletCode)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(gasPoolAddress)
+        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
 fun sendTon(
     toAddress: address,
     amount: int,
@@ -362,6 +385,22 @@ fun onInternalMessage(in: InMessage) {
 
         requestTaxChange(oldTaxMultiplier, newTaxMultiplier);
         saveData();
+        return;
+    }
+
+    if (op == OP_INIT_MASTER_CONFIG) {
+        requireOwner(senderAddress);
+        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+
+        var newMasterAddress = msgBody.loadAddress();
+        var newJettonWalletCode = msgBody.loadRef();
+
+        sendInitMasterConfigToGasPool(
+            newMasterAddress,
+            newJettonWalletCode,
+            queryId
+        );
+
         return;
     }
 
