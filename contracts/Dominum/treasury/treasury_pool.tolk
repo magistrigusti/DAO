@@ -15,6 +15,7 @@ import "../core/constants.tolk";
 global ownerAddress: address;
 global treasuryManagerAddress: address;
 global jettonWalletAddress: address;
+global walletConfigured: bool;
 
 global bankDaoAddress: address;
 global bankDefiAddress: address;
@@ -40,6 +41,7 @@ fun loadData() {
     ownerAddress = ds.loadAddress();
     treasuryManagerAddress = ds.loadAddress();
     jettonWalletAddress = ds.loadAddress();
+    walletConfigured = ds.loadBool();
 
     var targets = ds.loadRef().beginParse();
     bankDaoAddress = targets.loadAddress();
@@ -91,6 +93,7 @@ fun saveData() {
             .storeAddress(ownerAddress)
             .storeAddress(treasuryManagerAddress)
             .storeAddress(jettonWalletAddress)
+            .storeBool(walletConfigured)
             .storeRef(targets)
             .storeRef(stats)
             .storeRef(pending)
@@ -104,6 +107,23 @@ fun requireOwner(senderAddress: address) {
 
 fun requireTreasuryManager(senderAddress: address) {
     assert(senderAddress == treasuryManagerAddress, ERROR_NOT_MANAGER);
+}
+
+fun requireWalletConfigured() {
+    assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
+}
+
+fun initWalletConfig(newJettonWalletAddress: address) {
+    assert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(!hasPending, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceivedDom == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSentDom == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSentTon == 0, ERROR_ALREADY_INITIALIZED);
+
+    jettonWalletAddress = newJettonWalletAddress;
+    walletConfigured = true;
+
+    saveData();
 }
 
 fun isAllowedTarget(candidate: address): bool {
@@ -268,6 +288,8 @@ fun sendDom(
     amount: int,
     queryId: int
 ) {
+    requireWalletConfigured();
+
     if (amount <= 0) {
         return;
     }
@@ -349,7 +371,18 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
+    if (op == OP_INIT_TREASURY_WALLET_CONFIG) {
+        requireOwner(senderAddress);
+
+        var newJettonWalletAddress = msgBody.loadAddress();
+
+        initWalletConfig(newJettonWalletAddress);
+
+        return;
+    }
+
     if (op == OP_TRANSFER_NOTIFICATION) {
+        requireWalletConfigured();
         assert(senderAddress == jettonWalletAddress, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
@@ -496,7 +529,7 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getTreasuryPoolData(): (
-    address, address, address, address, address, address, address, int, int, int, int
+    address, address, address, bool, address, address, address, address, int, int, int, int
 ) {
     loadData();
 
@@ -504,6 +537,7 @@ get fun getTreasuryPoolData(): (
         ownerAddress,
         treasuryManagerAddress,
         jettonWalletAddress,
+        walletConfigured,
         bankDaoAddress,
         bankDefiAddress,
         bankDominumAddress,

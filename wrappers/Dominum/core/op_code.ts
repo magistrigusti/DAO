@@ -29,6 +29,7 @@ export const OP_CONFIRM_CHANGE_POOL = 0xb1n;
 export const OP_CANCEL_CHANGE_POOL = 0xb2n;
 export const OP_PROXY_INTERNAL_TRANSFER = 0xb3n;
 export const OP_SET_PROXY_WALLET_CONFIG = 0xb4n;
+export const OP_INIT_TREASURY_WALLET_CONFIG = 0xb5n;
 
 export const OP_INCREASE_MINT_ALLOWANCE = 0x70n;
 export const OP_ALLOD_BURNED = 0x71n;

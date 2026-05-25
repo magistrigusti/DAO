@@ -12,6 +12,7 @@ import {
   OP_CHANGE_TAX,
   OP_CONFIRM_TREASURY_REQUEST,
   OP_INIT_MASTER_CONFIG,
+  OP_INIT_TREASURY_WALLET_CONFIG,
   OP_REFILL_POOL,
   OP_REPLACE_TREASURY_ADDRESS,
   OP_WITHDRAW,
@@ -22,7 +23,8 @@ import {
 export type TreasuryPoolConfig = {
   ownerAddress: Address;
   treasuryManagerAddress: Address;
-  jettonWalletAddress: Address;
+  jettonWalletAddress?: Address;
+  walletConfigured?: boolean;
   bankDaoAddress: Address;
   bankDefiAddress: Address;
   bankDominumAddress: Address;
@@ -66,7 +68,8 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.treasuryManagerAddress)
-    .storeAddress(config.jettonWalletAddress)
+    .storeAddress(config.jettonWalletAddress ?? config.ownerAddress)
+    .storeBit(config.walletConfigured ?? false)
     .storeRef(targets)
     .storeRef(stats)
     .storeRef(pending)
@@ -106,6 +109,24 @@ export class TreasuryPool implements Contract {
       .storeUint(opts.queryId ?? 0n, 64)
       .storeAddress(opts.masterAddress)
       .storeRef(opts.jettonWalletCode)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
+  async sendInitTreasuryWalletConfig(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      jettonWalletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_TREASURY_WALLET_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.jettonWalletAddress)
       .endCell();
 
     await provider.internal(via, { value: opts.value, body });
@@ -224,6 +245,7 @@ export class TreasuryPool implements Contract {
       ownerAddress: stack.readAddress(),
       treasuryManagerAddress: stack.readAddress(),
       jettonWalletAddress: stack.readAddress(),
+      walletConfigured: stack.readBoolean(),
       bankDaoAddress: stack.readAddress(),
       bankDefiAddress: stack.readAddress(),
       bankDominumAddress: stack.readAddress(),

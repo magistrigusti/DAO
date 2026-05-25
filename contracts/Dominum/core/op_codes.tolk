@@ -54,6 +54,7 @@ const OP_CONFIRM_CHANGE_POOL: int = 0xB1;
 const OP_CANCEL_CHANGE_POOL: int = 0xB2;
 const OP_PROXY_INTERNAL_TRANSFER: int = 0xB3;
 const OP_SET_PROXY_WALLET_CONFIG: int = 0xB4;
+const OP_INIT_TREASURY_WALLET_CONFIG: int = 0xB5;
 
 // =====================================================
 // BANK DAO
