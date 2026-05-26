@@ -77,9 +77,19 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
 }
 
 export class TreasuryPool implements Contract {
-  constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+  constructor(
+    readonly address: Address,
+    readonly init?: {
+      code: Cell;
+      data: Cell;
+    }
+  ) {}
 
-  static createFromConfig(config: TreasuryPoolConfig, code: Cell, workchain = 0) {
+  static createFromConfig(
+    config: TreasuryPoolConfig,
+    code: Cell,
+    workchain = 0
+  ) {
     const data = treasuryPoolConfigToCell(config);
     const init = { code, data };
 
@@ -90,7 +100,11 @@ export class TreasuryPool implements Contract {
     return new TreasuryPool(address);
   }
 
-  async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
+  async sendDeploy(
+    provider: ContractProvider,
+    via: Sender,
+    value: bigint
+  ) {
     await provider.internal(via, { value });
   }
 
@@ -111,7 +125,10 @@ export class TreasuryPool implements Contract {
       .storeRef(opts.jettonWalletCode)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendInitTreasuryWalletConfig(
@@ -129,13 +146,21 @@ export class TreasuryPool implements Contract {
       .storeAddress(opts.jettonWalletAddress)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendReplaceAddressRequest(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; oldAddress: Address; newAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      oldAddress: Address;
+      newAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_REPLACE_TREASURY_ADDRESS, 32)
@@ -144,13 +169,21 @@ export class TreasuryPool implements Contract {
       .storeAddress(opts.newAddress)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendTaxRequest(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; oldTaxMultiplier: number; newTaxMultiplier: number; queryId?: bigint }
+    opts: {
+      value: bigint;
+      oldTaxMultiplier: number;
+      newTaxMultiplier: number;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_CHANGE_TAX, 32)
@@ -159,31 +192,59 @@ export class TreasuryPool implements Contract {
       .storeUint(opts.newTaxMultiplier, 16)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
-  async sendConfirmRequest(provider: ContractProvider, via: Sender, opts: { value: bigint; queryId?: bigint }) {
+  async sendConfirmRequest(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      queryId?: bigint;
+    }
+  ) {
     const body = beginCell()
       .storeUint(OP_CONFIRM_TREASURY_REQUEST, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
-  async sendCancelRequest(provider: ContractProvider, via: Sender, opts: { value: bigint; queryId?: bigint }) {
+  async sendCancelRequest(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      queryId?: bigint;
+    }
+  ) {
     const body = beginCell()
       .storeUint(OP_CANCEL_TREASURY_REQUEST, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendWithdrawTon(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW, 32)
@@ -192,13 +253,21 @@ export class TreasuryPool implements Contract {
       .storeAddress(opts.toAddress)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendWithdrawJettons(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW_JETTONS, 32)
@@ -207,13 +276,20 @@ export class TreasuryPool implements Contract {
       .storeAddress(opts.toAddress)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendRefillPool(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_REFILL_POOL, 32)
@@ -221,13 +297,20 @@ export class TreasuryPool implements Contract {
       .storeCoins(opts.amount)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async sendWithdrawFromPool(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW_FROM_POOL, 32)
@@ -235,7 +318,10 @@ export class TreasuryPool implements Contract {
       .storeCoins(opts.amount)
       .endCell();
 
-    await provider.internal(via, { value: opts.value, body });
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async getTreasuryPoolData(provider: ContractProvider) {
@@ -270,9 +356,17 @@ export class TreasuryPool implements Contract {
     };
   }
 
-  async isTreasuryTargetAllowed(provider: ContractProvider, candidate: Address) {
+  async isTreasuryTargetAllowed(
+    provider: ContractProvider,
+    candidate: Address
+  ) {
     const { stack } = await provider.get('isTreasuryTargetAllowed', [
-      { type: 'slice', cell: beginCell().storeAddress(candidate).endCell() },
+      {
+        type: 'slice',
+        cell: beginCell()
+          .storeAddress(candidate)
+          .endCell(),
+      },
     ]);
 
     return stack.readBoolean();

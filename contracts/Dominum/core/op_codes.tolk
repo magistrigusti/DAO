@@ -46,6 +46,7 @@ const OP_CHANGE_TREASURY: int = 0xA5;
 const OP_UPDATE_RATE: int = 0xA6;
 const OP_CHANGE_TAX: int = 0xA7;
 const OP_INIT_MASTER_CONFIG: int = 0xA8;
+
 // =====================================================
 // treasury_pool
 // =====================================================
@@ -91,4 +92,3 @@ const OP_SET_RELEASE: int = 0xF1;
 const OP_REPLACE_TREASURY_ADDRESS: int = 0x56;
 const OP_CONFIRM_TREASURY_REQUEST: int = 0x57;
 const OP_CANCEL_TREASURY_REQUEST: int = 0x58;
-

@@ -529,7 +529,9 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getTreasuryPoolData(): (
-    address, address, address, bool, address, address, address, address, int, int, int, int
+    address, address, address, bool,
+    address, address, address, address,
+    int, int, int, int
 ) {
     loadData();
 
