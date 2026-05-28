@@ -6,7 +6,8 @@ import {
 
 import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
 import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
-import { GasProxy } from '../../../wrappers/Dominum/treasury/GasProxy';
+import { TreasuryPool } from '../../../wrappers/Dominum/treasury/TreasuryPool';
+import { Minter } from '../../../wrappers/Dominum/treasury/Minter';
 
 import {
   GiverAllodium,
@@ -23,13 +24,24 @@ import {
 import {
   GiverManager,
 } from '../../../wrappers/Dominum/management/GiverManager';
+import {
+  MinterManager,
+} from '../../../wrappers/Dominum/management/MinterManager';
+import {
+  TreasuryManager,
+} from '../../../wrappers/Dominum/management/TreasuryManager';
 
-// ========== COMPILED CODE ==========
 export type CompiledContracts = {
   walletCode: Cell;
   masterCode: Cell;
-  gasProxyCode: Cell;
+
+  treasuryManagerCode: Cell;
+  treasuryPoolCode: Cell;
   gasPoolCode: Cell;
+
+  minterCode: Cell;
+  minterManagerCode: Cell;
+
   giverAllodiumCode: Cell;
   giverDefiCode: Cell;
   giverDaoCode: Cell;
@@ -37,19 +49,22 @@ export type CompiledContracts = {
   giverManagerCode: Cell;
 };
 
-// ========== INFRASTRUCTURE ==========
 export type InfrastructureContracts = {
   deployer: Address;
-  gasProxy: OpenedContract<GasProxy>;
+  treasuryManager: OpenedContract<TreasuryManager>;
+  treasuryPool: OpenedContract<TreasuryPool>;
   gasPool: OpenedContract<GasPool>;
 };
 
-// ========== TOKEN GRAPH ==========
 export type TokenGraphContracts = {
   giverManager: OpenedContract<GiverManager>;
+  minterManager: OpenedContract<MinterManager>;
+
+  minter: OpenedContract<Minter>;
+  domMaster: OpenedContract<DomMaster>;
+
   giverAllodium: OpenedContract<GiverAllodium>;
   giverDefi: OpenedContract<GiverDefi>;
   giverDao: OpenedContract<GiverDao>;
   giverDominum: OpenedContract<GiverDominum>;
-  domMaster: OpenedContract<DomMaster>;
 };

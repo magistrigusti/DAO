@@ -12,8 +12,15 @@ import {
   InfrastructureContracts,
 } from '../core/types';
 
-import { GasProxy } from '../../../wrappers/Dominum/treasury/GasProxy';
-import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
+import {
+  TreasuryManager,
+} from '../../../wrappers/Dominum/management/TreasuryManager';
+import {
+  TreasuryPool,
+} from '../../../wrappers/Dominum/treasury/TreasuryPool';
+import {
+  GasPool,
+} from '../../../wrappers/Dominum/pools/GasPool';
 
 export async function deployInfrastructure(
   provider: NetworkProvider,
@@ -23,58 +30,92 @@ export async function deployInfrastructure(
   const ui = provider.ui();
   const sender = provider.sender();
 
-  // ========== STEP 1: GAS PROXY ==========
-  ui.write('--- Step 1: Deploy GasProxy ---');
+  ui.write('--- Step 1: Deploy TreasuryManager ---');
 
-  const gasProxy = provider.open(
-      GasProxy.createFromConfig(
-          {
-              adminAddress: deployer,
-              realGasPoolAddress: deployer,
-          },
-          compiled.gasProxyCode
-      )
+  const treasuryManager = provider.open(
+    TreasuryManager.createFromConfig(
+      {
+        ownerAddress: deployer,
+      },
+      compiled.treasuryManagerCode
+    )
   );
 
-  await gasProxy.sendDeploy(
-      sender,
-      toNano(DEPLOY_VALUES.gasProxy)
+  await treasuryManager.sendDeploy(
+    sender,
+    toNano(DEPLOY_VALUES.treasuryManager)
   );
-  await provider.waitForDeploy(gasProxy.address);
+  await provider.waitForDeploy(treasuryManager.address);
 
   ui.write(
-      `GasProxy: ${gasProxy.address.toString()}`
+    `TreasuryManager: ${treasuryManager.address.toString()}`
   );
 
-  // ========== STEP 2: GAS POOL ==========
-  ui.write('--- Step 2: Deploy GasPool ---');
+  ui.write('--- Step 2: Deploy TreasuryPool ---');
+
+  const treasuryPool = provider.open(
+    TreasuryPool.createFromConfig(
+      {
+        ownerAddress: deployer,
+        treasuryManagerAddress: treasuryManager.address,
+
+        // Временный адрес. Реальный wallet казначейства пишем позже
+        // через OP_INIT_TREASURY_WALLET_CONFIG.
+        jettonWalletAddress: deployer,
+        walletConfigured: false,
+
+        // Временные цели. Реальный GasPool ставим позже
+        // через TreasuryManager -> TreasuryPool request/confirm.
+        bankDaoAddress: deployer,
+        bankDefiAddress: deployer,
+        bankDominumAddress: deployer,
+        gasPoolAddress: deployer,
+      },
+      compiled.treasuryPoolCode
+    )
+  );
+
+  await treasuryPool.sendDeploy(
+    sender,
+    toNano(DEPLOY_VALUES.treasuryPool)
+  );
+  await provider.waitForDeploy(treasuryPool.address);
+
+  ui.write(
+    `TreasuryPool: ${treasuryPool.address.toString()}`
+  );
+
+  ui.write('--- Step 3: Deploy GasPool ---');
 
   const gasPool = provider.open(
-      GasPool.createFromConfig(
-          {
-              adminAddress: deployer,
-              proxyAddress: gasProxy.address,
-              domTreasuryAddress: deployer,
-              domBalance: 0n,
-              tonReserve: 0n,
-          },
-          compiled.gasPoolCode
-      )
+    GasPool.createFromConfig(
+      {
+        treasuryPoolAddress: treasuryPool.address,
+
+        // Временная связка. Реальный Master пишем позже
+        // через TreasuryPool -> GasPool OP_INIT_MASTER_CONFIG.
+        masterAddress: deployer,
+        jettonWalletCode: compiled.walletCode,
+        masterConfigured: false,
+      },
+      compiled.gasPoolCode
+    )
   );
 
   await gasPool.sendDeploy(
-      sender,
-      toNano(DEPLOY_VALUES.gasPool)
+    sender,
+    toNano(DEPLOY_VALUES.gasPool)
   );
   await provider.waitForDeploy(gasPool.address);
 
   ui.write(
-      `GasPool: ${gasPool.address.toString()}`
+    `GasPool: ${gasPool.address.toString()}`
   );
 
   return {
-      deployer,
-      gasProxy,
-      gasPool,
+    deployer,
+    treasuryManager,
+    treasuryPool,
+    gasPool,
   };
 }
