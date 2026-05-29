@@ -1,7 +1,7 @@
 import {
   Address,
-  toNano,
   OpenedContract,
+  toNano,
 } from '@ton/core';
 import {
   NetworkProvider,
@@ -22,9 +22,6 @@ import {
 import {
   GiverDominum,
 } from '../../../wrappers/Dominum/givers/GiverDominum';
-import {
-  GiverManager,
-} from '../../../wrappers/Dominum/management/GiverManager';
 
 export type DeployedGivers = {
   giverAllodium: OpenedContract<GiverAllodium>;
@@ -36,110 +33,112 @@ export type DeployedGivers = {
 export async function deployGivers(
   provider: NetworkProvider,
   compiled: CompiledContracts,
-  giverManager: OpenedContract<GiverManager>,
+  masterAddress: Address,
+  gasPoolAddress: Address,
   deployer: Address
 ): Promise<DeployedGivers> {
   const ui = provider.ui();
   const sender = provider.sender();
 
-  ui.write('--- Step 4: Deploy Givers ---');
+  ui.write('--- Step 8: Deploy Givers ---');
 
   const giverAllodium = provider.open(
-      GiverAllodium.createFromConfig(
-          {
-              managerAddress: giverManager.address,
-              frsAllodiumAddress: deployer,
-              allodiumFoundationAddress: deployer,
-          },
-          compiled.giverAllodiumCode
-      )
+    GiverAllodium.createFromConfig(
+      {
+        masterAddress,
+        gasPoolAddress,
+        jettonWalletCode: compiled.walletCode,
+        frsAllodiumAddress: deployer,
+        allodiumFoundationAddress: deployer,
+      },
+      compiled.giverAllodiumCode
+    )
   );
 
   await giverAllodium.sendDeploy(
-      sender,
-      toNano(DEPLOY_VALUES.giver)
+    sender,
+    toNano(DEPLOY_VALUES.giver)
   );
-  await provider.waitForDeploy(
-      giverAllodium.address
-  );
+  await provider.waitForDeploy(giverAllodium.address);
 
   ui.write(
-      `GiverAllodium: ${giverAllodium.address.toString()}`
+    `GiverAllodium: ${giverAllodium.address.toString()}`
   );
 
   const giverDefi = provider.open(
-      GiverDefi.createFromConfig(
-          {
-              managerAddress: giverManager.address,
-              defiBankAddress: deployer,
-              defiDualAddress: deployer,
-          },
-          compiled.giverDefiCode
-      )
+    GiverDefi.createFromConfig(
+      {
+        masterAddress,
+        gasPoolAddress,
+        jettonWalletCode: compiled.walletCode,
+        marketAddress: deployer,
+        foundryAddress: deployer,
+        defiTreasuryAddress: deployer,
+      },
+      compiled.giverDefiCode
+    )
   );
 
   await giverDefi.sendDeploy(
-      sender,
-      toNano(DEPLOY_VALUES.giver)
+    sender,
+    toNano(DEPLOY_VALUES.giver)
   );
-  await provider.waitForDeploy(
-      giverDefi.address
-  );
+  await provider.waitForDeploy(giverDefi.address);
 
   ui.write(
-      `GiverDefi: ${giverDefi.address.toString()}`
+    `GiverDefi: ${giverDefi.address.toString()}`
   );
 
   const giverDao = provider.open(
-      GiverDao.createFromConfig(
-          {
-              managerAddress: giverManager.address,
-              bankDaoAddress: deployer,
-              daoFoundationAddress: deployer,
-          },
-          compiled.giverDaoCode
-      )
+    GiverDao.createFromConfig(
+      {
+        masterAddress,
+        gasPoolAddress,
+        jettonWalletCode: compiled.walletCode,
+        bankDaoAddress: deployer,
+        daoFoundationAddress: deployer,
+      },
+      compiled.giverDaoCode
+    )
   );
 
   await giverDao.sendDeploy(
-      sender,
-      toNano(DEPLOY_VALUES.giver)
+    sender,
+    toNano(DEPLOY_VALUES.giver)
   );
-  await provider.waitForDeploy(
-      giverDao.address
-  );
+  await provider.waitForDeploy(giverDao.address);
 
   ui.write(
-      `GiverDao: ${giverDao.address.toString()}`
+    `GiverDao: ${giverDao.address.toString()}`
   );
 
   const giverDominum = provider.open(
-      GiverDominum.createFromConfig(
-          {
-              managerAddress: giverManager.address,
-              bankDominumAddress: deployer,
-              dominumFoundationAddress: deployer,
-          },
-          compiled.giverDominumCode
-      )
+    GiverDominum.createFromConfig(
+      {
+        masterAddress,
+        gasPoolAddress,
+        jettonWalletCode: compiled.walletCode,
+        bankDominumAddress: deployer,
+        dominumFoundationAddress: deployer,
+      },
+      compiled.giverDominumCode
+    )
   );
 
   await giverDominum.sendDeploy(
-      sender,
-      toNano(DEPLOY_VALUES.giver)
+    sender,
+    toNano(DEPLOY_VALUES.giver)
   );
-  await provider.waitForDeploy(
-      giverDominum.address
-  );
+  await provider.waitForDeploy(giverDominum.address);
 
   ui.write(
-      `GiverDominum: ${giverDominum.address.toString()}`
+    `GiverDominum: ${giverDominum.address.toString()}`
   );
 
   return {
-      giverAllodium,
-      giverDefi,
-      giverDao,
-      giverDominum,
+    giverAllodium,
+    giverDefi,
+    giverDao,
+    giverDominum,
   };
 }
