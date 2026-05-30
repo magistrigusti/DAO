@@ -6,6 +6,7 @@
   "scripts": {
     "build": "npx blueprint build",
     "compile": "npx blueprint build --all",
+    "deploy:dom:testnet": "npx ts-node -r dotenv/config scripts/runDeployDomMintV3.ts",
     "deploy": "npx blueprint run",
     "test": "jest"
   },
