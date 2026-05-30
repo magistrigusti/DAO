@@ -18,14 +18,14 @@ export async function configureTokenGraph(
   graph: TokenGraphContracts
 ): Promise<void> {
   await configureGasPipeline(
-      provider,
-      compiled,
-      infrastructure,
-      graph
+    provider,
+    compiled,
+    infrastructure,
+    graph
   );
 
   await configureGiverWallets(
-      provider,
-      graph
+    provider,
+    graph
   );
 }
