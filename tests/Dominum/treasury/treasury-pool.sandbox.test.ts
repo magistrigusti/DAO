@@ -103,7 +103,7 @@ describe('TreasuryPool', () => {
     expect(await treasuryPool.isTreasuryTargetAllowed(bankDefi.address)).toBe(true);
     expect(await treasuryPool.isTreasuryTargetAllowed(bankDominum.address)).toBe(true);
     expect(await treasuryPool.isTreasuryTargetAllowed(gasPool.address)).toBe(true);
-    expect(await treasuryPool.isTreasuryTargetAllowed(outsider.address)).toBe(true);
+    expect(await treasuryPool.isTreasuryTargetAllowed(outsider.address)).toBe(false);
   });
 
   it('should initialize treasury DOM wallet only from owner', async () => {
@@ -140,7 +140,7 @@ describe('TreasuryPool', () => {
     expectAddress(data.jettonWalletAddress, wallet.address);
   });
 
-  it('should create pending address change from treasury manager and confirm by owner' async () => {
+  it('should create pending address change from treasury manager and confirm by owner', async () => {
     const treasuryPool = await deployPool();
 
     await treasuryPool.sendReplaceAddressRequest(
@@ -149,7 +149,7 @@ describe('TreasuryPool', () => {
         value: toNano('0.05'),
         oldAddress: gasPool.address,
         newAddress: newGasPool.address,
-        queryId: 33n
+        queryId: 33n,
       }
     );
 
@@ -164,7 +164,7 @@ describe('TreasuryPool', () => {
       owner.getSender(),
       {
         value: toNano('0.05'),
-        queryId: 34n
+        queryId: 34n,
       }
     );
 
@@ -185,7 +185,7 @@ describe('TreasuryPool', () => {
           value: toNano('0.05'),
           oldAddress: gasPool.address,
           newAddress: newGasPool.address,
-          queryId: 35n
+          queryId: 35n,
         }
       )
     );
@@ -193,6 +193,7 @@ describe('TreasuryPool', () => {
     const pending = await treasuryPool.getTreasuryPendingData();
     const data = await treasuryPool.getTreasuryPoolData();
 
-    expect(pending.hasPending).toBe(false)
-  })
-})
+    expect(pending.hasPending).toBe(false);
+    expectAddress(data.gasPoolAddress, gasPool.address);
+  });
+});
