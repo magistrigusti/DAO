@@ -5,194 +5,176 @@ import {
   SandboxContract,
   TreasuryContract,
 } from '@ton/sandbox';
-import {
-  Cell,
-  toNano,
-} from '@ton/core';
+import { Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
-import { TreasuryPool } from '../../../wrappers/Dominum/treasury/TreasuryPool';
+import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
+import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
 
-async function ignoreFailure(promise: Promise<unknown>): Promise<void> {
-  try {
-    await promise;
-  } catch {}
-}
+import {
+  DOM_COMPILE,
+  DOM_CONTRACT,
+  DOM_FIXTURE,
+  DOM_QUERY,
+  DOM_STATE,
+  DOM_VALUE,
+  calculateDefaultDomFee,
+} from '../_helpers/dom-test-values';
+import {
+  expectAddress,
+  ignoreFailure,
+} from '../core/dom-test-utils';
 
-function expectAddress(
-  actual: { toString(): string },
-  expected: { toString(): string }
-) {
-  expect(actual.toString()).toEqual(expected.toString());
-}
-
-describe('TreasuryPool', () => {
+describe('GasPool', () => {
   let blockchain: Blockchain;
 
+  let treasuryPool: SandboxContract<TreasuryContract>;
+  let master: SandboxContract<TreasuryContract>;
   let owner: SandboxContract<TreasuryContract>;
-  let treasuryManager: SandboxContract<TreasuryContract>;
-  let wallet: SandboxContract<TreasuryContract>;
-  let bankDao: SandboxContract<TreasuryContract>;
-  let bankDefi: SandboxContract<TreasuryContract>;
-  let bankDominum: SandboxContract<TreasuryContract>;
-  let gasPool: SandboxContract<TreasuryContract>;
-  let newGasPool: SandboxContract<TreasuryContract>;
+  let receiver: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
 
-  let treasuryPoolCode: Cell;
+  let walletCode: Cell;
+  let gasPoolCode: Cell;
 
   beforeAll(async () => {
-    treasuryPoolCode = await compile('Dominum/treasury/TreasuryPool');
+    walletCode = await compile(DOM_COMPILE.wallet);
+    gasPoolCode = await compile(DOM_COMPILE.gasPool);
   });
 
   beforeEach(async () => {
     blockchain = await Blockchain.create();
 
+    treasuryPool = await blockchain.treasury('treasury-pool');
+    master = await blockchain.treasury('master');
     owner = await blockchain.treasury('owner');
-    treasuryManager = await blockchain.treasury('treasury-manager');
-    wallet = await blockchain.treasury('wallet');
-    bankDao = await blockchain.treasury('bank-dao');
-    bankDefi = await blockchain.treasury('bank-defi');
-    bankDominum = await blockchain.treasury('bank-dominum');
-    gasPool = await blockchain.treasury('gas-pool');
-    newGasPool = await blockchain.treasury('new-gas-pool');
+    receiver = await blockchain.treasury('receiver');
     outsider = await blockchain.treasury('outsider');
   });
 
-  async function deployPool() {
-    const treasuryPool = blockchain.openContract(
-      TreasuryPool.createFromConfig(
+  async function deployGasPool(configured: boolean) {
+    const gasPool = blockchain.openContract(
+      GasPool.createFromConfig(
         {
-          ownerAddress: owner.address,
-          treasuryManagerAddress: treasuryManager.address,
-          jettonWalletAddress: wallet.address,
-          walletConfigured: false,
-
-          bankDaoAddress: bankDao.address,
-          bankDefiAddress: bankDefi.address,
-          bankDominumAddress: bankDominum.address,
-          gasPoolAddress: gasPool.address,
+          treasuryPoolAddress: treasuryPool.address,
+          masterAddress: configured ? master.address : owner.address,
+          jettonWalletCode: walletCode,
+          masterConfigured: configured,
         },
-        treasuryPoolCode
+        gasPoolCode
       )
     );
 
-    await treasuryPool.sendDeploy(
-      owner.getSender(),
-      toNano('0.2')
+    await gasPool.sendDeploy(
+      treasuryPool.getSender(),
+      DOM_VALUE.deployGasPool
     );
 
-    return treasuryPool;
+    return gasPool;
   }
 
-  it('should expose treasury state and allowed targets', async () => {
-    const treasuryPool = await deployPool();
-    const data = await treasuryPool.getTreasuryPoolData();
+  it('should expose initial state', async () => {
+    const gasPool = await deployGasPool(
+      DOM_STATE.masterNotConfigured
+    );
 
-    expectAddress(data.ownerAddress, owner.address);
-    expectAddress(data.treasuryManagerAddress, treasuryManager.address);
-    expectAddress(data.jettonWalletAddress, wallet.address);
+    const data = await gasPool.getGasPoolData();
 
-    expect(data.walletConfigured).toBe(false);
-    expect(data.taxMultiplier).toEqual(300n);
-    expect(data.totalReceivedDom).toEqual(0n);
-    expect(data.totalSentDom).toEqual(0n);
-    expect(data.totalSentTon).toEqual(0n);
-
-    expect(await treasuryPool.isTreasuryTargetAllowed(bankDao.address)).toBe(true);
-    expect(await treasuryPool.isTreasuryTargetAllowed(bankDefi.address)).toBe(true);
-    expect(await treasuryPool.isTreasuryTargetAllowed(bankDominum.address)).toBe(true);
-    expect(await treasuryPool.isTreasuryTargetAllowed(gasPool.address)).toBe(true);
-    expect(await treasuryPool.isTreasuryTargetAllowed(outsider.address)).toBe(true);
+    expectAddress(data.treasuryPoolAddress, treasuryPool.address);
+    expect(data.masterConfigured).toBe(false);
+    expect(data.taxMultiplier).toEqual(
+      DOM_CONTRACT.taxMultiplier
+    );
   });
 
-  it('should initialize treasury DOM wallet only from owner', async () => {
-    const treasuryPool = await deployPool();
+  it('should initialize master only from treasury pool', async () => {
+    const gasPool = await deployGasPool(
+      DOM_STATE.masterNotConfigured
+    );
 
     await ignoreFailure(
-      treasuryPool.sendInitTreasuryWalletConfig(
+      gasPool.sendInitMasterConfig(
         outsider.getSender(),
         {
-          value: toNano('0.05'),
-          jettonWalletAddress: outsider.address,
-          queryId: 31n,
+          value: DOM_VALUE.config,
+          masterAddress: master.address,
+          jettonWalletCode: walletCode,
+          queryId: DOM_QUERY.gasInitMasterRejected,
         }
       )
     );
 
-    let data = await treasuryPool.getTreasuryPoolData();
+    let data = await gasPool.getGasPoolData();
 
-    expect(data.walletConfigured).toBe(false);
-    expectAddress(data.jettonWalletAddress, wallet.address);
+    expect(data.masterConfigured).toBe(false);
 
-    await treasuryPool.sendInitTreasuryWalletConfig(
-      owner.getSender(),
+    await gasPool.sendInitMasterConfig(
+      treasuryPool.getSender(),
       {
-        value: toNano('0.05'),
-        jettonWalletAddress: wallet.address,
-        queryId: 32n,
+        value: DOM_VALUE.config,
+        masterAddress: master.address,
+        jettonWalletCode: walletCode,
+        queryId: DOM_QUERY.gasInitMaster,
       }
     );
 
-    data = await treasuryPool.getTreasuryPoolData();
+    data = await gasPool.getGasPoolData();
 
-    expect(data.walletConfigured).toBe(true);
-    expectAddress(data.jettonWalletAddress, wallet.address);
+    expect(data.masterConfigured).toBe(true);
+    expectAddress(data.masterAddress, master.address);
   });
 
-  it('should create pending address change from treasury manager and confirm by owner' async () => {
-    const treasuryPool = await deployPool();
+  it('should execute wallet transfer and collect DOM fee', async () => {
+    const gasPool = await deployGasPool(true);
 
-    await treasuryPool.sendReplaceAddressRequest(
-      treasuryManager.getSender(),
-      {
-        value: toNano('0.05'),
-        oldAddress: gasPool.address,
-        newAddress: newGasPool.address,
-        queryId: 33n
-      }
-    );
-
-    const pending = await treasuryPool.getTreasuryPendingData();
-
-    expect(pending.hasPending).toBe(true);
-    expect(pending.pendingKind).toEqual(1n);
-    expectAddress(pending.pendingOldAddress!, gasPool.address);
-    expectAddress(pending.pendingNewAddress!, newGasPool.address);
-
-    await treasuryPool.sendConfirmRequest(
-      owner.getSender(),
-      {
-        value: toNano('0.05'),
-        queryId: 34n
-      }
-    );
-
-    const data = await treasuryPool.getTreasuryPoolData();
-    const afterPending = await treasuryPool.getTreasuryPendingData();
-
-    expectAddress(data.gasPoolAddress, newGasPool.address);
-    expect(afterPending.hasPending).toBe(false);
-  });
-
-  it('should reject address request from non-manager', async () => {
-    const treasuryPool = await deployPool();
-
-    await ignoreFailure(
-      treasuryPool.sendReplaceAddressRequest(
-        outsider.getSender(),
+    const senderWallet = blockchain.openContract(
+      DomWallet.createFromConfig(
         {
-          value: toNano('0.05'),
-          oldAddress: gasPool.address,
-          newAddress: newGasPool.address,
-          queryId: 35n
-        }
+          balance: DOM_FIXTURE.walletInitialBalance,
+          ownerAddress: owner.address,
+          masterAddress: master.address,
+          gasPoolAddress: gasPool.address,
+          jettonWalletCode: walletCode,
+        },
+        walletCode
       )
     );
 
-    const pending = await treasuryPool.getTreasuryPendingData();
-    const data = await treasuryPool.getTreasuryPoolData();
+    await senderWallet.sendDeploy(
+      owner.getSender(),
+      DOM_VALUE.deploySmall
+    );
 
-    expect(pending.hasPending).toBe(false)
-  })
-})
+    await senderWallet.sendTransfer(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.deploySmall,
+        jettonAmount: DOM_FIXTURE.walletSmallTransferAmount,
+        toOwner: receiver.address,
+        maxFeeDom: DOM_CONTRACT.giverMaxFeeDom,
+        responseDestination: owner.address,
+        queryId: DOM_QUERY.gasTransfer,
+      }
+    );
+
+    const receiverWallet = blockchain.openContract(
+      DomWallet.createFromAddress(
+        await gasPool.getWalletAddress(receiver.address)
+      )
+    );
+
+    const poolWallet = blockchain.openContract(
+      DomWallet.createFromAddress(
+        await gasPool.getPoolWalletAddress()
+      )
+    );
+
+    expect((await receiverWallet.getWalletData()).balance).toEqual(
+      DOM_FIXTURE.walletSmallTransferAmount
+    );
+
+    expect((await poolWallet.getWalletData()).balance).toEqual(
+      calculateDefaultDomFee()
+    );
+  });
+});
