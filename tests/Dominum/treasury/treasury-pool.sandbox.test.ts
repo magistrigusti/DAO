@@ -16,12 +16,12 @@ import {
   DOM_QUERY,
   DOM_STATE,
   DOM_VALUE,
-} from '../_helpers/dom-test-values';
+} from '../_helpers/dom-test-constants';
 import {
   expectAddress,
   expectOptionalAddress,
   ignoreFailure,
-} from '../core/dom-test-utils';
+} from '../_helpers/dom-test-utils';
 
 describe('TreasuryPool', () => {
   let blockchain: Blockchain;

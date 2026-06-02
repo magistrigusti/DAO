@@ -22,11 +22,11 @@ import {
   DOM_STATE,
   DOM_VALUE,
   calculateShare,
-} from '../_helpers/dom-test-values';
+} from '../_helpers/dom-test-constants';
 import {
   expectAddress,
   ignoreFailure,
-} from '../core/dom-test-utils';
+} from '../_helpers/dom-test-utils';
 
 describe('DomMaster', () => {
   let blockchain: Blockchain;

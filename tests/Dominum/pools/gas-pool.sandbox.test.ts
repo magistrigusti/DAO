@@ -19,11 +19,11 @@ import {
   DOM_STATE,
   DOM_VALUE,
   calculateDefaultDomFee,
-} from '../_helpers/dom-test-values';
+} from '../_helpers/dom-test-constants';
 import {
   expectAddress,
   ignoreFailure,
-} from '../core/dom-test-utils';
+} from '../_helpers/dom-test-utils';
 
 describe('GasPool', () => {
   let blockchain: Blockchain;

@@ -16,11 +16,11 @@ import {
   DOM_FIXTURE,
   DOM_QUERY,
   DOM_VALUE,
-} from '../_helpers/dom-test-values';
+} from '../_helpers/dom-test-constants';
 import {
   expectAddress,
   ignoreFailure,
-} from '../core/dom-test-utils';
+} from '../_helpers/dom-test-utils';
 
 describe('DomWallet', () => {
   let blockchain: Blockchain;

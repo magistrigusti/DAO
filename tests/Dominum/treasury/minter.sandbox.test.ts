@@ -20,11 +20,11 @@ import {
   DOM_QUERY,
   DOM_STATE,
   DOM_VALUE,
-} from '../_helpers/dom-test-values';
+} from '../_helpers/dom-test-constants';
 import {
   expectAddress,
   ignoreFailure,
-} from '../core/dom-test-utils';
+} from '../_helpers/dom-test-utils';
 
 describe('Minter', () => {
   let blockchain: Blockchain;
