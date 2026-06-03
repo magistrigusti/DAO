@@ -21,7 +21,7 @@ import {
   expectAddress,
   expectOptionalAddress,
   ignoreFailure,
-} from '../_helpers/dom-test-utils';
+} from '../core/dom-test-utils';
 
 describe('TreasuryPool', () => {
   let blockchain: Blockchain;

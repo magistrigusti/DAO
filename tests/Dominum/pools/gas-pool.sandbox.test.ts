@@ -23,7 +23,7 @@ import {
 import {
   expectAddress,
   ignoreFailure,
-} from '../_helpers/dom-test-utils';
+} from '../core/dom-test-utils';
 
 describe('GasPool', () => {
   let blockchain: Blockchain;

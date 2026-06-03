@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "acton": {
+      "source": "ton-blockchain/skills",
+      "sourceType": "github",
+      "skillPath": "acton/SKILL.md",
+      "computedHash": "ebba56620a0cd33ea232773c88183dd4b05c86f1397ce4f810c9b9e00adb134a"
+    },
+    "func2tolk": {
+      "source": "ton-blockchain/skills",
+      "sourceType": "github",
+      "skillPath": "func2tolk/SKILL.md",
+      "computedHash": "ecff1cea564fb3f61d60c594f75cc620be93c267f81e8241b57dcd812e268635"
+    },
+    "tolk": {
+      "source": "ton-blockchain/skills",
+      "sourceType": "github",
+      "skillPath": "tolk/SKILL.md",
+      "computedHash": "8b34b8ffc397da9af1beb0723dc8d50874d107670bb94f914a710da5f218b7e3"
+    },
+    "ton-blockchain": {
+      "source": "ton-blockchain/skills",
+      "sourceType": "github",
+      "skillPath": "ton-blockchain/SKILL.md",
+      "computedHash": "b23173a36deaadfafdc04437d67338822a3b223f492abcce40afa61a6e057374"
+    }
+  }
+}
