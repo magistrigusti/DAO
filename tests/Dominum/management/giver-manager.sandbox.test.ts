@@ -6,40 +6,47 @@ import {
   TreasuryContract,
 } from '@ton/sandbox';
 import {
+  beginCell,
   Cell,
-  toNano,
 } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
+import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
 import { GiverManager } from '../../../wrappers/Dominum/management/GiverManager';
-import { GiverAllodium } from '../../../wrappers/Dominum/givers/GiverAllodium';
 
-const GIVER_MANAGER = 'Dominum/givers/GiverManager' as const;
-const GIVER_ALLODIUM = 'Dominum/givers/GiverAllodium' as const;
-
-async function ignoreFailure(promise: Promise<unknown>): Promise<void> {
-  try {
-    await promise;
-  } catch {}
-}
+import {
+  DOM_COMPILE,
+  DOM_QUERY,
+  DOM_STATE,
+  DOM_VALUE,
+} from '../_helpers/dom-test-values';
+import {
+  expectAddress,
+  ignoreFailure,
+} from '../core/dom-test-utils';
 
 describe('GiverManager', () => {
   let blockchain: Blockchain;
 
   let owner: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
-  let walletOwner: SandboxContract<TreasuryContract>;
-  let target1: SandboxContract<TreasuryContract>;
-  let target2: SandboxContract<TreasuryContract>;
-  let newTarget1: SandboxContract<TreasuryContract>;
-  let newTarget2: SandboxContract<TreasuryContract>;
+  let gasPool: SandboxContract<TreasuryContract>;
+  let minter: SandboxContract<TreasuryContract>;
+  let minterManager: SandboxContract<TreasuryContract>;
+  let oldAllodiumGiver: SandboxContract<TreasuryContract>;
+  let newAllodiumGiver: SandboxContract<TreasuryContract>;
+  let defiGiver: SandboxContract<TreasuryContract>;
+  let daoGiver: SandboxContract<TreasuryContract>;
+  let dominumGiver: SandboxContract<TreasuryContract>;
 
+  let walletCode: Cell;
+  let masterCode: Cell;
   let giverManagerCode: Cell;
-  let giverAllodiumCode: Cell;
 
   beforeAll(async () => {
-    giverManagerCode = await compile(GIVER_MANAGER);
-    giverAllodiumCode = await compile(GIVER_ALLODIUM);
+    walletCode = await compile(DOM_COMPILE.wallet);
+    masterCode = await compile(DOM_COMPILE.master);
+    giverManagerCode = await compile(DOM_COMPILE.giverManager);
   });
 
   beforeEach(async () => {
@@ -47,15 +54,18 @@ describe('GiverManager', () => {
 
     owner = await blockchain.treasury('owner');
     outsider = await blockchain.treasury('outsider');
-    walletOwner = await blockchain.treasury('wallet-owner');
-    target1 = await blockchain.treasury('target-1');
-    target2 = await blockchain.treasury('target-2');
-    newTarget1 = await blockchain.treasury('new-target-1');
-    newTarget2 = await blockchain.treasury('new-target-2');
+    gasPool = await blockchain.treasury('gas-pool');
+    minter = await blockchain.treasury('minter');
+    minterManager = await blockchain.treasury('minter-manager');
+    oldAllodiumGiver = await blockchain.treasury('old-allodium-giver');
+    newAllodiumGiver = await blockchain.treasury('new-allodium-giver');
+    defiGiver = await blockchain.treasury('defi-giver');
+    daoGiver = await blockchain.treasury('dao-giver');
+    dominumGiver = await blockchain.treasury('dominum-giver');
   });
 
-  function openManager() {
-    return blockchain.openContract(
+  async function deployFlow() {
+    const giverManager = blockchain.openContract(
       GiverManager.createFromConfig(
         {
           ownerAddress: owner.address,
@@ -63,171 +73,105 @@ describe('GiverManager', () => {
         giverManagerCode
       )
     );
-  }
-
-  function openAllodiumGiver(managerAddress: string) {
-    return blockchain.openContract(
-      GiverAllodium.createFromConfig(
-        {
-          managerAddress: owner.address.constructor.parse(managerAddress),
-          walletAddress: null,
-          frsAllodiumAddress: target1.address,
-          allodiumFoundationAddress: target2.address,
-        },
-        giverAllodiumCode
-      )
-    );
-  }
-
-  it('should expose owner in getter', async () => {
-    const giverManager = openManager();
 
     await giverManager.sendDeploy(
       owner.getSender(),
-      toNano('0.05')
+      DOM_VALUE.deploySmall
     );
 
+    const domMaster = blockchain.openContract(
+      DomMaster.createFromConfig(
+        {
+          totalSupply: DOM_STATE.emptySupply,
+          ownerAddress: owner.address,
+          lastMintTime: DOM_STATE.noLastMintTime,
+          isStarted: DOM_STATE.notStarted,
+          gasPoolAddress: gasPool.address,
+          minterAddress: minter.address,
+          minterManagerAddress: minterManager.address,
+          giverManagerAddress: giverManager.address,
+          giverAllodiumAddress: oldAllodiumGiver.address,
+          giverDefiAddress: defiGiver.address,
+          giverDaoAddress: daoGiver.address,
+          giverDominumAddress: dominumGiver.address,
+          content: beginCell().endCell(),
+          jettonWalletCode: walletCode,
+        },
+        masterCode
+      )
+    );
+
+    await domMaster.sendDeploy(
+      owner.getSender(),
+      DOM_VALUE.deploySmall
+    );
+
+    return {
+      giverManager,
+      domMaster,
+    };
+  }
+
+  it('should expose owner address', async () => {
+    const { giverManager } = await deployFlow();
     const managerOwner = await giverManager.getManagerData();
 
-    expect(managerOwner.toString()).toEqual(owner.address.toString());
+    expectAddress(managerOwner, owner.address);
   });
 
-  it('should set wallet in giver through manager', async () => {
-    const giverManager = openManager();
+  it('should replace giver through DomMaster from owner', async () => {
+    const {
+      giverManager,
+      domMaster,
+    } = await deployFlow();
 
-    await giverManager.sendDeploy(
-      owner.getSender(),
-      toNano('0.05')
-    );
-
-    const giver = blockchain.openContract(
-      GiverAllodium.createFromConfig(
-        {
-          managerAddress: giverManager.address,
-          walletAddress: null,
-          frsAllodiumAddress: target1.address,
-          allodiumFoundationAddress: target2.address,
-        },
-        giverAllodiumCode
-      )
-    );
-
-    await giver.sendDeploy(
-      owner.getSender(),
-      toNano('0.05')
-    );
-
-    await giverManager.sendSetWallet(
+    await giverManager.sendReplaceGiver(
       owner.getSender(),
       {
-        value: toNano('0.05'),
-        giverAddress: giver.address,
-        walletAddress: walletOwner.address,
-        queryId: 1n,
+        value: DOM_VALUE.config,
+        masterAddress: domMaster.address,
+        oldGiverAddress: oldAllodiumGiver.address,
+        newGiverAddress: newAllodiumGiver.address,
+        queryId: DOM_QUERY.replaceGiverAllodium,
       }
     );
 
-    const giverData = await giver.getGiverData();
+    const giversData = await domMaster.getGiversData();
 
-    expect(giverData.walletAddress?.toString()).toEqual(walletOwner.address.toString());
+    expectAddress(
+      giversData.giverAllodiumAddress,
+      newAllodiumGiver.address
+    );
+
+    expectAddress(giversData.giverDefiAddress, defiGiver.address);
+    expectAddress(giversData.giverDaoAddress, daoGiver.address);
+    expectAddress(giversData.giverDominumAddress, dominumGiver.address);
   });
 
-  it('should change whitelist in giver through manager', async () => {
-    const giverManager = openManager();
-
-    await giverManager.sendDeploy(
-      owner.getSender(),
-      toNano('0.05')
-    );
-
-    const giver = blockchain.openContract(
-      GiverAllodium.createFromConfig(
-        {
-          managerAddress: giverManager.address,
-          walletAddress: null,
-          frsAllodiumAddress: target1.address,
-          allodiumFoundationAddress: target2.address,
-        },
-        giverAllodiumCode
-      )
-    );
-
-    await giver.sendDeploy(
-      owner.getSender(),
-      toNano('0.05')
-    );
-
-    await giverManager.sendChangeWhitelist(
-      owner.getSender(),
-      {
-        value: toNano('0.05'),
-        giverAddress: giver.address,
-        newAddress1: newTarget1.address,
-        newAddress2: newTarget2.address,
-        queryId: 2n,
-      }
-    );
-
-    const giverData = await giver.getGiverData();
-
-    expect(giverData.frsAllodiumAddress.toString()).toEqual(newTarget1.address.toString());
-    expect(giverData.allodiumFoundationAddress.toString()).toEqual(newTarget2.address.toString());
-  });
-
-  it('should ignore manager commands from non-owner', async () => {
-    const giverManager = openManager();
-
-    await giverManager.sendDeploy(
-      owner.getSender(),
-      toNano('0.05')
-    );
-
-    const giver = blockchain.openContract(
-      GiverAllodium.createFromConfig(
-        {
-          managerAddress: giverManager.address,
-          walletAddress: null,
-          frsAllodiumAddress: target1.address,
-          allodiumFoundationAddress: target2.address,
-        },
-        giverAllodiumCode
-      )
-    );
-
-    await giver.sendDeploy(
-      owner.getSender(),
-      toNano('0.05')
-    );
+  it('should reject replace giver from non-owner', async () => {
+    const {
+      giverManager,
+      domMaster,
+    } = await deployFlow();
 
     await ignoreFailure(
-      giverManager.sendSetWallet(
+      giverManager.sendReplaceGiver(
         outsider.getSender(),
         {
-          value: toNano('0.05'),
-          giverAddress: giver.address,
-          walletAddress: walletOwner.address,
-          queryId: 3n,
+          value: DOM_VALUE.config,
+          masterAddress: domMaster.address,
+          oldGiverAddress: oldAllodiumGiver.address,
+          newGiverAddress: newAllodiumGiver.address,
+          queryId: DOM_QUERY.replaceGiverRejected,
         }
       )
     );
 
-    await ignoreFailure(
-      giverManager.sendChangeWhitelist(
-        outsider.getSender(),
-        {
-          value: toNano('0.05'),
-          giverAddress: giver.address,
-          newAddress1: newTarget1.address,
-          newAddress2: newTarget2.address,
-          queryId: 4n,
-        }
-      )
+    const giversData = await domMaster.getGiversData();
+
+    expectAddress(
+      giversData.giverAllodiumAddress,
+      oldAllodiumGiver.address
     );
-
-    const giverData = await giver.getGiverData();
-
-    expect(giverData.walletAddress).toBeNull();
-    expect(giverData.frsAllodiumAddress.toString()).toEqual(target1.address.toString());
-    expect(giverData.allodiumFoundationAddress.toString()).toEqual(target2.address.toString());
   });
 });

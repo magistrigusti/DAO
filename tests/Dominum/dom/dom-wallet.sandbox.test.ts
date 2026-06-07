@@ -16,7 +16,7 @@ import {
   DOM_FIXTURE,
   DOM_QUERY,
   DOM_VALUE,
-} from '../_helpers/dom-test-constants';
+} from '../_helpers/dom-test-values';
 import {
   expectAddress,
   ignoreFailure,

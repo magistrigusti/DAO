@@ -105,7 +105,9 @@ describe('BankDao', () => {
 
     let data = await bankDao.getBankData();
 
-    expect(data.whitelistCount).toEqual(1n);
+    expect(data.whitelistCount).toEqual(
+      DOM_STATE.oneCount
+    );
 
     await bankDao.sendRemoveWhitelist(
       owner.getSender(),

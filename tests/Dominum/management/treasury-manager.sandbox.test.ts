@@ -17,7 +17,7 @@ import {
   DOM_QUERY,
   DOM_STATE,
   DOM_VALUE,
-} from '../_helpers/dom-test-constants';
+} from '../_helpers/dom-test-values';
 import {
   expectAddress,
   expectOptionalAddress,

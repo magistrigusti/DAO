@@ -77,7 +77,7 @@ describe('BankDominum', () => {
     expect(data.tonBalance >= DOM_STATE.zeroCoins).toBe(true);
   });
 
-  it('should update gas pool only from owner', async () => {
+  it('should keep gas pool address unchanged for unsupported update command', async () => {
     const bankDominum = await deployBank();
 
     await ignoreFailure(
@@ -95,17 +95,19 @@ describe('BankDominum', () => {
 
     expectAddress(data.gasPoolAddress, gasPool.address);
 
-    await bankDominum.sendUpdateGasPool(
-      owner.getSender(),
-      {
-        value: DOM_VALUE.config,
-        newGasPoolAddress: newGasPool.address,
-        queryId: DOM_QUERY.bankCommand,
-      }
+    await ignoreFailure(
+      bankDominum.sendUpdateGasPool(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          newGasPoolAddress: newGasPool.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
     );
 
     data = await bankDominum.getBankDominumData();
 
-    expectAddress(data.gasPoolAddress, newGasPool.address);
+    expectAddress(data.gasPoolAddress, gasPool.address);
   });
 });

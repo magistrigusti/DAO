@@ -19,7 +19,7 @@ import {
   DOM_STATE,
   DOM_VALUE,
   calculateDefaultDomFee,
-} from '../_helpers/dom-test-constants';
+} from '../_helpers/dom-test-values';
 import {
   expectAddress,
   ignoreFailure,

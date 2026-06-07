@@ -31,7 +31,7 @@ describe('DaoFoundation', () => {
   let daoFoundationCode: Cell;
 
   beforeAll(async () => {
-    daoFoundationCode = await compile('Dominum/dao/DaoFoundation');
+    daoFoundationCode = await compile(DOM_COMPILE.daoFoundation);
   });
 
   beforeEach(async () => {

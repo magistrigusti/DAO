@@ -21,13 +21,22 @@ export const DOM_COMPILE = {
   bankDao: 'Dominum/banks/BankDao',
   bankDefi: 'Dominum/banks/BankDefi',
   bankDominum: 'Dominum/banks/BankDominum',
+
+  daoFoundation: 'Dominum/dao/DaoFoundation',
+  dominumFoundation: 'Dominum/foundation/DominumFoundation',
+
+  marketMaker: 'Dominum/defi/MarketMaker',
+  foundryLock: 'Dominum/invest/FoundryLock',
 } as const;
 
 export const DOM_STATE = {
   emptySupply: 0n,
+  emptyBalance: 0n,
+  emptyCounter: 0n,
   noLastMintTime: 0n,
   zeroCoins: 0n,
   zeroCount: 0n,
+  oneCount: 1n,
   notStarted: false,
   walletNotConfigured: false,
   masterNotConfigured: false,

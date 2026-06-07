@@ -22,7 +22,7 @@ import {
   DOM_STATE,
   DOM_VALUE,
   calculateShare,
-} from '../_helpers/dom-test-constants';
+} from '../_helpers/dom-test-values';
 import {
   expectAddress,
   ignoreFailure,
