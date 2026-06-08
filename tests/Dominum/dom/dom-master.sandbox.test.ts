@@ -33,10 +33,9 @@ describe('DomMaster', () => {
 
   let owner: SandboxContract<TreasuryContract>;
   let minter: SandboxContract<TreasuryContract>;
+  let gasPool: SandboxContract<TreasuryContract>;
   let minterManager: SandboxContract<TreasuryContract>;
   let giverManager: SandboxContract<TreasuryContract>;
-  let gasPool: SandboxContract<TreasuryContract>;
-
   let giverAllodium: SandboxContract<TreasuryContract>;
   let giverDefi: SandboxContract<TreasuryContract>;
   let giverDao: SandboxContract<TreasuryContract>;
@@ -83,7 +82,6 @@ describe('DomMaster', () => {
           minterAddress: minter.address,
           minterManagerAddress: minterManager.address,
           giverManagerAddress: giverManager.address,
-
           giverAllodiumAddress: giverAllodium.address,
           giverDefiAddress: giverDefi.address,
           giverDaoAddress: giverDao.address,
