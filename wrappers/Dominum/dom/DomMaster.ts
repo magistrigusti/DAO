@@ -34,6 +34,21 @@ export type DomMasterConfig = {
 export function domMasterConfigToCell(
   config: DomMasterConfig
 ): Cell {
+  const roleCore = beginCell()
+    .storeAddress(config.gasPoolAddress)
+    .storeAddress(config.minterAddress)
+    .endCell();
+
+  const roleManagers = beginCell()
+    .storeAddress(config.minterManagerAddress)
+    .storeAddress(config.giverManagerAddress)
+    .endCell();
+
+  const roles = beginCell()
+    .storeRef(roleCore)
+    .storeRef(roleManagers)
+    .endCell();
+
   const giversFirst = beginCell()
     .storeAddress(config.giverAllodiumAddress)
     .storeAddress(config.giverDefiAddress)
@@ -44,17 +59,18 @@ export function domMasterConfigToCell(
     .storeAddress(config.giverDominumAddress)
     .endCell();
 
+  const givers = beginCell()
+    .storeRef(giversFirst)
+    .storeRef(giversSecond)
+    .endCell();
+
   return beginCell()
     .storeCoins(config.totalSupply)
     .storeAddress(config.ownerAddress)
     .storeUint(config.lastMintTime, 64)
     .storeBit(config.isStarted)
-    .storeAddress(config.gasPoolAddress)
-    .storeAddress(config.minterAddress)
-    .storeAddress(config.minterManagerAddress)
-    .storeAddress(config.giverManagerAddress)
-    .storeRef(giversFirst)
-    .storeRef(giversSecond)
+    .storeRef(roles)
+    .storeRef(givers)
     .storeRef(config.content)
     .storeRef(config.jettonWalletCode)
     .endCell();

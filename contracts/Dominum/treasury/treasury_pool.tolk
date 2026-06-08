@@ -44,10 +44,13 @@ fun loadData() {
     walletConfigured = ds.loadBool();
 
     var targets = ds.loadRef().beginParse();
-    bankDaoAddress = targets.loadAddress();
-    bankDefiAddress = targets.loadAddress();
-    bankDominumAddress = targets.loadAddress();
-    gasPoolAddress = targets.loadAddress();
+    var bankTargets = targets.loadRef().beginParse();
+    var poolTargets = targets.loadRef().beginParse();
+
+    bankDaoAddress = bankTargets.loadAddress();
+    bankDefiAddress = bankTargets.loadAddress();
+    bankDominumAddress = poolTargets.loadAddress();
+    gasPoolAddress = poolTargets.loadAddress();
 
     var stats = ds.loadRef().beginParse();
     taxMultiplier = stats.loadUint(16);
@@ -65,11 +68,19 @@ fun loadData() {
 }
 
 fun saveData() {
-    var targets = beginCell()
+    var bankTargets = beginCell()
         .storeAddress(bankDaoAddress)
         .storeAddress(bankDefiAddress)
+        .endCell();
+
+    var poolTargets = beginCell()
         .storeAddress(bankDominumAddress)
         .storeAddress(gasPoolAddress)
+        .endCell();
+
+    var targets = beginCell()
+        .storeRef(bankTargets)
+        .storeRef(poolTargets)
         .endCell();
 
     var stats = beginCell()

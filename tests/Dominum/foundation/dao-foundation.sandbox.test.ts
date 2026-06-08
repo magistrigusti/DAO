@@ -11,6 +11,7 @@ import { compile } from '@ton/blueprint';
 import { DaoFoundation } from '../../../wrappers/Dominum/foundation/DaoFoundation';
 
 import {
+  DOM_COMPILE,
   DOM_QUERY,
   DOM_STATE,
   DOM_VALUE,

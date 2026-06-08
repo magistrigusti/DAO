@@ -130,7 +130,7 @@ describe('GasPool', () => {
     const senderWallet = blockchain.openContract(
       DomWallet.createFromConfig(
         {
-          balance: DOM_FIXTURE.walletInitialBalance,
+          balance: DOM_STATE.emptyBalance,
           ownerAddress: owner.address,
           masterAddress: master.address,
           gasPoolAddress: gasPool.address,
@@ -143,6 +143,22 @@ describe('GasPool', () => {
     await senderWallet.sendDeploy(
       owner.getSender(),
       DOM_VALUE.deploySmall
+    );
+
+    expectAddress(
+      senderWallet.address,
+      await gasPool.getWalletAddress(owner.address)
+    );
+
+    await senderWallet.sendInternalTransfer(
+      master.getSender(),
+      {
+        value: DOM_VALUE.deploySmall,
+        amount: DOM_FIXTURE.walletInitialBalance,
+        fromOwner: master.address,
+        responseDestination: owner.address,
+        queryId: DOM_QUERY.masterMint,
+      }
     );
 
     await senderWallet.sendTransfer(

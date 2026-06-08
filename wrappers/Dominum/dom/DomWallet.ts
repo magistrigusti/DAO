@@ -8,7 +8,11 @@ import {
     Dictionary,
     Sender,
 } from '@ton/core';
-import { OP_BURN, OP_TRANSFER } from '../core/op_code';
+import {
+    OP_BURN,
+    OP_INTERNAL_TRANSFER,
+    OP_TRANSFER,
+} from '../core/op_code';
 
 export type DomWalletConfig = {
     balance: bigint;
@@ -20,18 +24,18 @@ export type DomWalletConfig = {
 };
 
 export function domWalletConfigToCell(config: DomWalletConfig): Cell {
-    const pendingTransfers =
-        config.pendingTransfers ??
-        Dictionary.empty(Dictionary.Keys.BigUint(64), Dictionary.Values.Cell());
-
-    return beginCell()
+    const builder = beginCell()
         .storeCoins(config.balance)
         .storeAddress(config.ownerAddress)
         .storeAddress(config.masterAddress)
         .storeAddress(config.gasPoolAddress)
-        .storeRef(config.jettonWalletCode)
-        .storeDict(pendingTransfers)
-        .endCell();
+        .storeRef(config.jettonWalletCode);
+
+    if (config.pendingTransfers) {
+        builder.storeDict(config.pendingTransfers);
+    }
+
+    return builder.endCell();
 }
 
 export class DomWallet implements Contract {
@@ -73,6 +77,31 @@ export class DomWallet implements Contract {
             .storeAddress(opts.toOwner)
             .storeAddress(opts.responseDestination ?? null)
             .storeCoins(opts.maxFeeDom)
+            .endCell();
+
+        await provider.internal(via, {
+            value: opts.value,
+            body,
+        });
+    }
+
+    async sendInternalTransfer(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            amount: bigint;
+            fromOwner: Address;
+            responseDestination?: Address | null;
+            queryId?: bigint;
+        }
+    ) {
+        const body = beginCell()
+            .storeUint(OP_INTERNAL_TRANSFER, 32)
+            .storeUint(opts.queryId ?? 0n, 64)
+            .storeCoins(opts.amount)
+            .storeAddress(opts.fromOwner)
+            .storeAddress(opts.responseDestination ?? null)
             .endCell();
 
         await provider.internal(via, {

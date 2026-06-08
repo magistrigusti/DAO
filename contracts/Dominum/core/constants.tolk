@@ -41,8 +41,8 @@ const MINT_INTERVAL: int = TESTNET_MINT_INTERVAL;
 // TON GAS / STORAGE
 // -----------------------------------------------------
 const MIN_TON_FOR_STORAGE: int = 5000000;
-const BASE_TON_COST: int = 5000000;
 const MIN_TON_FOR_TRANSFER: int = 20000000;
+const BASE_TON_COST: int = 50000000;
 
 // -----------------------------------------------------
 // DOM FEE

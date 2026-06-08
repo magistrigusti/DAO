@@ -42,11 +42,19 @@ export type TreasuryPoolConfig = {
 };
 
 export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
-  const targets = beginCell()
+  const bankTargets = beginCell()
     .storeAddress(config.bankDaoAddress)
     .storeAddress(config.bankDefiAddress)
+    .endCell();
+
+  const poolTargets = beginCell()
     .storeAddress(config.bankDominumAddress)
     .storeAddress(config.gasPoolAddress)
+    .endCell();
+
+  const targets = beginCell()
+    .storeRef(bankTargets)
+    .storeRef(poolTargets)
     .endCell();
 
   const stats = beginCell()

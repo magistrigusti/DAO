@@ -38,14 +38,19 @@ fun loadData() {
     lastMintTime = ds.loadUint(64);
     isStarted = ds.loadBool();
 
-    gasPoolAddress = ds.loadAddress();
+    var roles = ds.loadRef().beginParse();
+    var roleCore = roles.loadRef().beginParse();
+    var roleManagers = roles.loadRef().beginParse();
 
-    minterAddress = ds.loadAddress();
-    minterManagerAddress = ds.loadAddress();
-    giverManagerAddress = ds.loadAddress();
+    gasPoolAddress = roleCore.loadAddress();
+    minterAddress = roleCore.loadAddress();
 
-    var giversFirst = ds.loadRef().beginParse();
-    var giversSecond = ds.loadRef().beginParse();
+    minterManagerAddress = roleManagers.loadAddress();
+    giverManagerAddress = roleManagers.loadAddress();
+
+    var givers = ds.loadRef().beginParse();
+    var giversFirst = givers.loadRef().beginParse();
+    var giversSecond = givers.loadRef().beginParse();
 
     giverAllodiumAddress = giversFirst.loadAddress();
     giverDefiAddress = giversFirst.loadAddress();
@@ -58,6 +63,21 @@ fun loadData() {
 }
 
 fun saveData() {
+    var roleCore = beginCell()
+        .storeAddress(gasPoolAddress)
+        .storeAddress(minterAddress)
+        .endCell();
+
+    var roleManagers = beginCell()
+        .storeAddress(minterManagerAddress)
+        .storeAddress(giverManagerAddress)
+        .endCell();
+
+    var roles = beginCell()
+        .storeRef(roleCore)
+        .storeRef(roleManagers)
+        .endCell();
+
     var giversFirst = beginCell()
         .storeAddress(giverAllodiumAddress)
         .storeAddress(giverDefiAddress)
@@ -68,18 +88,19 @@ fun saveData() {
         .storeAddress(giverDominumAddress)
         .endCell();
 
+    var givers = beginCell()
+        .storeRef(giversFirst)
+        .storeRef(giversSecond)
+        .endCell();
+
     contract.setData(
         beginCell()
             .storeCoins(totalSupply)
             .storeAddress(ownerAddress)
             .storeUint(lastMintTime, 64)
             .storeBool(isStarted)
-            .storeAddress(gasPoolAddress)
-            .storeAddress(minterAddress)
-            .storeAddress(minterManagerAddress)
-            .storeAddress(giverManagerAddress)
-            .storeRef(giversFirst)
-            .storeRef(giversSecond)
+            .storeRef(roles)
+            .storeRef(givers)
             .storeRef(content)
             .storeRef(jettonWalletCode)
             .endCell()
