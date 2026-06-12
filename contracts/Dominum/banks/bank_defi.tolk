@@ -1,6 +1,7 @@
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+import "@stdlib/tvm-dicts";
 
 // ========== TOLK MIGRATION v2 ==========
 // BANK DEFI — банк DeFi-ветки Dominum.
@@ -26,6 +27,8 @@ global marketMakerAddress: address;
 
 global totalReceived: int;
 global totalSent: int;
+global whitelistDict: dict;
+global whitelistCount: int;
 
 // -----------------------------------------------------
 // LOAD / SAVE
@@ -39,15 +42,25 @@ fun loadData() {
     var targets = ds.loadRef().beginParse();
     defiFoundationAddress = targets.loadAddress();
     marketMakerAddress = targets.loadAddress();
+    whitelistCount = targets.loadUint(16);
 
-    totalReceived = ds.loadCoins();
-    totalSent = ds.loadCoins();
+    var statsRef = ds.loadRef().beginParse();
+    totalReceived = statsRef.loadCoins();
+    totalSent = statsRef.loadCoins();
+    whitelistDict = statsRef.loadDict();
 }
 
 fun saveData() {
     var targets = beginCell()
         .storeAddress(defiFoundationAddress)
         .storeAddress(marketMakerAddress)
+        .storeUint(whitelistCount, 16)
+        .endCell();
+
+    var statsRef = beginCell()
+        .storeCoins(totalReceived)
+        .storeCoins(totalSent)
+        .storeDict(whitelistDict)
         .endCell();
 
     contract.setData(
@@ -55,8 +68,7 @@ fun saveData() {
             .storeAddress(ownerAddress)
             .storeAddress(walletAddress)
             .storeRef(targets)
-            .storeCoins(totalReceived)
-            .storeCoins(totalSent)
+            .storeRef(statsRef)
             .endCell()
     );
 }
@@ -71,6 +83,22 @@ fun requireOwner(senderAddress: address) {
     );
 }
 
+fun getAddrHash(addr: address): int {
+    var (_, hash) = addr.getWorkchainAndHash();
+    return hash;
+}
+
+fun isWhitelisted(addr: address): bool {
+    var hash = getAddrHash(addr);
+    var (_, found) = whitelistDict.uDictGet(256, hash);
+
+    if (found) {
+        return true;
+    }
+
+    return false;
+}
+
 fun isAllowedTarget(candidate: address): bool {
     if (candidate == defiFoundationAddress) {
         return true;
@@ -80,7 +108,7 @@ fun isAllowedTarget(candidate: address): bool {
         return true;
     }
 
-    return false;
+    return isWhitelisted(candidate);
 }
 
 // -----------------------------------------------------
@@ -232,6 +260,49 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
+    if (op == OP_ADD_WHITELIST) {
+        requireOwner(senderAddress);
+
+        var newAddress = msgBody.loadAddress();
+        var hash = getAddrHash(newAddress);
+
+        var (_, exists) = whitelistDict.uDictGet(256, hash);
+
+        if (!exists) {
+            var addrSlice = beginCell()
+                .storeAddress(newAddress)
+                .endCell()
+                .beginParse();
+
+            whitelistDict.uDictSet(
+                256,
+                hash,
+                addrSlice
+            );
+
+            whitelistCount = whitelistCount + 1;
+            saveData();
+        }
+
+        return;
+    }
+
+    if (op == OP_REMOVE_WHITELIST) {
+        requireOwner(senderAddress);
+
+        var removeAddress = msgBody.loadAddress();
+        var hash = getAddrHash(removeAddress);
+
+        var deleted = whitelistDict.uDictDelete(256, hash);
+
+        if (deleted) {
+            whitelistCount = whitelistCount - 1;
+            saveData();
+        }
+
+        return;
+    }
+
     throw(0xffff);
 }
 
@@ -239,7 +310,7 @@ fun onInternalMessage(in: InMessage) {
 // GETTERS
 // -----------------------------------------------------
 get fun getDefiBankData(): (
-    address, address, address, address, int, int
+    address, address, address, address, int, int, int
 ) {
     loadData();
 
@@ -248,9 +319,15 @@ get fun getDefiBankData(): (
         walletAddress,
         defiFoundationAddress,
         marketMakerAddress,
+        whitelistCount,
         totalReceived,
         totalSent
     );
+}
+
+get fun isAddressWhitelisted(candidate: address): bool {
+    loadData();
+    return isWhitelisted(candidate);
 }
 
 get fun isAddressAllowed(candidate: address): bool {

@@ -5,10 +5,13 @@ import {
   Contract,
   contractAddress,
   ContractProvider,
+  Dictionary,
   Sender,
 } from '@ton/core';
 import {
+  OP_ADD_WHITELIST,
   OP_REFILL_POOL,
+  OP_REMOVE_WHITELIST,
   OP_UPDATE_GAS_POOL,
   OP_WITHDRAW,
   OP_WITHDRAW_FROM_POOL,
@@ -19,15 +22,23 @@ export type BankDominumConfig = {
   ownerAddress: Address;
   gasPoolAddress: Address;
   domWalletAddress: Address;
+  whitelistCount?: number;
+  whitelistDict?: Dictionary<bigint, Cell> | null;
 };
 
 export function bankDominumConfigToCell(
   config: BankDominumConfig
 ): Cell {
+  const whitelistDict =
+      config.whitelistDict ??
+      Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
+
   return beginCell()
       .storeAddress(config.ownerAddress)
       .storeAddress(config.gasPoolAddress)
       .storeAddress(config.domWalletAddress)
+      .storeUint(config.whitelistCount ?? 0, 16)
+      .storeDict(whitelistDict)
       .endCell();
 }
 
@@ -175,6 +186,48 @@ export class BankDominum implements Contract {
       });
   }
 
+  async sendAddWhitelist(
+      provider: ContractProvider,
+      via: Sender,
+      opts: {
+          value: bigint;
+          address: Address;
+          queryId?: bigint;
+      }
+  ) {
+      const body = beginCell()
+          .storeUint(OP_ADD_WHITELIST, 32)
+          .storeUint(opts.queryId ?? 0n, 64)
+          .storeAddress(opts.address)
+          .endCell();
+
+      await provider.internal(via, {
+          value: opts.value,
+          body,
+      });
+  }
+
+  async sendRemoveWhitelist(
+      provider: ContractProvider,
+      via: Sender,
+      opts: {
+          value: bigint;
+          address: Address;
+          queryId?: bigint;
+      }
+  ) {
+      const body = beginCell()
+          .storeUint(OP_REMOVE_WHITELIST, 32)
+          .storeUint(opts.queryId ?? 0n, 64)
+          .storeAddress(opts.address)
+          .endCell();
+
+      await provider.internal(via, {
+          value: opts.value,
+          body,
+      });
+  }
+
   async getBankDominumData(
       provider: ContractProvider
   ) {
@@ -187,7 +240,46 @@ export class BankDominum implements Contract {
           ownerAddress: stack.readAddress(),
           gasPoolAddress: stack.readAddress(),
           domWalletAddress: stack.readAddress(),
+          whitelistCount: stack.readBigNumber(),
           tonBalance: stack.readBigNumber(),
       };
+  }
+
+  async isAddressWhitelisted(
+      provider: ContractProvider,
+      candidate: Address
+  ) {
+      const { stack } = await provider.get(
+          'isAddressWhitelisted',
+          [
+              {
+                  type: 'slice',
+                  cell: beginCell()
+                      .storeAddress(candidate)
+                      .endCell(),
+              },
+          ]
+      );
+
+      return stack.readBoolean();
+  }
+
+  async isAddressAllowed(
+      provider: ContractProvider,
+      candidate: Address
+  ) {
+      const { stack } = await provider.get(
+          'isAddressAllowed',
+          [
+              {
+                  type: 'slice',
+                  cell: beginCell()
+                      .storeAddress(candidate)
+                      .endCell(),
+              },
+          ]
+      );
+
+      return stack.readBoolean();
   }
 }

@@ -1,6 +1,7 @@
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+import "@stdlib/tvm-dicts";
 
 // ========== TOLK MIGRATION v2 ==========
 // BANK DOMINUM — главный банк экосистемы DOM.
@@ -14,6 +15,8 @@ import "../core/constants.tolk";
 global ownerAddress: address;
 global gasPoolAddress: address;
 global domWalletAddress: address;
+global whitelistDict: dict;
+global whitelistCount: int;
 
 // -----------------------------------------------------
 // LOAD / SAVE
@@ -24,6 +27,8 @@ fun loadData() {
     ownerAddress = ds.loadAddress();
     gasPoolAddress = ds.loadAddress();
     domWalletAddress = ds.loadAddress();
+    whitelistCount = ds.loadUint(16);
+    whitelistDict = ds.loadDict();
 }
 
 fun saveData() {
@@ -32,6 +37,8 @@ fun saveData() {
             .storeAddress(ownerAddress)
             .storeAddress(gasPoolAddress)
             .storeAddress(domWalletAddress)
+            .storeUint(whitelistCount, 16)
+            .storeDict(whitelistDict)
             .endCell()
     );
 }
@@ -44,6 +51,30 @@ fun requireOwner(senderAddress: address) {
         senderAddress == ownerAddress,
         ERROR_NOT_OWNER
     );
+}
+
+fun getAddrHash(addr: address): int {
+    var (_, hash) = addr.getWorkchainAndHash();
+    return hash;
+}
+
+fun isWhitelisted(addr: address): bool {
+    var hash = getAddrHash(addr);
+    var (_, found) = whitelistDict.uDictGet(256, hash);
+
+    if (found) {
+        return true;
+    }
+
+    return false;
+}
+
+fun isAllowedTarget(candidate: address): bool {
+    if (candidate == gasPoolAddress) {
+        return true;
+    }
+
+    return isWhitelisted(candidate);
 }
 
 // -----------------------------------------------------
@@ -206,6 +237,7 @@ fun onInternalMessage(in: InMessage) {
         var toAddress = msgBody.loadAddress();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
         assert(
             amount + MIN_TON_FOR_STORAGE <= myBalance,
             ERROR_INSUFFICIENT_BALANCE
@@ -226,6 +258,7 @@ fun onInternalMessage(in: InMessage) {
         var toAddress = msgBody.loadAddress();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
         assert(
             msgValue >= MIN_TON_FOR_TRANSFER,
             ERROR_INSUFFICIENT_GAS
@@ -246,6 +279,7 @@ fun onInternalMessage(in: InMessage) {
         var amount = msgBody.loadCoins();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
         assert(
             msgValue >= MIN_TON_FOR_STORAGE,
             ERROR_INSUFFICIENT_GAS
@@ -274,6 +308,55 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
+    // =====================================================
+    // OP_ADD_WHITELIST — добавить адрес будущего инструмента
+    // =====================================================
+    if (op == OP_ADD_WHITELIST) {
+        requireOwner(senderAddress);
+
+        var newAddress = msgBody.loadAddress();
+        var hash = getAddrHash(newAddress);
+
+        var (_, exists) = whitelistDict.uDictGet(256, hash);
+
+        if (!exists) {
+            var addrSlice = beginCell()
+                .storeAddress(newAddress)
+                .endCell()
+                .beginParse();
+
+            whitelistDict.uDictSet(
+                256,
+                hash,
+                addrSlice
+            );
+
+            whitelistCount = whitelistCount + 1;
+            saveData();
+        }
+
+        return;
+    }
+
+    // =====================================================
+    // OP_REMOVE_WHITELIST — убрать адрес из списка целей
+    // =====================================================
+    if (op == OP_REMOVE_WHITELIST) {
+        requireOwner(senderAddress);
+
+        var removeAddress = msgBody.loadAddress();
+        var hash = getAddrHash(removeAddress);
+
+        var deleted = whitelistDict.uDictDelete(256, hash);
+
+        if (deleted) {
+            whitelistCount = whitelistCount - 1;
+            saveData();
+        }
+
+        return;
+    }
+
     throw(0xffff);
 }
 
@@ -281,7 +364,7 @@ fun onInternalMessage(in: InMessage) {
 // GETTERS
 // -----------------------------------------------------
 get fun getBankDominumData(): (
-    address, address, address, int
+    address, address, address, int, int
 ) {
     loadData();
 
@@ -289,6 +372,17 @@ get fun getBankDominumData(): (
         ownerAddress,
         gasPoolAddress,
         domWalletAddress,
+        whitelistCount,
         contract.getOriginalBalance()
     );
+}
+
+get fun isAddressWhitelisted(candidate: address): bool {
+    loadData();
+    return isWhitelisted(candidate);
+}
+
+get fun isAddressAllowed(candidate: address): bool {
+    loadData();
+    return isAllowedTarget(candidate);
 }

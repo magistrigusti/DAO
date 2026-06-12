@@ -12,11 +12,13 @@ import { BankDefi } from '../../../wrappers/Dominum/banks/BankDefi';
 
 import {
   DOM_COMPILE,
+  DOM_QUERY,
   DOM_STATE,
   DOM_VALUE,
 } from '../_helpers/dom-test-values';
 import {
   expectAddress,
+  ignoreFailure,
 } from '../core/dom-test-utils';
 
 describe('BankDefi', () => {
@@ -27,6 +29,7 @@ describe('BankDefi', () => {
   let defiFoundation: SandboxContract<TreasuryContract>;
   let marketMaker: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
+  let futureDefiTool: SandboxContract<TreasuryContract>;
 
   let bankDefiCode: Cell;
 
@@ -42,6 +45,7 @@ describe('BankDefi', () => {
     defiFoundation = await blockchain.treasury('defi-foundation');
     marketMaker = await blockchain.treasury('market-maker');
     outsider = await blockchain.treasury('outsider');
+    futureDefiTool = await blockchain.treasury('future-defi-tool');
   });
 
   async function deployBank() {
@@ -74,6 +78,10 @@ describe('BankDefi', () => {
     expectAddress(data.defiFoundationAddress, defiFoundation.address);
     expectAddress(data.marketMakerAddress, marketMaker.address);
 
+    expect(data.whitelistCount).toEqual(
+      DOM_STATE.zeroCount
+    );
+
     expect(data.totalReceived).toEqual(
       DOM_STATE.zeroCoins
     );
@@ -97,5 +105,72 @@ describe('BankDefi', () => {
     expect(
       await bankDefi.isAddressAllowed(outsider.address)
     ).toBe(false);
+  });
+
+  it('should add and remove future DeFi targets through dynamic whitelist', async () => {
+    const bankDefi = await deployBank();
+
+    await bankDefi.sendAddWhitelist(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        address: futureDefiTool.address,
+        queryId: DOM_QUERY.bankCommand,
+      }
+    );
+
+    let data = await bankDefi.getDefiBankData();
+
+    expect(data.whitelistCount).toEqual(
+      DOM_STATE.oneCount
+    );
+
+    expect(
+      await bankDefi.isAddressWhitelisted(futureDefiTool.address)
+    ).toBe(true);
+
+    expect(
+      await bankDefi.isAddressAllowed(futureDefiTool.address)
+    ).toBe(true);
+
+    await bankDefi.sendRemoveWhitelist(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        address: futureDefiTool.address,
+        queryId: DOM_QUERY.bankCommand,
+      }
+    );
+
+    data = await bankDefi.getDefiBankData();
+
+    expect(data.whitelistCount).toEqual(
+      DOM_STATE.zeroCount
+    );
+
+    expect(
+      await bankDefi.isAddressAllowed(futureDefiTool.address)
+    ).toBe(false);
+  });
+
+  it('should reject whitelist changes from non-owner', async () => {
+    const bankDefi = await deployBank();
+
+    await ignoreFailure(
+      bankDefi.sendAddWhitelist(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          address: futureDefiTool.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
+    );
+
+    const data = await bankDefi.getDefiBankData();
+
+    expect(data.whitelistCount).toEqual(
+      DOM_STATE.zeroCount
+    );
   });
 });

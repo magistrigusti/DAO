@@ -54,8 +54,6 @@ describe('AllodiumFoundation', () => {
         {
           ownerAddress: owner.address,
           domWalletAddress: domWallet.address,
-          allodiumDaoAddress: dao.address,
-          allodiumReserveAddress: reserve.address,
           totalReceived: ALLODIUM_STATE.emptyCounter,
           totalSent: ALLODIUM_STATE.emptyCounter,
         },
@@ -77,9 +75,53 @@ describe('AllodiumFoundation', () => {
     expectAddress(initialData.ownerAddress, owner.address);
     expectAddress(initialData.domWalletAddress, domWallet.address);
 
-    expect(await foundation.isAddressAllowed(dao.address)).toBe(true);
-    expect(await foundation.isAddressAllowed(reserve.address)).toBe(true);
+    expect(initialData.whitelistCount).toEqual(
+      ALLODIUM_STATE.emptyCounter
+    );
+
+    expect(await foundation.isAddressAllowed(dao.address)).toBe(false);
+    expect(await foundation.isAddressAllowed(reserve.address)).toBe(false);
     expect(await foundation.isAddressAllowed(outsider.address)).toBe(false);
+
+    await foundation.sendAddWhitelist(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.service,
+        address: dao.address,
+        queryId: ALLODIUM_QUERY.addWhitelist,
+      }
+    );
+
+    await foundation.sendAddWhitelist(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.service,
+        address: reserve.address,
+        queryId: ALLODIUM_QUERY.addWhitelist,
+      }
+    );
+
+    let data = await foundation.getFoundationData();
+
+    expect(data.whitelistCount).toEqual(2n);
+
+    expect(await foundation.isAddressWhitelisted(dao.address)).toBe(true);
+    expect(await foundation.isAddressAllowed(reserve.address)).toBe(true);
+
+    await ignoreFailure(
+      foundation.sendAddWhitelist(
+        outsider.getSender(),
+        {
+          value: ALLODIUM_VALUE.service,
+          address: outsider.address,
+          queryId: ALLODIUM_QUERY.rejected,
+        }
+      )
+    );
+
+    data = await foundation.getFoundationData();
+
+    expect(data.whitelistCount).toEqual(2n);
 
     await foundation.sendDomTransferNotification(
       domWallet.getSender(),
@@ -91,7 +133,7 @@ describe('AllodiumFoundation', () => {
       }
     );
 
-    let data = await foundation.getFoundationData();
+    data = await foundation.getFoundationData();
 
     expect(data.totalReceived).toEqual(
       ALLODIUM_FIXTURE.lockedDomAmount
@@ -112,6 +154,20 @@ describe('AllodiumFoundation', () => {
     expect(data.totalSent).toEqual(
       ALLODIUM_FIXTURE.lockedDomAmount
     );
+
+    await foundation.sendRemoveWhitelist(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.service,
+        address: reserve.address,
+        queryId: ALLODIUM_QUERY.removeWhitelist,
+      }
+    );
+
+    data = await foundation.getFoundationData();
+
+    expect(data.whitelistCount).toEqual(1n);
+    expect(await foundation.isAddressAllowed(reserve.address)).toBe(false);
 
     await ignoreFailure(
       foundation.sendWithdrawJettons(

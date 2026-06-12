@@ -34,7 +34,7 @@ export const ALLODIUM_FIXTURE = {
 export const ALLODIUM_VALUE = {
   deploySmall: toNano('0.05'),
   deployMedium: toNano('0.1'),
-  transferWithTax: toNano('0.08'),
+  transferWithTax: toNano('0.1'),
   service: toNano('0.05'),
 } as const;
 
@@ -47,6 +47,8 @@ export const ALLODIUM_QUERY = {
   domLocked: 21n,
   allodBurned: 22n,
   withdraw: 31n,
+  addWhitelist: 32n,
+  removeWhitelist: 33n,
   rejected: 99n,
 } as const;
 

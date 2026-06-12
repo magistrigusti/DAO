@@ -38,6 +38,8 @@ const OP_MINT: int = 0x15;
 // =====================================================
 const OP_WITHDRAW: int = 0x51;
 const OP_WITHDRAW_JETTONS: int = 0x52;
+const OP_ADD_WHITELIST: int = 0xE0;
+const OP_REMOVE_WHITELIST: int = 0xE1;
 
 // =====================================================
 // FRS МОСТ — DOM ↔ ALLOD

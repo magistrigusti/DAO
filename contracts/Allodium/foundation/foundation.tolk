@@ -1,6 +1,7 @@
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+import "@stdlib/tvm-dicts";
 
 // ========== TOLK MIGRATION v2 ==========
 // ALLODIUM FOUNDATION — фонд ликвидности Allodium.
@@ -13,8 +14,8 @@ const DOM_TRANSFER_MAX_FEE: int = 3000000;
 
 global ownerAddress: address;
 global domWalletAddress: address;
-global allodiumDaoAddress: address;
-global allodiumReserveAddress: address;
+global whitelistDict: dict;
+global whitelistCount: int;
 global totalReceived: int;
 global totalSent: int;
 
@@ -23,21 +24,27 @@ fun loadData() {
 
     ownerAddress = ds.loadAddress();
     domWalletAddress = ds.loadAddress();
-    allodiumDaoAddress = ds.loadAddress();
-    allodiumReserveAddress = ds.loadAddress();
-    totalReceived = ds.loadCoins();
-    totalSent = ds.loadCoins();
+    whitelistCount = ds.loadUint(16);
+
+    var statsRef = ds.loadRef().beginParse();
+    totalReceived = statsRef.loadCoins();
+    totalSent = statsRef.loadCoins();
+    whitelistDict = statsRef.loadDict();
 }
 
 fun saveData() {
+    var statsRef = beginCell()
+        .storeCoins(totalReceived)
+        .storeCoins(totalSent)
+        .storeDict(whitelistDict)
+        .endCell();
+
     contract.setData(
         beginCell()
             .storeAddress(ownerAddress)
             .storeAddress(domWalletAddress)
-            .storeAddress(allodiumDaoAddress)
-            .storeAddress(allodiumReserveAddress)
-            .storeCoins(totalReceived)
-            .storeCoins(totalSent)
+            .storeUint(whitelistCount, 16)
+            .storeRef(statsRef)
             .endCell()
     );
 }
@@ -46,12 +53,16 @@ fun requireOwner(senderAddress: address) {
     assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 }
 
-fun isAllowedTarget(candidate: address): bool {
-    if (candidate == allodiumDaoAddress) {
-        return true;
-    }
+fun getAddrHash(addr: address): int {
+    var (_, hash) = addr.getWorkchainAndHash();
+    return hash;
+}
 
-    if (candidate == allodiumReserveAddress) {
+fun isWhitelisted(addr: address): bool {
+    var hash = getAddrHash(addr);
+    var (_, found) = whitelistDict.uDictGet(256, hash);
+
+    if (found) {
         return true;
     }
 
@@ -141,7 +152,7 @@ fun onInternalMessage(in: InMessage) {
         var toAddress = msgBody.loadAddress();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
-        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
+        assert(isWhitelisted(toAddress), ERROR_NOT_IN_WHITELIST);
 
         totalSent = totalSent + amount;
         saveData();
@@ -157,9 +168,52 @@ fun onInternalMessage(in: InMessage) {
         var toAddress = msgBody.loadAddress();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
-        assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
+        assert(isWhitelisted(toAddress), ERROR_NOT_IN_WHITELIST);
 
         sendTon(toAddress, amount, queryId);
+        return;
+    }
+
+    if (op == OP_ADD_WHITELIST) {
+        requireOwner(senderAddress);
+
+        var newAddress = msgBody.loadAddress();
+        var hash = getAddrHash(newAddress);
+
+        var (_, exists) = whitelistDict.uDictGet(256, hash);
+
+        if (!exists) {
+            var addrSlice = beginCell()
+                .storeAddress(newAddress)
+                .endCell()
+                .beginParse();
+
+            whitelistDict.uDictSet(
+                256,
+                hash,
+                addrSlice
+            );
+
+            whitelistCount = whitelistCount + 1;
+            saveData();
+        }
+
+        return;
+    }
+
+    if (op == OP_REMOVE_WHITELIST) {
+        requireOwner(senderAddress);
+
+        var removeAddress = msgBody.loadAddress();
+        var hash = getAddrHash(removeAddress);
+
+        var deleted = whitelistDict.uDictDelete(256, hash);
+
+        if (deleted) {
+            whitelistCount = whitelistCount - 1;
+            saveData();
+        }
+
         return;
     }
 
@@ -167,21 +221,25 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getFoundationData(): (
-    address, address, address, address, int, int
+    address, address, int, int, int
 ) {
     loadData();
 
     return (
         ownerAddress,
         domWalletAddress,
-        allodiumDaoAddress,
-        allodiumReserveAddress,
+        whitelistCount,
         totalReceived,
         totalSent
     );
 }
 
+get fun isAddressWhitelisted(candidate: address): bool {
+    loadData();
+    return isWhitelisted(candidate);
+}
+
 get fun isAddressAllowed(candidate: address): bool {
     loadData();
-    return isAllowedTarget(candidate);
+    return isWhitelisted(candidate);
 }
