@@ -7,7 +7,12 @@ import {
   ContractProvider,
   Sender,
 } from '@ton/core';
+// wrappers/Allodium/treasury/FrsAllodium.ts
 
+import {
+    OP_ALLOD_BURNED,
+    OP_TRANSFER_NOTIFICATION,
+} from '../core/op_code';
 
 export type FrsAllodiumConfig = {
   ownerAddress: Address;

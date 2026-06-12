@@ -7,6 +7,13 @@ import {
   ContractProvider,
   Sender,
 } from '@ton/core';
+// wrappers/Allodium/foundation/AllodiumFoundation.ts
+
+import {
+    OP_TRANSFER_NOTIFICATION,
+    OP_WITHDRAW,
+    OP_WITHDRAW_JETTONS,
+} from '../core/op_code';
 
 export type AllodiumFoundationConfig = {
   ownerAddress: Address;

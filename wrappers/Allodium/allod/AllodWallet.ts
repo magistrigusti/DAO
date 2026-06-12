@@ -7,7 +7,13 @@ import {
   ContractProvider,
   Sender,
 } from '@ton/core';
+// wrappers/Allodium/allod/AllodWallet.ts
 
+import {
+    OP_BURN,
+    OP_INTERNAL_TRANSFER,
+    OP_TRANSFER,
+} from '../core/op_code';
 
 export type AllodWalletConfig = {
   balance: bigint;

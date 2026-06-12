@@ -7,12 +7,12 @@ import {
   ContractProvider,
   Sender,
 } from '@ton/core';
+// wrappers/Allodium/allod/AllodMaster.ts
 
 import {
-    OP_MINT,
     OP_INCREASE_MINT_ALLOWANCE,
+    OP_MINT,
 } from '../core/op_code';
-
 export type AllodMasterConfig = {
   totalSupply: bigint;
   ownerAddress: Address;
