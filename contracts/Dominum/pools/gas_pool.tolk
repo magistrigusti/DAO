@@ -98,8 +98,12 @@ fun buildWalletAddress(owner: address): address {
     );
 }
 
-fun calculateFee(maxFeeDom: int): int {
-    var feeDom = MIN_DOM_TRANSFER_FEE * taxMultiplier / TAX_MULTIPLIER_DENOM;
+fun calculateFee(): int {
+    var feeDom = DOM_TRANSFER_TON_BASE *
+        INITIAL_DOM_PER_TON *
+        taxMultiplier /
+        NANO_TON /
+        TAX_MULTIPLIER_DENOM;
 
     if (feeDom < MIN_DOM_TRANSFER_FEE) {
         feeDom = MIN_DOM_TRANSFER_FEE;
@@ -108,8 +112,6 @@ fun calculateFee(maxFeeDom: int): int {
     if (feeDom > MAX_DOM_TRANSFER_FEE) {
         feeDom = MAX_DOM_TRANSFER_FEE;
     }
-
-    assert(feeDom <= maxFeeDom, ERROR_INSUFFICIENT_BALANCE);
 
     return feeDom;
 }
@@ -180,7 +182,7 @@ fun executeTransfer(
     jettonAmount: int,
     toOwner: address,
     fromOwner: address,
-    maxFeeDom: int,
+    paidFeeDom: int,
     queryId: int
 ) {
     requireMasterConfigured();
@@ -190,12 +192,12 @@ fun executeTransfer(
 
     assert(senderWallet == expectedWallet, ERROR_NOT_VALID_WALLET);
     assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-    assert(maxFeeDom > 0, ERROR_INVALID_AMOUNT);
+    assert(paidFeeDom > 0, ERROR_INVALID_AMOUNT);
 
-    var feeDom = calculateFee(maxFeeDom);
-    var refundDom = maxFeeDom - feeDom;
+    var expectedFeeDom = calculateFee();
+    assert(paidFeeDom == expectedFeeDom, ERROR_INVALID_AMOUNT);
 
-    var tonBudget = BASE_TON_COST * 3;
+    var tonBudget = BASE_TON_COST * 2;
     assert(myBalance >= tonBudget + MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
 
     sendInternalTransfer(
@@ -207,19 +209,10 @@ fun executeTransfer(
 
     sendInternalTransfer(
         contract.getAddress(),
-        feeDom,
+        expectedFeeDom,
         fromOwner,
         queryId + 2
     );
-
-    if (refundDom > 0) {
-        sendInternalTransfer(
-            fromOwner,
-            refundDom,
-            fromOwner,
-            queryId + 3
-        );
-    }
 
     totalSpentTon = totalSpentTon + tonBudget;
     totalExecuted = totalExecuted + 1;
@@ -259,14 +252,14 @@ fun onInternalMessage(in: InMessage) {
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
         var fromOwner = msgBody.loadAddress();
-        var maxFeeDom = msgBody.loadCoins();
+        var paidFeeDom = msgBody.loadCoins();
 
         executeTransfer(
             senderAddress,
             jettonAmount,
             toOwner,
             fromOwner,
-            maxFeeDom,
+            paidFeeDom,
             queryId
         );
 
@@ -352,4 +345,10 @@ get fun getWalletAddress(owner: address): address {
     loadData();
 
     return buildWalletAddress(owner);
+}
+
+get fun getDomTransferFee(): int {
+    loadData();
+
+    return calculateFee();
 }

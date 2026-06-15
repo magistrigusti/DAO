@@ -5,9 +5,9 @@ import "@stdlib/tvm-dicts";
 
 // ========== DOM WALLET v2.3 ==========
 // User transfer body:
-// OP_TRANSFER | queryId | amount | toOwner | responseDest | maxFeeDom
+// OP_TRANSFER | queryId | amount | toOwner | responseDest | paidFeeDom
 //
-// Wallet debits amount + maxFeeDom.
+// Wallet debits amount + paidFeeDom.
 // If the message bounces before GasPool settlement, wallet restores full debit
 // from pendingTransfers by queryId.
 // =====================================
@@ -250,7 +250,7 @@ fun onInternalMessage(in: InMessage) {
 
         balance += amount;
 
-        // GasPool sends refund/settlement with queryId + 2.
+        // GasPool settlement clears pending by derived query id.
         tryClearSettledPending(queryId, senderAddress);
 
         saveData();
@@ -261,7 +261,7 @@ fun onInternalMessage(in: InMessage) {
 
     // =====================================================
     // OP_TRANSFER
-    // body: amount | toOwner | responseDest | maxFeeDom
+    // body: amount | toOwner | responseDest | paidFeeDom
     // =====================================================
     if (op == OP_TRANSFER) {
         assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
@@ -269,12 +269,12 @@ fun onInternalMessage(in: InMessage) {
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
         var responseDestination = msgBody.loadAddressOpt();
-        var maxFeeDom = msgBody.loadCoins();
+        var paidFeeDom = msgBody.loadCoins();
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-        assert(maxFeeDom > 0, ERROR_INVALID_AMOUNT);
+        assert(paidFeeDom > 0, ERROR_INVALID_AMOUNT);
 
-        var totalSpend = jettonAmount + maxFeeDom;
+        var totalSpend = jettonAmount + paidFeeDom;
 
         assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
         assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
@@ -293,7 +293,7 @@ fun onInternalMessage(in: InMessage) {
             .storeCoins(jettonAmount)
             .storeAddress(toOwner)
             .storeAddress(ownerAddress)
-            .storeCoins(maxFeeDom)
+            .storeCoins(paidFeeDom)
             .endCell();
 
         var msg = beginCell()

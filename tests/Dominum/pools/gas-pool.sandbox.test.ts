@@ -85,6 +85,10 @@ describe('GasPool', () => {
     expect(data.taxMultiplier).toEqual(
       DOM_CONTRACT.taxMultiplier
     );
+
+    expect(await gasPool.getDomTransferFee()).toEqual(
+      calculateDefaultDomFee()
+    );
   });
 
   it('should initialize master only from treasury pool', async () => {
@@ -167,7 +171,7 @@ describe('GasPool', () => {
         value: DOM_VALUE.deploySmall,
         jettonAmount: DOM_FIXTURE.walletSmallTransferAmount,
         toOwner: receiver.address,
-        maxFeeDom: DOM_CONTRACT.giverMaxFeeDom,
+        paidFeeDom: calculateDefaultDomFee(),
         responseDestination: owner.address,
         queryId: DOM_QUERY.gasTransfer,
       }

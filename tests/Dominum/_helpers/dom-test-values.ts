@@ -54,9 +54,13 @@ export const DOM_CONTRACT = {
   shareDao: 25n,
   shareDominum: 25n,
 
-  giverMaxFeeDom: 3_000_000n,
+  giverMaxFeeDom: 1_500_000n,
 
   minDomTransferFee: 1_000_000n,
+  maxDomTransferFee: 3_000_000n,
+  domTransferTonBase: 50_000_000n,
+  initialDomPerTon: 10_000_000n,
+  nanoTon: 1_000_000_000n,
   taxMultiplier: 300n,
   taxMultiplierDenom: 100n,
 
@@ -123,9 +127,21 @@ export function calculateShare(
 }
 
 export function calculateDefaultDomFee(): bigint {
-  return DOM_CONTRACT.minDomTransferFee *
+  const feeDom = DOM_CONTRACT.domTransferTonBase *
+    DOM_CONTRACT.initialDomPerTon *
     DOM_CONTRACT.taxMultiplier /
+    DOM_CONTRACT.nanoTon /
     DOM_CONTRACT.taxMultiplierDenom;
+
+  if (feeDom < DOM_CONTRACT.minDomTransferFee) {
+    return DOM_CONTRACT.minDomTransferFee;
+  }
+
+  if (feeDom > DOM_CONTRACT.maxDomTransferFee) {
+    return DOM_CONTRACT.maxDomTransferFee;
+  }
+
+  return feeDom;
 }
 
 export function calculateGiverReserve(

@@ -108,17 +108,24 @@ export class GasPool implements Contract {
       jettonAmount: bigint;
       toOwner: Address;
       fromOwner: Address;
-      maxFeeDom: bigint;
+      paidFeeDom?: bigint;
+      maxFeeDom?: bigint;
       queryId?: bigint;
     }
   ) {
+    const paidFeeDom = opts.paidFeeDom ?? opts.maxFeeDom;
+
+    if (paidFeeDom === undefined) {
+      throw new Error('paidFeeDom is required');
+    }
+
     const body = beginCell()
       .storeUint(OP_GAS_POOL_EXECUTE, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .storeCoins(opts.jettonAmount)
       .storeAddress(opts.toOwner)
       .storeAddress(opts.fromOwner)
-      .storeCoins(opts.maxFeeDom)
+      .storeCoins(paidFeeDom)
       .endCell();
 
     await provider.internal(via, {
@@ -232,5 +239,14 @@ export class GasPool implements Contract {
     );
 
     return stack.readAddress();
+  }
+
+  async getDomTransferFee(provider: ContractProvider) {
+    const { stack } = await provider.get(
+      'getDomTransferFee',
+      []
+    );
+
+    return stack.readBigNumber();
   }
 }

@@ -65,18 +65,25 @@ export class DomWallet implements Contract {
             value: bigint;
             jettonAmount: bigint;
             toOwner: Address;
-            maxFeeDom: bigint;
+            paidFeeDom?: bigint;
+            maxFeeDom?: bigint;
             responseDestination?: Address | null;
             queryId?: bigint;
         }
     ) {
+        const paidFeeDom = opts.paidFeeDom ?? opts.maxFeeDom;
+
+        if (paidFeeDom === undefined) {
+            throw new Error('paidFeeDom is required');
+        }
+
         const body = beginCell()
             .storeUint(OP_TRANSFER, 32)
             .storeUint(opts.queryId ?? 0n, 64)
             .storeCoins(opts.jettonAmount)
             .storeAddress(opts.toOwner)
             .storeAddress(opts.responseDestination ?? null)
-            .storeCoins(opts.maxFeeDom)
+            .storeCoins(paidFeeDom)
             .endCell();
 
         await provider.internal(via, {

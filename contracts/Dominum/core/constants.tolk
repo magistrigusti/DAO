@@ -43,6 +43,7 @@ const MINT_INTERVAL: int = TESTNET_MINT_INTERVAL;
 const MIN_TON_FOR_STORAGE: int = 5000000;
 const MIN_TON_FOR_TRANSFER: int = 20000000;
 const BASE_TON_COST: int = 50000000;
+const DOM_TRANSFER_TON_BASE: int = 50000000;
 
 // -----------------------------------------------------
 // DOM FEE
@@ -53,6 +54,7 @@ const MAX_DOM_TRANSFER_FEE: int = ONE_DOM * 3;
 // -----------------------------------------------------
 // TAX SYSTEM
 // -----------------------------------------------------
+// 300 = 100% TON-base compensation + 200% protocol profit.
 const TAX_MULTIPLIER: int = 300;
 const TAX_MULTIPLIER_DENOM: int = 100;
 
@@ -71,7 +73,7 @@ const NANO_TON: int = 1000000000;
 // -----------------------------------------------------
 // GIVER
 // -----------------------------------------------------
-const GIVER_MAX_FEE_DOM: int = 3000000;
+const GIVER_MAX_FEE_DOM: int = 1500000;
 
 // -----------------------------------------------------
 // FRS — DOM <-> ALLOD
