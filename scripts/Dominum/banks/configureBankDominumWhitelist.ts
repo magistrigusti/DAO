@@ -1,8 +1,8 @@
 import { Address, OpenedContract, toNano } from '@ton/core';
 import { NetworkProvider } from '@ton/blueprint';
-import { AllodiumFoundation } from '../../../wrappers/Allodium/foundation/AllodiumFoundation';
+import { BankDominum } from '../../../wrappers/Dominum/banks/BankDominum';
 
-export type AllodiumFoundationWhitelistTarget = {
+export type BankDominumWhitelistTarget = {
   address: Address;
   label?: string;
   remove?: boolean;
@@ -10,10 +10,10 @@ export type AllodiumFoundationWhitelistTarget = {
   value?: bigint;
 };
 
-export async function configureAllodiumFoundationWhitelist(
+export async function configureBankDominumWhitelist(
   provider: NetworkProvider,
-  foundation: OpenedContract<AllodiumFoundation>,
-  targets: readonly AllodiumFoundationWhitelistTarget[]
+  bankDominum: OpenedContract<BankDominum>,
+  targets: readonly BankDominumWhitelistTarget[]
 ): Promise<void> {
   const ui = provider.ui();
   const sender = provider.sender();
@@ -23,19 +23,19 @@ export async function configureAllodiumFoundationWhitelist(
     const label = target.label ?? target.address.toString();
 
     if (target.remove) {
-      await foundation.sendRemoveWhitelist(sender, {
+      await bankDominum.sendRemoveWhitelist(sender, {
         value,
         address: target.address,
         queryId: target.queryId ?? 0n,
       });
-      ui.write(`AllodiumFoundation whitelist removed: ${label}`);
+      ui.write(`BankDominum whitelist removed: ${label}`);
     } else {
-      await foundation.sendAddWhitelist(sender, {
+      await bankDominum.sendAddWhitelist(sender, {
         value,
         address: target.address,
         queryId: target.queryId ?? 0n,
       });
-      ui.write(`AllodiumFoundation whitelist added: ${label}`);
+      ui.write(`BankDominum whitelist added: ${label}`);
     }
 
     await provider.waitForLastTransaction();

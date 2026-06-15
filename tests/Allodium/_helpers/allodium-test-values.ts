@@ -20,7 +20,7 @@ export const ALLODIUM_CONTRACT = {
   oneAllod: 10_000n,
   exchangeRateDomToAllod: 100n,
   exchangeDecimalsFactor: 100n,
-  taxAllodTon: toNano('0.05'),
+  taxAllodTon: toNano('0.01'),
 } as const;
 
 export const ALLODIUM_FIXTURE = {
@@ -34,7 +34,7 @@ export const ALLODIUM_FIXTURE = {
 export const ALLODIUM_VALUE = {
   deploySmall: toNano('0.05'),
   deployMedium: toNano('0.1'),
-  transferWithTax: toNano('0.1'),
+  transferWithTax: toNano('0.05'),
   service: toNano('0.05'),
 } as const;
 
