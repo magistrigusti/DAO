@@ -1,0 +1,178 @@
+import "../core/op_codes.tolk";
+import "../core/errors.tolk";
+import "../core/constants.tolk";
+
+global authorityAddress: address;
+global masterAddress: address;
+global jettonWalletCode: cell;
+global masterConfigured: bool;
+
+global transferFeeAllod: int;
+
+global totalReceivedAllod: int;
+global totalSpentTon: int;
+global totalExecuted: int;
+
+fun loadData() {
+    var ds = contract.getData(). beginParse();
+
+    authorutyAddress = ds.loadAddress();
+    masterAddress = ds.loadAddress();
+    jettonWalletCode = ds.loadRef();
+    masterConfigured = ds.loadBool();
+
+    transferFeeAllod = ds.loadCoins();
+
+    totalReceivedAllod = ds.loadCoins();
+    totalSpentTon = ds.loadCoins();
+    totalExecuted = ds.loadUint(64);
+}
+
+fun saveData() {
+    contract.setData(
+        beginCell()
+            .storeAddress(authorityAddress)
+            .storeAddress(masterAddress)
+            .storeRef(jettonWalletCode)
+            .storeBool(masterConfigured)
+            .storeCoins(transferFeeAllod)
+            .storeCoins(totalReceivedAllod)
+            .storeCoins(totalSpentTon)
+            .storeUint(totalExecuted, 64)
+            .endCell()
+    );
+}
+
+fun requireAuthority(senderAddress: address) {
+    assert(senderAddress == authorityAddress, ERROR_NOT_OWNER);
+}
+
+fun requiredMasterConfigured() {
+    assert(masterConfigured, ERROR_PROXY_NOT_CONFIGURED);
+}
+
+fun buildWalletData(owner: address): cell {
+    return beginCell()
+        .storeCoins(0)
+        .storeAddress(owner)
+        .storeAddress(masterAddress)
+        .storeAddress(contract.getAddress())
+        .storeRef(jettonWalletCode)
+        .endCell();
+}
+
+fun buildWalletStateInit(owner: address): cell {
+    var walletData = buildWalletData(owner);
+
+    return beginCell()
+        .storeUint(0, 2)
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
+        .storeUint(0, 1)
+        .endCell();
+}
+
+fun buildWalletAddress(owner: address): address {
+    var stateInit = buildWalletStateInit(owner);
+    var wc = contract.getAddress().getWorkchain();
+
+    return address.fromWorkcainAndHash(
+        wc,
+        stateInit.hash()
+    );
+}
+
+fun sendInternalTransfer(
+    toOwner: address,
+    amount: int,
+    fromOwner: address,
+    queryId: int
+) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var stateInit = buildWalletStateInit(toOwner);
+    var toWallet = buildWalletAddress(toOwner);
+
+    var body = beginCell()
+        .storeUint(OP_INTERNAL_TRANSFER, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeAddress(fromOwner)
+        .storeAddress(fromOwner)
+        .storeCoins(0)
+        .storeBool(false)
+        .endCell();
+
+    var msg = beginCell()
+        storeUint(0x18, 6)
+        .storeAddress(toWallet)
+        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+        .storeRef(stateInit)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun initMasterConfig(
+    newMasterAddress: address,
+    newJettonWalletCode: cell
+) {
+    assert(!masterConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceivedAllod == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSpentTon == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalExecuted == 0, ERROR_ALREADY_INITIALIZED);
+
+    masterAddress = newMasterAddress;
+    jettonWalletCode = newJettonWalletCode;
+    masterConfigured = true;
+
+    saveData();
+}
+
+fun executeTransfer(
+    senderWallet: address,
+    jettonAmount: int,
+    toOwner: address,
+    fromOwner: address,
+    paidFeeAllod: int,
+    queryId: int
+) {
+    requireMasterConfigured();
+
+    var expectedWallet = buildWalletAddress(fromOwner);
+    assert(senderWallet == expectedWallet, ERROR_NOT_VALID_WALLET);
+
+    assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+    assert(paidFeeAllod == transferFeeAllod, ERROR_INVALID_AMOUNT);
+
+    var tonBudget = ALLOD_GAS_TRANSFER_TON_BUDGET;
+
+    assert(
+        constract.getOriginalBalance() >= tonBudget + MIN_TON_FOR_STORAGE,
+        ERROR_INSUFFICIENT_GAS
+    );
+
+    sendInternalTransfer(
+        toOwner,
+        jettonAnount,
+        fromOwner,
+        queryId + 1
+    );
+
+    sendInternalTransfer(
+        contract.getAddress(),
+        paidFeeAllod,
+        fromOwner,
+        queryId + 2
+    );
+
+    totalSpenTon = totalSpentTon + tonBudget;
+    totalExecuted = totalExecuted + 1;
+
+    saveData();
+}
+

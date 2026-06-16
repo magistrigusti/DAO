@@ -6,12 +6,12 @@ export const DOM_COMPILE = {
 
   minter: 'Dominum/treasury/Minter',
   treasuryPool: 'Dominum/treasury/TreasuryPool',
-  treasuryManager: 'Dominum/treasury/TreasuryManager',
+  treasuryManager: 'Dominum/management/TreasuryManager',
 
   gasPool: 'Dominum/pools/GasPool',
 
   minterManager: 'Dominum/management/MinterManager',
-  giverManager: 'Dominum/givers/GiverManager',
+  giverManager: 'Dominum/management/GiverManager',
 
   giverAllodium: 'Dominum/givers/GiverAllodium',
   giverDefi: 'Dominum/givers/GiverDefi',

@@ -2,21 +2,26 @@
 // КОНСТАНТЫ ALLODIUM
 // =====================================================
 
-// Decimals токенов
+// Decimals токенов.
 const DOM_DECIMALS: int = 6;
 const ALLOD_DECIMALS: int = 4;
 const DUBLON_DECIMALS: int = 3;
 
-// Курс: 1 DOM = 100 ALLOD
+// Курс FRS: 1 DOM = 100 ALLOD.
 const EXCHANGE_RATE_DOM_TO_ALLOD: int = 100;
 
-// Масштаб для перевода между минимальными единицами:
-// 10^(DOM_DECIMALS - ALLOD_DECIMALS) = 10^(6 - 4) = 100
+// 10^(DOM_DECIMALS - ALLOD_DECIMALS) = 100.
 const EXCHANGE_DECIMALS_FACTOR: int = 100;
 
-// Налог на transfer ALLOD: 0.01 TON
-const TAX_ALLOD_TON: coins = ton("0.01");
+// Fee за перевод ALLOD в минимальных единицах ALLOD.
+// 1 ALLOD = 10_000, значит 100 = 0.01 ALLOD.
+const ALLOD_TRANSFER_FEE_DEFAULT: int = 100;
+const ALLOD_TRANSFER_FEE_MIN: int = 1;
+const ALLOD_TRANSFER_FEE_MAX: int = 100000000;
 
-// TON на служебные сообщения
-const MIN_TON_FOR_TRANSFER: int = 50000000; 
-const MIN_TON_FOR_STORAGE: int = 10000000;   // 0.01 TON
+// TON нужен только для оплаты сети TON.
+const MIN_TON_FOR_TRANSFER: int = 50000000;
+const MIN_TON_FOR_STORAGE: int = 10000000;
+
+// Два внутренних сообщения: получателю и wallet пула.
+const ALLOD_GAS_TRANSFER_TON_BUDGET: int = 100000000;

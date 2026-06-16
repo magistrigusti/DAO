@@ -9,7 +9,7 @@ const CONTRACTS = {
   wallet: 'Dominum/dom/DomWallet',
   master: 'Dominum/dom/DomMaster',
 
-  treasuryManager: 'Dominum/treasury/TreasuryManager',
+  treasuryManager: 'Dominum/management/TreasuryManager',
   treasuryPool: 'Dominum/treasury/TreasuryPool',
   gasPool: 'Dominum/pools/GasPool',
 
@@ -21,8 +21,7 @@ const CONTRACTS = {
   giverDao: 'Dominum/givers/GiverDao',
   giverDominum: 'Dominum/givers/GiverDominum',
 
-  // Файл compile сейчас лежит в compilables/Dominum/givers/GiverManager.compile.ts
-  giverManager: 'Dominum/givers/GiverManager',
+  giverManager: 'Dominum/management/GiverManager',
 } as const;
 
 export async function compileContracts(
