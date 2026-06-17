@@ -14,9 +14,9 @@ global totalSpentTon: int;
 global totalExecuted: int;
 
 fun loadData() {
-    var ds = contract.getData(). beginParse();
+    var ds = contract.getData().beginParse();
 
-    authorutyAddress = ds.loadAddress();
+    authorityAddress = ds.loadAddress();
     masterAddress = ds.loadAddress();
     jettonWalletCode = ds.loadRef();
     masterConfigured = ds.loadBool();
@@ -47,7 +47,7 @@ fun requireAuthority(senderAddress: address) {
     assert(senderAddress == authorityAddress, ERROR_NOT_OWNER);
 }
 
-fun requiredMasterConfigured() {
+fun requireMasterConfigured() {
     assert(masterConfigured, ERROR_PROXY_NOT_CONFIGURED);
 }
 
@@ -76,7 +76,7 @@ fun buildWalletAddress(owner: address): address {
     var stateInit = buildWalletStateInit(owner);
     var wc = contract.getAddress().getWorkchain();
 
-    return address.fromWorkcainAndHash(
+    return address.fromWorkchainAndHash(
         wc,
         stateInit.hash()
     );
@@ -106,7 +106,7 @@ fun sendInternalTransfer(
         .endCell();
 
     var msg = beginCell()
-        storeUint(0x18, 6)
+        .storeUint(0x18, 6)
         .storeAddress(toWallet)
         .storeCoins(MIN_TON_FOR_TRANSFER)
         .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
@@ -152,13 +152,13 @@ fun executeTransfer(
     var tonBudget = ALLOD_GAS_TRANSFER_TON_BUDGET;
 
     assert(
-        constract.getOriginalBalance() >= tonBudget + MIN_TON_FOR_STORAGE,
+        contract.getOriginalBalance() >= tonBudget + MIN_TON_FOR_STORAGE,
         ERROR_INSUFFICIENT_GAS
     );
 
     sendInternalTransfer(
         toOwner,
-        jettonAnount,
+        jettonAmount,
         fromOwner,
         queryId + 1
     );
@@ -170,9 +170,141 @@ fun executeTransfer(
         queryId + 2
     );
 
-    totalSpenTon = totalSpentTon + tonBudget;
+    totalSpentTon = totalSpentTon + tonBudget;
     totalExecuted = totalExecuted + 1;
 
     saveData();
 }
 
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
+        return;
+    }
+
+    var senderAddress = in.senderAddress;
+
+    loadData();
+
+    var op = msgBody.loadUint(32);
+    var queryId = msgBody.loadUint(64);
+
+    if (op == OP_INIT_ALLOD_MASTER_CONFIG) {
+        requireAuthority(senderAddress);
+
+        var newMasterAddress = msgBody.loadAddress();
+        var newJettonWalletCode = msgBody.loadRef();
+
+        initMasterConfig(
+            newMasterAddress,
+            newJettonWalletCode
+        );
+
+        return;
+    }
+
+    if (op == OP_ALLOD_GAS_POOL_EXECUTE) {
+        var jettonAmount = msgBody.loadCoins();
+        var toOwner = msgBody.loadAddress();
+        var fromOwner = msgBody.loadAddress();
+        var paidFeeAllod = msgBody.loadCoins();
+
+        executeTransfer(
+            senderAddress,
+            jettonAmount,
+            toOwner,
+            fromOwner,
+            paidFeeAllod,
+            queryId
+        );
+
+        return;
+    }
+
+    if (op == OP_TRANSFER_NOTIFICATION) {
+        requireMasterConfigured();
+
+        var poolWallet = buildWalletAddress(contract.getAddress());
+        assert(senderAddress == poolWallet, ERROR_NOT_VALID_WALLET);
+
+        var amount = msgBody.loadCoins();
+        var fromAddress = msgBody.loadAddress();
+
+        if (fromAddress == contract.getAddress()) {
+            return;
+        }
+
+        totalReceivedAllod = totalReceivedAllod + amount;
+        saveData();
+
+        return;
+    }
+
+    if (op == OP_CHANGE_ALLOD_TRANSFER_FEE) {
+        requireAuthority(senderAddress);
+
+        var newTransferFeeAllod = msgBody.loadCoins();
+
+        assert(
+            newTransferFeeAllod >= ALLOD_TRANSFER_FEE_MIN,
+            ERROR_INVALID_AMOUNT
+        );
+
+        assert(
+            newTransferFeeAllod <= ALLOD_TRANSFER_FEE_MAX,
+            ERROR_LIMIT_EXCEEDED
+        );
+
+        transferFeeAllod = newTransferFeeAllod;
+        saveData();
+
+        return;
+    }
+
+    if (op == OP_ALLOD_GAS_TOP_UP) {
+        requireAuthority(senderAddress);
+        return;
+    }
+
+    throw(0xffff);
+}
+
+get fun getAllodGasPoolData(): (
+    address,
+    address,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int
+) {
+    loadData();
+
+    return (
+        authorityAddress,
+        masterAddress,
+        masterConfigured,
+        transferFeeAllod,
+        totalReceivedAllod,
+        totalSpentTon,
+        totalExecuted,
+        contract.getOriginalBalance()
+    );
+}
+
+get fun getPoolWalletAddress(): address {
+    loadData();
+    return buildWalletAddress(contract.getAddress());
+}
+
+get fun getWalletAddress(owner: address): address {
+    loadData();
+    return buildWalletAddress(owner);
+}
+
+get fun getAllodTransferFee(): int {
+    loadData();
+    return transferFeeAllod;
+}
