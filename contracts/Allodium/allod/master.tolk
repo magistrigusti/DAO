@@ -17,7 +17,7 @@ global totalSupply: int;
 
 global ownerAddress: slice;        // кто вызывает OP_MINT
 global frsAddress: slice;          // только FRS может increase allowance
-global foundationAddress: slice;   // куда идет TON-налог из wallet
+global gasPoolAddress: slice;      // AllodGasPool исполняет переводы и принимает ALLOD fee
 
 global mintAllowancePool: int;     // доступный лимит минта ALLOD
 
@@ -34,7 +34,7 @@ fun loadData() {
 
     ownerAddress = ds.loadMsgAddress();
     frsAddress = ds.loadMsgAddress();
-    foundationAddress = ds.loadMsgAddress();
+    gasPoolAddress = ds.loadMsgAddress();
 
     mintAllowancePool = ds.loadCoins();
 
@@ -48,7 +48,7 @@ fun saveData() {
             .storeCoins(totalSupply)
             .storeSlice(ownerAddress)
             .storeSlice(frsAddress)
-            .storeSlice(foundationAddress)
+            .storeSlice(gasPoolAddress)
             .storeCoins(mintAllowancePool)
             .storeRef(content)
             .storeRef(jettonWalletCode)
@@ -64,7 +64,7 @@ fun calculateWalletData(owner: slice): cell {
         .storeCoins(0)
         .storeSlice(owner)
         .storeSlice(myAddress())
-        .storeSlice(foundationAddress)
+        .storeSlice(gasPoolAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -300,7 +300,7 @@ get fun getMasterData(): (slice, slice, slice, int, int) {
     return (
         ownerAddress,
         frsAddress,
-        foundationAddress,
+        gasPoolAddress,
         mintAllowancePool,
         totalSupply
     );

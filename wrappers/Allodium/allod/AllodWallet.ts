@@ -19,7 +19,7 @@ export type AllodWalletConfig = {
   balance: bigint;
   ownerAddress: Address;
   masterAddress: Address;
-  foundationAddress: Address;
+  gasPoolAddress: Address;
   jettonWalletCode: Cell;
 };
 
@@ -30,7 +30,7 @@ export function allodWalletConfigToCell(
     .storeCoins(config.balance)
     .storeAddress(config.ownerAddress)
     .storeAddress(config.masterAddress)
-    .storeAddress(config.foundationAddress)
+    .storeAddress(config.gasPoolAddress)
     .storeRef(config.jettonWalletCode)
     .endCell();
 }
@@ -138,7 +138,7 @@ export class AllodWallet implements Contract {
       balance: stack.readBigNumber(),
       ownerAddress: stack.readAddress(),
       masterAddress: stack.readAddress(),
-      foundationAddress: stack.readAddress(),
+      gasPoolAddress: stack.readAddress(),
     };
   }
 }

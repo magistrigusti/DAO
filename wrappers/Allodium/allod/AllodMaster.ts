@@ -17,7 +17,7 @@ export type AllodMasterConfig = {
   totalSupply: bigint;
   ownerAddress: Address;
   frsAddress: Address;
-  foundationAddress: Address;
+  gasPoolAddress: Address;
   mintAllowancePool: bigint;
   content: Cell;
   jettonWalletCode: Cell;
@@ -30,7 +30,7 @@ export function allodMasterConfigToCell(
     .storeCoins(config.totalSupply)
     .storeAddress(config.ownerAddress)
     .storeAddress(config.frsAddress)
-    .storeAddress(config.foundationAddress)
+    .storeAddress(config.gasPoolAddress)
     .storeCoins(config.mintAllowancePool)
     .storeRef(config.content)
     .storeRef(config.jettonWalletCode)
@@ -144,7 +144,7 @@ export class AllodMaster implements Contract {
     return {
       ownerAddress: stack.readAddress(),
       frsAddress: stack.readAddress(),
-      foundationAddress: stack.readAddress(),
+      gasPoolAddress: stack.readAddress(),
       mintAllowancePool: stack.readBigNumber(),
       totalSupply: stack.readBigNumber(),
     };
