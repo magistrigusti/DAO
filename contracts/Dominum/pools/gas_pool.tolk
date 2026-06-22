@@ -3,6 +3,7 @@ import "../core/errors.tolk";
 import "../core/constants.tolk";
 
 global treasuryPoolAddress: address;
+global gasRouterAddress: address;
 global masterAddress: address;
 global jettonWalletCode: cell;
 global masterConfigured: bool;
@@ -17,6 +18,7 @@ fun loadData() {
     var ds = contract.getData().beginParse();
 
     treasuryPoolAddress = ds.loadAddress();
+    gasRouterAddress = ds.loadAddress();
     masterAddress = ds.loadAddress();
     jettonWalletCode = ds.loadRef();
     masterConfigured = ds.loadBool();
@@ -32,6 +34,7 @@ fun saveData() {
     contract.setData(
         beginCell()
             .storeAddress(treasuryPoolAddress)
+            .storeAddress(gasRouterAddress)
             .storeAddress(masterAddress)
             .storeRef(jettonWalletCode)
             .storeBool(masterConfigured)
@@ -72,7 +75,7 @@ fun buildWalletData(owner: address): cell {
         .storeCoins(0)
         .storeAddress(owner)
         .storeAddress(masterAddress)
-        .storeAddress(contract.getAddress())
+        .storeAddress(gasRouterAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -129,7 +132,7 @@ fun sendInternalTransfer(
     var stateInit = buildWalletStateInit(toOwner);
     var toWallet = buildWalletAddress(toOwner);
 
-    var body = beginCell()
+    var walletBody = beginCell()
         .storeUint(OP_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
@@ -139,13 +142,20 @@ fun sendInternalTransfer(
         .storeBool(false)
         .endCell();
 
+    var routerBody = beginCell()
+        .storeUint(OP_GAS_ROUTER_DELIVER, 32)
+        .storeUint(queryId, 64)
+        .storeAddress(toWallet)
+        .storeRef(stateInit)
+        .storeRef(walletBody)
+        .endCell();
+
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeAddress(toWallet)
+        .storeAddress(gasRouterAddress)
         .storeCoins(BASE_TON_COST)
-        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
-        .storeRef(stateInit)
-        .storeRef(body)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(routerBody)
         .endCell();
 
     sendRawMessage(msg, 1);
@@ -177,6 +187,29 @@ fun sendDomFromPoolWallet(
     sendRawMessage(msg, 1);
 }
 
+fun sendRouterSettlement(
+    walletAddress: address,
+    success: bool,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_GAS_ROUTER_SETTLE, 32)
+        .storeUint(queryId, 64)
+        .storeAddress(walletAddress)
+        .storeBool(success)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(gasRouterAddress)
+        .storeCoins(0)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 64);
+}
+
 fun executeTransfer(
     senderWallet: address,
     jettonAmount: int,
@@ -185,20 +218,37 @@ fun executeTransfer(
     paidFeeDom: int,
     queryId: int
 ) {
-    requireMasterConfigured();
+    if (!masterConfigured) {
+        sendRouterSettlement(senderWallet, false, queryId);
+        return;
+    }
 
     var expectedWallet = buildWalletAddress(fromOwner);
     var myBalance = contract.getOriginalBalance();
 
-    assert(senderWallet == expectedWallet, ERROR_NOT_VALID_WALLET);
-    assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
-    assert(paidFeeDom > 0, ERROR_INVALID_AMOUNT);
+    if (senderWallet != expectedWallet) {
+        sendRouterSettlement(senderWallet, false, queryId);
+        return;
+    }
+
+    if ((jettonAmount <= 0) | (paidFeeDom <= 0)) {
+        sendRouterSettlement(senderWallet, false, queryId);
+        return;
+    }
 
     var expectedFeeDom = calculateFee();
-    assert(paidFeeDom == expectedFeeDom, ERROR_INVALID_AMOUNT);
+
+    if (paidFeeDom != expectedFeeDom) {
+        sendRouterSettlement(senderWallet, false, queryId);
+        return;
+    }
 
     var tonBudget = BASE_TON_COST * 2;
-    assert(myBalance >= tonBudget + MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+
+    if (myBalance < tonBudget + MIN_TON_FOR_STORAGE) {
+        sendRouterSettlement(senderWallet, false, queryId);
+        return;
+    }
 
     sendInternalTransfer(
         toOwner,
@@ -218,6 +268,7 @@ fun executeTransfer(
     totalExecuted = totalExecuted + 1;
 
     saveData();
+    sendRouterSettlement(senderWallet, true, queryId);
 }
 
 fun onInternalMessage(in: InMessage) {
@@ -249,13 +300,16 @@ fun onInternalMessage(in: InMessage) {
     }
 
     if (op == OP_GAS_POOL_EXECUTE) {
+        assert(senderAddress == gasRouterAddress, ERROR_NOT_OWNER);
+
+        var senderWallet = msgBody.loadAddress();
         var jettonAmount = msgBody.loadCoins();
         var toOwner = msgBody.loadAddress();
         var fromOwner = msgBody.loadAddress();
         var paidFeeDom = msgBody.loadCoins();
 
         executeTransfer(
-            senderAddress,
+            senderWallet,
             jettonAmount,
             toOwner,
             fromOwner,
@@ -319,12 +373,13 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getGasPoolData(): (
-    address, address, bool, int, int, int, int, int
+    address, address, address, bool, int, int, int, int, int
 ) {
     loadData();
 
     return (
         treasuryPoolAddress,
+        gasRouterAddress,
         masterAddress,
         masterConfigured,
         taxMultiplier,

@@ -21,6 +21,7 @@ global bankDaoAddress: address;
 global bankDefiAddress: address;
 global bankDominumAddress: address;
 global gasPoolAddress: address;
+global gasRouterAddress: address;
 
 global taxMultiplier: int;
 
@@ -30,6 +31,7 @@ global totalSentTon: int;
 
 global hasPending: bool;
 global pendingKind: int;
+global pendingTargetKind: int;
 global pendingOldAddress: address?;
 global pendingNewAddress: address?;
 global pendingOldValue: int;
@@ -51,6 +53,7 @@ fun loadData() {
     bankDefiAddress = bankTargets.loadAddress();
     bankDominumAddress = poolTargets.loadAddress();
     gasPoolAddress = poolTargets.loadAddress();
+    gasRouterAddress = poolTargets.loadAddress();
 
     var stats = ds.loadRef().beginParse();
     taxMultiplier = stats.loadUint(16);
@@ -61,6 +64,7 @@ fun loadData() {
     var pending = ds.loadRef().beginParse();
     hasPending = pending.loadBool();
     pendingKind = pending.loadUint(8);
+    pendingTargetKind = pending.loadUint(8);
     pendingOldAddress = pending.loadAddressOpt();
     pendingNewAddress = pending.loadAddressOpt();
     pendingOldValue = pending.loadUint(32);
@@ -76,6 +80,7 @@ fun saveData() {
     var poolTargets = beginCell()
         .storeAddress(bankDominumAddress)
         .storeAddress(gasPoolAddress)
+        .storeAddress(gasRouterAddress)
         .endCell();
 
     var targets = beginCell()
@@ -93,6 +98,7 @@ fun saveData() {
     var pending = beginCell()
         .storeBool(hasPending)
         .storeUint(pendingKind, 8)
+        .storeUint(pendingTargetKind, 8)
         .storeAddressOpt(pendingOldAddress)
         .storeAddressOpt(pendingNewAddress)
         .storeUint(pendingOldValue, 32)
@@ -157,9 +163,33 @@ fun isAllowedTarget(candidate: address): bool {
     return false;
 }
 
+fun isExpectedTarget(
+    targetKind: int,
+    candidate: address
+): bool {
+    if (targetKind == TREASURY_TARGET_BANK_DAO) {
+        return candidate == bankDaoAddress;
+    }
+
+    if (targetKind == TREASURY_TARGET_BANK_DEFI) {
+        return candidate == bankDefiAddress;
+    }
+
+    if (targetKind == TREASURY_TARGET_BANK_DOMINUM) {
+        return candidate == bankDominumAddress;
+    }
+
+    if (targetKind == TREASURY_TARGET_GAS_POOL) {
+        return candidate == gasPoolAddress;
+    }
+
+    return false;
+}
+
 fun clearPending() {
     hasPending = false;
     pendingKind = PENDING_NONE;
+    pendingTargetKind = 0;
     pendingOldAddress = null;
     pendingNewAddress = null;
     pendingOldValue = 0;
@@ -167,14 +197,20 @@ fun clearPending() {
 }
 
 fun requestAddressChange(
+    targetKind: int,
     oldAddress: address,
     newAddress: address
 ) {
     assert(!hasPending, ERROR_ALREADY_INITIALIZED);
-    assert(isAllowedTarget(oldAddress), ERROR_NOT_IN_WHITELIST);
+    assert(oldAddress != newAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        isExpectedTarget(targetKind, oldAddress),
+        ERROR_WRONG_TARGET
+    );
 
     hasPending = true;
     pendingKind = PENDING_ADDRESS;
+    pendingTargetKind = targetKind;
     pendingOldAddress = oldAddress;
     pendingNewAddress = newAddress;
     pendingOldValue = 0;
@@ -192,40 +228,67 @@ fun requestTaxChange(
 
     hasPending = true;
     pendingKind = PENDING_TAX;
+    pendingTargetKind = 0;
     pendingOldAddress = null;
     pendingNewAddress = null;
     pendingOldValue = oldTaxMultiplier;
     pendingNewValue = newTaxMultiplier;
 }
 
-fun applyAddressChange() {
+fun sendGasPoolChangeToRouter(
+    newGasPoolAddress: address,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_GAS_ROUTER_SET_POOL, 32)
+        .storeUint(queryId, 64)
+        .storeAddress(newGasPoolAddress)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(gasRouterAddress)
+        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun applyAddressChange(queryId: int) {
     assert(pendingOldAddress != null, ERROR_NO_PENDING);
     assert(pendingNewAddress != null, ERROR_NO_PENDING);
 
     var oldAddress = pendingOldAddress!;
     var newAddress = pendingNewAddress!;
 
-    if (oldAddress == bankDaoAddress) {
+    if (pendingTargetKind == TREASURY_TARGET_BANK_DAO) {
+        assert(oldAddress == bankDaoAddress, ERROR_NOT_IN_WHITELIST);
         bankDaoAddress = newAddress;
         return;
     }
 
-    if (oldAddress == bankDefiAddress) {
+    if (pendingTargetKind == TREASURY_TARGET_BANK_DEFI) {
+        assert(oldAddress == bankDefiAddress, ERROR_NOT_IN_WHITELIST);
         bankDefiAddress = newAddress;
         return;
     }
 
-    if (oldAddress == bankDominumAddress) {
+    if (pendingTargetKind == TREASURY_TARGET_BANK_DOMINUM) {
+        assert(oldAddress == bankDominumAddress, ERROR_NOT_IN_WHITELIST);
         bankDominumAddress = newAddress;
         return;
     }
 
-    if (oldAddress == gasPoolAddress) {
+    if (pendingTargetKind == TREASURY_TARGET_GAS_POOL) {
+        assert(oldAddress == gasPoolAddress, ERROR_NOT_IN_WHITELIST);
         gasPoolAddress = newAddress;
+        sendGasPoolChangeToRouter(newAddress, queryId);
         return;
     }
 
-    throw(ERROR_NOT_IN_WHITELIST);
+    throw(ERROR_WRONG_TARGET);
 }
 
 fun sendTaxToGasPool(queryId: int) {
@@ -413,10 +476,11 @@ fun onInternalMessage(in: InMessage) {
     if (op == OP_REPLACE_TREASURY_ADDRESS) {
         requireTreasuryManager(senderAddress);
 
+        var targetKind = msgBody.loadUint(8);
         var oldAddress = msgBody.loadAddress();
         var newAddress = msgBody.loadAddress();
 
-        requestAddressChange(oldAddress, newAddress);
+        requestAddressChange(targetKind, oldAddress, newAddress);
         saveData();
         return;
     }
@@ -453,7 +517,7 @@ fun onInternalMessage(in: InMessage) {
         assert(hasPending, ERROR_NO_PENDING);
 
         if (pendingKind == PENDING_ADDRESS) {
-            applyAddressChange();
+            applyAddressChange(queryId);
         }
 
         if (pendingKind == PENDING_TAX) {
@@ -541,7 +605,7 @@ fun onInternalMessage(in: InMessage) {
 
 get fun getTreasuryPoolData(): (
     address, address, address, bool,
-    address, address, address, address,
+    address, address, address, address, address,
     int, int, int, int
 ) {
     loadData();
@@ -555,6 +619,7 @@ get fun getTreasuryPoolData(): (
         bankDefiAddress,
         bankDominumAddress,
         gasPoolAddress,
+        gasRouterAddress,
         taxMultiplier,
         totalReceivedDom,
         totalSentDom,
@@ -563,13 +628,14 @@ get fun getTreasuryPoolData(): (
 }
 
 get fun getTreasuryPendingData(): (
-    bool, int, address?, address?, int, int
+    bool, int, int, address?, address?, int, int
 ) {
     loadData();
 
     return (
         hasPending,
         pendingKind,
+        pendingTargetKind,
         pendingOldAddress,
         pendingNewAddress,
         pendingOldValue,

@@ -8,6 +8,7 @@ import {
 } from '@ton/blueprint';
 
 import { DEPLOY_VALUES } from '../core/config';
+import { buildTypedPlaceholderAddress } from '../core/helpers';
 import { CompiledContracts } from '../core/types';
 
 import {
@@ -34,8 +35,7 @@ export async function deployGivers(
   provider: NetworkProvider,
   compiled: CompiledContracts,
   masterAddress: Address,
-  gasPoolAddress: Address,
-  deployer: Address
+  gasRouterAddress: Address
 ): Promise<DeployedGivers> {
   const ui = provider.ui();
   const sender = provider.sender();
@@ -46,10 +46,10 @@ export async function deployGivers(
     GiverAllodium.createFromConfig(
       {
         masterAddress,
-        gasPoolAddress,
+        gasRouterAddress,
         jettonWalletCode: compiled.walletCode,
-        frsAllodiumAddress: deployer,
-        allodiumFoundationAddress: deployer,
+        frsAllodiumAddress: buildTypedPlaceholderAddress(10, 1),
+        allodiumFoundationAddress: buildTypedPlaceholderAddress(10, 2),
       },
       compiled.giverAllodiumCode
     )
@@ -69,11 +69,11 @@ export async function deployGivers(
     GiverDefi.createFromConfig(
       {
         masterAddress,
-        gasPoolAddress,
+        gasRouterAddress,
         jettonWalletCode: compiled.walletCode,
-        marketAddress: deployer,
-        foundryAddress: deployer,
-        defiTreasuryAddress: deployer,
+        marketAddress: buildTypedPlaceholderAddress(11, 1),
+        foundryAddress: buildTypedPlaceholderAddress(11, 2),
+        defiTreasuryAddress: buildTypedPlaceholderAddress(11, 3),
       },
       compiled.giverDefiCode
     )
@@ -93,10 +93,10 @@ export async function deployGivers(
     GiverDao.createFromConfig(
       {
         masterAddress,
-        gasPoolAddress,
+        gasRouterAddress,
         jettonWalletCode: compiled.walletCode,
-        bankDaoAddress: deployer,
-        daoFoundationAddress: deployer,
+        bankDaoAddress: buildTypedPlaceholderAddress(12, 1),
+        daoFoundationAddress: buildTypedPlaceholderAddress(12, 2),
       },
       compiled.giverDaoCode
     )
@@ -116,10 +116,10 @@ export async function deployGivers(
     GiverDominum.createFromConfig(
       {
         masterAddress,
-        gasPoolAddress,
+        gasRouterAddress,
         jettonWalletCode: compiled.walletCode,
-        bankDominumAddress: deployer,
-        dominumFoundationAddress: deployer,
+        bankDominumAddress: buildTypedPlaceholderAddress(13, 1),
+        dominumFoundationAddress: buildTypedPlaceholderAddress(13, 2),
       },
       compiled.giverDominumCode
     )

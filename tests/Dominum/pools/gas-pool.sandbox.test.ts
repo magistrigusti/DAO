@@ -10,6 +10,7 @@ import { compile } from '@ton/blueprint';
 
 import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
 import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
+import { GasRouter } from '../../../wrappers/Dominum/pools/GasRouter';
 
 import {
   DOM_COMPILE,
@@ -36,10 +37,12 @@ describe('GasPool', () => {
 
   let walletCode: Cell;
   let gasPoolCode: Cell;
+  let gasRouterCode: Cell;
 
   beforeAll(async () => {
     walletCode = await compile(DOM_COMPILE.wallet);
     gasPoolCode = await compile(DOM_COMPILE.gasPool);
+    gasRouterCode = await compile(DOM_COMPILE.gasRouter);
   });
 
   beforeEach(async () => {
@@ -53,10 +56,26 @@ describe('GasPool', () => {
   });
 
   async function deployGasPool(configured: boolean) {
+    const gasRouter = blockchain.openContract(
+      GasRouter.createFromConfig(
+        {
+          controllerAddress: owner.address,
+          activeGasPoolAddress: outsider.address,
+        },
+        gasRouterCode
+      )
+    );
+
+    await gasRouter.sendDeploy(
+      owner.getSender(),
+      DOM_VALUE.deploySmall
+    );
+
     const gasPool = blockchain.openContract(
       GasPool.createFromConfig(
         {
           treasuryPoolAddress: treasuryPool.address,
+          gasRouterAddress: gasRouter.address,
           masterAddress: configured ? master.address : owner.address,
           jettonWalletCode: walletCode,
           masterConfigured: configured,
@@ -70,17 +89,30 @@ describe('GasPool', () => {
       DOM_VALUE.deployGasPool
     );
 
-    return gasPool;
+    await gasRouter.sendSetActiveGasPool(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        activeGasPoolAddress: gasPool.address,
+        queryId: DOM_QUERY.gasInitMaster + 10n,
+      }
+    );
+
+    return {
+      gasPool,
+      gasRouter,
+    };
   }
 
   it('should expose initial state', async () => {
-    const gasPool = await deployGasPool(
+    const { gasPool, gasRouter } = await deployGasPool(
       DOM_STATE.masterNotConfigured
     );
 
     const data = await gasPool.getGasPoolData();
 
     expectAddress(data.treasuryPoolAddress, treasuryPool.address);
+    expectAddress(data.gasRouterAddress, gasRouter.address);
     expect(data.masterConfigured).toBe(false);
     expect(data.taxMultiplier).toEqual(
       DOM_CONTRACT.taxMultiplier
@@ -92,7 +124,7 @@ describe('GasPool', () => {
   });
 
   it('should initialize master only from treasury pool', async () => {
-    const gasPool = await deployGasPool(
+    const { gasPool } = await deployGasPool(
       DOM_STATE.masterNotConfigured
     );
 
@@ -129,7 +161,7 @@ describe('GasPool', () => {
   });
 
   it('should execute wallet transfer and collect DOM fee', async () => {
-    const gasPool = await deployGasPool(true);
+    const { gasPool, gasRouter } = await deployGasPool(true);
 
     const senderWallet = blockchain.openContract(
       DomWallet.createFromConfig(
@@ -137,7 +169,7 @@ describe('GasPool', () => {
           balance: DOM_STATE.emptyBalance,
           ownerAddress: owner.address,
           masterAddress: master.address,
-          gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
           jettonWalletCode: walletCode,
         },
         walletCode

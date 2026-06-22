@@ -15,9 +15,9 @@ import "../core/constants.tolk";
 // =====================================================
 global totalSupply: int;
 
-global ownerAddress: slice;        // кто вызывает OP_MINT
-global frsAddress: slice;          // только FRS может increase allowance
-global gasPoolAddress: slice;      // AllodGasPool исполняет переводы и принимает ALLOD fee
+global ownerAddress: address;        // кто вызывает OP_MINT
+global frsAddress: address;          // только FRS может increase allowance
+global gasPoolAddress: address;      // AllodGasPool исполняет переводы и принимает ALLOD fee
 
 global mintAllowancePool: int;     // доступный лимит минта ALLOD
 
@@ -28,13 +28,13 @@ global jettonWalletCode: cell;
 // LOAD / SAVE
 // =====================================================
 fun loadData() {
-    var ds = getContractData().beginParse();
+    var ds = contract.getData().beginParse();
 
     totalSupply = ds.loadCoins();
 
-    ownerAddress = ds.loadMsgAddress();
-    frsAddress = ds.loadMsgAddress();
-    gasPoolAddress = ds.loadMsgAddress();
+    ownerAddress = ds.loadAddress();
+    frsAddress = ds.loadAddress();
+    gasPoolAddress = ds.loadAddress();
 
     mintAllowancePool = ds.loadCoins();
 
@@ -43,12 +43,12 @@ fun loadData() {
 }
 
 fun saveData() {
-    setContractData(
+    contract.setData(
         beginCell()
             .storeCoins(totalSupply)
-            .storeSlice(ownerAddress)
-            .storeSlice(frsAddress)
-            .storeSlice(gasPoolAddress)
+            .storeAddress(ownerAddress)
+            .storeAddress(frsAddress)
+            .storeAddress(gasPoolAddress)
             .storeCoins(mintAllowancePool)
             .storeRef(content)
             .storeRef(jettonWalletCode)
@@ -59,17 +59,17 @@ fun saveData() {
 // =====================================================
 // WALLET ADDRESS
 // =====================================================
-fun calculateWalletData(owner: slice): cell {
+fun calculateWalletData(owner: address): cell {
     return beginCell()
         .storeCoins(0)
-        .storeSlice(owner)
-        .storeSlice(myAddress())
-        .storeSlice(gasPoolAddress)
+        .storeAddress(owner)
+        .storeAddress(contract.getAddress())
+        .storeAddress(gasPoolAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
 
-fun calculateWalletStateInit(owner: slice): cell {
+fun calculateWalletStateInit(owner: address): cell {
     var walletData = calculateWalletData(owner);
 
     return beginCell()
@@ -80,20 +80,20 @@ fun calculateWalletStateInit(owner: slice): cell {
         .endCell();
 }
 
-fun calculateWalletAddress(stateInit: cell): slice {
-    return beginCell()
-        .storeUint(4, 3)
-        .storeInt(0, 8)
-        .storeUint(stateInit.hash(), 256)
-        .endCell()
-        .beginParse();
+fun calculateWalletAddress(stateInit: cell): address {
+    var workchain = contract.getAddress().getWorkchain();
+
+    return address.fromWorkchainAndHash(
+        workchain,
+        stateInit.hash()
+    );
 }
 
 // =====================================================
 // SEND MINT TO WALLET
 // =====================================================
 fun sendToWallet(
-    toOwner: slice,
+    toOwner: address,
     jettonAmount: int,
     queryId: int,
     msgValue: int
@@ -105,15 +105,15 @@ fun sendToWallet(
         .storeUint(OP_INTERNAL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(jettonAmount)
-        .storeSlice(myAddress())
-        .storeSlice(toOwner)
+        .storeAddress(contract.getAddress())
+        .storeAddress(toOwner)
         .storeCoins(0)
         .storeBool(false)
         .endCell();
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(walletAddress)
+        .storeAddress(walletAddress)
         .storeCoins(msgValue)
         .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
         .storeRef(stateInit)
@@ -135,7 +135,7 @@ fun sendAllodBurnedToFrs(burnAmount: int, queryId: int) {
 
     var msg = beginCell()
         .storeUint(0x18, 6)
-        .storeSlice(frsAddress)
+        .storeAddress(frsAddress)
         .storeCoins(0)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
@@ -147,24 +147,15 @@ fun sendAllodBurnedToFrs(burnAmount: int, queryId: int) {
 // =====================================================
 // MAIN
 // =====================================================
-fun onInternalMessage(
-    myBalance: int,
-    msgValue: int,
-    msgFull: cell,
-    msgBody: slice
-) {
-    if (msgBody.isEndOfSlice()) {
+fun onInternalMessage(in: InMessage) {
+    var msgBody = in.body;
+
+    if (msgBody.isEmpty()) {
         return;
     }
 
-    var cs = msgFull.beginParse();
-    var flags = cs.loadUint(4);
-
-    if (flags & 1) {
-        return;
-    }
-
-    var senderAddress = cs.loadMsgAddress();
+    var senderAddress = in.senderAddress;
+    var msgValue = in.valueCoins;
 
     loadData();
 
@@ -176,7 +167,7 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_INCREASE_MINT_ALLOWANCE) {
         assert(
-            senderAddress.equalSlices(frsAddress),
+            senderAddress == frsAddress,
             ERROR_NOT_FRS
         );
 
@@ -195,11 +186,11 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_MINT) {
         assert(
-            senderAddress.equalSlices(ownerAddress),
+            senderAddress == ownerAddress,
             ERROR_NOT_OWNER
         );
 
-        var toOwner = msgBody.loadMsgAddress();
+        var toOwner = msgBody.loadAddress();
         var mintAmount = msgBody.loadCoins();
 
         assert(mintAmount > 0, ERROR_INVALID_AMOUNT);
@@ -231,14 +222,14 @@ fun onInternalMessage(
     // =====================================================
     if (op == OP_BURN_NOTIFICATION) {
         var burnAmount = msgBody.loadCoins();
-        var fromOwner = msgBody.loadMsgAddress();
+        var fromOwner = msgBody.loadAddress();
 
         var expectedWallet = calculateWalletAddress(
             calculateWalletStateInit(fromOwner)
         );
 
         assert(
-            senderAddress.equalSlices(expectedWallet),
+            senderAddress == expectedWallet,
             ERROR_NOT_VALID_WALLET
         );
 
@@ -251,12 +242,12 @@ fun onInternalMessage(
         // Уведомляем FRS для разблокировки DOM
         sendAllodBurnedToFrs(burnAmount, queryId);
 
-        var responseAddress = msgBody.loadMsgAddress();
+        var responseAddress = msgBody.loadAddressOpt();
 
-        if (~responseAddress.isAddressNone()) {
+        if (responseAddress != null) {
             var msg = beginCell()
                 .storeUint(0x10, 6)
-                .storeSlice(responseAddress)
+                .storeAddress(responseAddress)
                 .storeCoins(0)
                 .storeUint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                 .storeUint(OP_EXCESSES, 32)
@@ -275,7 +266,7 @@ fun onInternalMessage(
 // =====================================================
 // GETTERS
 // =====================================================
-get fun getJettonData(): (int, int, slice, cell, cell) {
+get fun getJettonData(): (int, int, address, cell, cell) {
     loadData();
 
     return (
@@ -287,14 +278,14 @@ get fun getJettonData(): (int, int, slice, cell, cell) {
     );
 }
 
-get fun getWalletAddress(ownerAddressValue: slice): slice {
+get fun getWalletAddress(ownerAddressValue: address): address {
     loadData();
 
     var stateInit = calculateWalletStateInit(ownerAddressValue);
     return calculateWalletAddress(stateInit);
 }
 
-get fun getMasterData(): (slice, slice, slice, int, int) {
+get fun getMasterData(): (address, address, address, int, int) {
     loadData();
 
     return (

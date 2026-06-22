@@ -49,6 +49,9 @@ export const OP_REMOVE_WHITELIST = 0xe1n;
 
 export const OP_REPLACE_GIVER = 0x42n;
 export const OP_REPLACE_MINTER = 0x43n;
+export const OP_CONFIRM_MASTER_REQUEST = 0x44n;
+export const OP_REJECT_MASTER_REQUEST = 0x45n;
+export const OP_REPLACE_MANAGER = 0x46n;
 
 export const OP_REPLACE_TREASURY_ADDRESS = 0x56n;
 export const OP_CONFIRM_TREASURY_REQUEST = 0x57n;
@@ -59,6 +62,12 @@ export const OP_SEND_JETTONS = 0x59n;
 export const OP_UPDATE_RATE = 0xa6n;
 export const OP_CHANGE_TAX = 0xa7n;
 export const OP_INIT_MASTER_CONFIG = 0xa8n;
+export const OP_GAS_ROUTER_EXECUTE = 0xa9n;
+export const OP_GAS_ROUTER_SET_POOL = 0xaan;
+export const OP_GAS_ROUTER_SETTLE = 0xabn;
+export const OP_GAS_ROUTER_FAILED = 0xacn;
+export const OP_GAS_ROUTER_SET_CONTROLLER = 0xadn;
+export const OP_GAS_ROUTER_DELIVER = 0xaen;
 
 export const OP_UNLOCK_MONTH = 0xf0n;
 export const OP_SET_RELEASE = 0xf1n;

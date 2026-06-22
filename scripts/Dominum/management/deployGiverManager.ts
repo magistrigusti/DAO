@@ -16,7 +16,7 @@ import {
 export async function deployGiverManager(
   provider: NetworkProvider,
   compiled: CompiledContracts,
-  deployer: Address
+  ownerAddress: Address
 ) {
   const ui = provider.ui();
   const sender = provider.sender();
@@ -26,7 +26,7 @@ export async function deployGiverManager(
   const giverManager = provider.open(
       GiverManager.createFromConfig(
           {
-              ownerAddress: deployer,
+              ownerAddress,
           },
           compiled.giverManagerCode
       )

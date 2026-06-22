@@ -23,17 +23,22 @@ import {
   expectOptionalAddress,
   ignoreFailure,
 } from '../core/dom-test-utils';
+import {
+  TREASURY_TARGET,
+} from '../../../wrappers/Dominum/core/constants';
 
 describe('TreasuryManager', () => {
   let blockchain: Blockchain;
 
-  let owner: SandboxContract<TreasuryContract>;
+  let managerOwner: SandboxContract<TreasuryContract>;
+  let poolOwner: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
   let wallet: SandboxContract<TreasuryContract>;
   let bankDao: SandboxContract<TreasuryContract>;
   let bankDefi: SandboxContract<TreasuryContract>;
   let bankDominum: SandboxContract<TreasuryContract>;
   let gasPool: SandboxContract<TreasuryContract>;
+  let gasRouter: SandboxContract<TreasuryContract>;
   let newGasPool: SandboxContract<TreasuryContract>;
 
   let treasuryManagerCode: Cell;
@@ -47,13 +52,15 @@ describe('TreasuryManager', () => {
   beforeEach(async () => {
     blockchain = await Blockchain.create();
 
-    owner = await blockchain.treasury('owner');
+    managerOwner = await blockchain.treasury('manager-owner');
+    poolOwner = await blockchain.treasury('pool-owner');
     outsider = await blockchain.treasury('outsider');
     wallet = await blockchain.treasury('wallet');
     bankDao = await blockchain.treasury('bank-dao');
     bankDefi = await blockchain.treasury('bank-defi');
     bankDominum = await blockchain.treasury('bank-dominum');
     gasPool = await blockchain.treasury('gas-pool');
+    gasRouter = await blockchain.treasury('gas-router');
     newGasPool = await blockchain.treasury('new-gas-pool');
   });
 
@@ -61,21 +68,21 @@ describe('TreasuryManager', () => {
     const treasuryManager = blockchain.openContract(
       TreasuryManager.createFromConfig(
         {
-          ownerAddress: owner.address,
+          ownerAddress: managerOwner.address,
         },
         treasuryManagerCode
       )
     );
 
     await treasuryManager.sendDeploy(
-      owner.getSender(),
+      managerOwner.getSender(),
       DOM_VALUE.deploySmall
     );
 
     const treasuryPool = blockchain.openContract(
       TreasuryPool.createFromConfig(
         {
-          ownerAddress: owner.address,
+          ownerAddress: poolOwner.address,
           treasuryManagerAddress: treasuryManager.address,
           jettonWalletAddress: wallet.address,
           walletConfigured: DOM_STATE.walletNotConfigured,
@@ -83,13 +90,14 @@ describe('TreasuryManager', () => {
           bankDefiAddress: bankDefi.address,
           bankDominumAddress: bankDominum.address,
           gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
         },
         treasuryPoolCode
       )
     );
 
     await treasuryPool.sendDeploy(
-      owner.getSender(),
+      poolOwner.getSender(),
       DOM_VALUE.deployTreasuryPool
     );
 
@@ -102,10 +110,10 @@ describe('TreasuryManager', () => {
   it('should expose owner address', async () => {
     const { treasuryManager } = await deployFlow();
 
-    const managerOwner =
+    const storedManagerOwner =
       await treasuryManager.getTreasuryManagerData();
 
-    expectAddress(managerOwner, owner.address);
+    expectAddress(storedManagerOwner, managerOwner.address);
   });
 
   it('should forward address replacement request from owner', async () => {
@@ -115,10 +123,11 @@ describe('TreasuryManager', () => {
     } = await deployFlow();
 
     await treasuryManager.sendReplaceTreasuryAddress(
-      owner.getSender(),
+      managerOwner.getSender(),
       {
         value: DOM_VALUE.config,
         treasuryPoolAddress: treasuryPool.address,
+        targetKind: TREASURY_TARGET.gasPool,
         oldAddress: gasPool.address,
         newAddress: newGasPool.address,
         queryId: DOM_QUERY.treasuryAddressRequest,
@@ -131,6 +140,9 @@ describe('TreasuryManager', () => {
     expect(pending.hasPending).toBe(true);
     expect(pending.pendingKind).toEqual(
       DOM_CONTRACT.pendingAddressKind
+    );
+    expect(pending.pendingTargetKind).toEqual(
+      BigInt(TREASURY_TARGET.gasPool)
     );
 
     expectOptionalAddress(
@@ -156,6 +168,7 @@ describe('TreasuryManager', () => {
         {
           value: DOM_VALUE.config,
           treasuryPoolAddress: treasuryPool.address,
+          targetKind: TREASURY_TARGET.gasPool,
           oldAddress: gasPool.address,
           newAddress: newGasPool.address,
           queryId: DOM_QUERY.treasuryAddressRejected,

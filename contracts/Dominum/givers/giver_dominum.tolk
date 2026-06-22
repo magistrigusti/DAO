@@ -8,7 +8,7 @@ import "../core/constants.tolk";
 // Адреса получателей задаются при деплое и не меняются.
 
 global masterAddress: address;
-global gasPoolAddress: address;
+global gasRouterAddress: address;
 global jettonWalletCode: cell;
 
 global bankDominumAddress: address;
@@ -18,7 +18,7 @@ fun loadData() {
     var ds = contract.getData().beginParse();
 
     masterAddress = ds.loadAddress();
-    gasPoolAddress = ds.loadAddress();
+    gasRouterAddress = ds.loadAddress();
     jettonWalletCode = ds.loadRef();
 
     var targets = ds.loadRef().beginParse();
@@ -32,7 +32,7 @@ fun buildWalletData(owner: address): cell {
         .storeCoins(0)
         .storeAddress(owner)
         .storeAddress(masterAddress)
-        .storeAddress(gasPoolAddress)
+        .storeAddress(gasRouterAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -143,7 +143,7 @@ get fun getGiverData(): (
 
     return (
         masterAddress,
-        gasPoolAddress,
+        gasRouterAddress,
         buildWalletAddress(contract.getAddress()),
         bankDominumAddress,
         dominumFoundationAddress

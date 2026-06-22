@@ -24,13 +24,17 @@ import {
   expectAddress,
   ignoreFailure,
 } from '../core/dom-test-utils';
+import {
+  GIVER_TARGET,
+} from '../../../wrappers/Dominum/core/constants';
 
 describe('GiverManager', () => {
   let blockchain: Blockchain;
 
-  let owner: SandboxContract<TreasuryContract>;
+  let managerOwner: SandboxContract<TreasuryContract>;
+  let masterOwner: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
-  let gasPool: SandboxContract<TreasuryContract>;
+  let gasRouter: SandboxContract<TreasuryContract>;
   let minter: SandboxContract<TreasuryContract>;
   let minterManager: SandboxContract<TreasuryContract>;
   let oldAllodiumGiver: SandboxContract<TreasuryContract>;
@@ -52,9 +56,10 @@ describe('GiverManager', () => {
   beforeEach(async () => {
     blockchain = await Blockchain.create();
 
-    owner = await blockchain.treasury('owner');
+    managerOwner = await blockchain.treasury('manager-owner');
+    masterOwner = await blockchain.treasury('master-owner');
     outsider = await blockchain.treasury('outsider');
-    gasPool = await blockchain.treasury('gas-pool');
+    gasRouter = await blockchain.treasury('gas-router');
     minter = await blockchain.treasury('minter');
     minterManager = await blockchain.treasury('minter-manager');
     oldAllodiumGiver = await blockchain.treasury('old-allodium-giver');
@@ -68,14 +73,14 @@ describe('GiverManager', () => {
     const giverManager = blockchain.openContract(
       GiverManager.createFromConfig(
         {
-          ownerAddress: owner.address,
+          ownerAddress: managerOwner.address,
         },
         giverManagerCode
       )
     );
 
     await giverManager.sendDeploy(
-      owner.getSender(),
+      managerOwner.getSender(),
       DOM_VALUE.deploySmall
     );
 
@@ -83,10 +88,10 @@ describe('GiverManager', () => {
       DomMaster.createFromConfig(
         {
           totalSupply: DOM_STATE.emptySupply,
-          ownerAddress: owner.address,
+          ownerAddress: masterOwner.address,
           lastMintTime: DOM_STATE.noLastMintTime,
           isStarted: DOM_STATE.notStarted,
-          gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
           minterAddress: minter.address,
           minterManagerAddress: minterManager.address,
           giverManagerAddress: giverManager.address,
@@ -102,7 +107,7 @@ describe('GiverManager', () => {
     );
 
     await domMaster.sendDeploy(
-      owner.getSender(),
+      masterOwner.getSender(),
       DOM_VALUE.deploySmall
     );
 
@@ -114,9 +119,9 @@ describe('GiverManager', () => {
 
   it('should expose owner address', async () => {
     const { giverManager } = await deployFlow();
-    const managerOwner = await giverManager.getManagerData();
+    const storedManagerOwner = await giverManager.getManagerData();
 
-    expectAddress(managerOwner, owner.address);
+    expectAddress(storedManagerOwner, managerOwner.address);
   });
 
   it('should replace giver through DomMaster from owner', async () => {
@@ -126,17 +131,33 @@ describe('GiverManager', () => {
     } = await deployFlow();
 
     await giverManager.sendReplaceGiver(
-      owner.getSender(),
+      managerOwner.getSender(),
       {
         value: DOM_VALUE.config,
         masterAddress: domMaster.address,
+        targetKind: GIVER_TARGET.allodium,
         oldGiverAddress: oldAllodiumGiver.address,
         newGiverAddress: newAllodiumGiver.address,
         queryId: DOM_QUERY.replaceGiverAllodium,
       }
     );
 
-    const giversData = await domMaster.getGiversData();
+    let giversData = await domMaster.getGiversData();
+
+    expectAddress(
+      giversData.giverAllodiumAddress,
+      oldAllodiumGiver.address
+    );
+
+    await domMaster.sendConfirmMasterRequest(
+      masterOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        queryId: DOM_QUERY.replaceGiverAllodium + 1n,
+      }
+    );
+
+    giversData = await domMaster.getGiversData();
 
     expectAddress(
       giversData.giverAllodiumAddress,
@@ -160,6 +181,7 @@ describe('GiverManager', () => {
         {
           value: DOM_VALUE.config,
           masterAddress: domMaster.address,
+          targetKind: GIVER_TARGET.allodium,
           oldGiverAddress: oldAllodiumGiver.address,
           newGiverAddress: newAllodiumGiver.address,
           queryId: DOM_QUERY.replaceGiverRejected,
@@ -172,6 +194,49 @@ describe('GiverManager', () => {
     expectAddress(
       giversData.giverAllodiumAddress,
       oldAllodiumGiver.address
+    );
+  });
+
+  it('should replace GiverManager only after Master owner confirmation', async () => {
+    const {
+      giverManager,
+      domMaster,
+    } = await deployFlow();
+
+    const newGiverManager =
+      await blockchain.treasury('new-giver-manager');
+
+    await giverManager.sendReplaceManager(
+      managerOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        masterAddress: domMaster.address,
+        oldManagerAddress: giverManager.address,
+        newManagerAddress: newGiverManager.address,
+        queryId: DOM_QUERY.replaceGiverManager,
+      }
+    );
+
+    let masterData = await domMaster.getMasterData();
+
+    expectAddress(
+      masterData.giverManagerAddress,
+      giverManager.address
+    );
+
+    await domMaster.sendConfirmMasterRequest(
+      masterOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        queryId: DOM_QUERY.replaceGiverManager + 1n,
+      }
+    );
+
+    masterData = await domMaster.getMasterData();
+
+    expectAddress(
+      masterData.giverManagerAddress,
+      newGiverManager.address
     );
   });
 });

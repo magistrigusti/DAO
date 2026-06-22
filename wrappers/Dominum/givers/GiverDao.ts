@@ -10,7 +10,7 @@ import {
 
 export type GiverDaoConfig = {
   masterAddress: Address;
-  gasPoolAddress: Address;
+  gasRouterAddress: Address;
   jettonWalletCode: Cell;
   bankDaoAddress: Address;
   daoFoundationAddress: Address;
@@ -26,7 +26,7 @@ export function giverDaoConfigToCell(
 
   return beginCell()
     .storeAddress(config.masterAddress)
-    .storeAddress(config.gasPoolAddress)
+    .storeAddress(config.gasRouterAddress)
     .storeRef(config.jettonWalletCode)
     .storeRef(targets)
     .endCell();
@@ -75,7 +75,7 @@ export class GiverDao implements Contract {
 
     return {
       masterAddress: stack.readAddress(),
-      gasPoolAddress: stack.readAddress(),
+      gasRouterAddress: stack.readAddress(),
       walletAddress: stack.readAddress(),
       bankDaoAddress: stack.readAddress(),
       daoFoundationAddress: stack.readAddress(),

@@ -117,6 +117,26 @@ fun sendInternalTransfer(
     sendRawMessage(msg, 1);
 }
 
+fun sendSettlement(
+    walletAddress: address,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_EXCESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(walletAddress)
+        .storeCoins(0)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 64);
+}
+
 fun initMasterConfig(
     newMasterAddress: address,
     newJettonWalletCode: cell
@@ -174,6 +194,7 @@ fun executeTransfer(
     totalExecuted = totalExecuted + 1;
 
     saveData();
+    sendSettlement(senderWallet, queryId);
 }
 
 fun onInternalMessage(in: InMessage) {

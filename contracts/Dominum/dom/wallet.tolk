@@ -18,7 +18,7 @@ import "@stdlib/tvm-dicts";
 global balance: int;
 global ownerAddress: address;
 global masterAddress: address;
-global gasPoolAddress: address; // proxy address
+global gasRouterAddress: address;
 global jettonWalletCode: cell;
 
 // queryId -> totalSpend
@@ -33,7 +33,7 @@ fun loadData() {
     balance = ds.loadCoins();
     ownerAddress = ds.loadAddress();
     masterAddress = ds.loadAddress();
-    gasPoolAddress = ds.loadAddress();
+    gasRouterAddress = ds.loadAddress();
     jettonWalletCode = ds.loadRef();
 
     var (bitsLeft, refsLeft) = ds.remainingBitsAndRefsCount();
@@ -50,7 +50,7 @@ fun saveData() {
             .storeCoins(balance)
             .storeAddress(ownerAddress)
             .storeAddress(masterAddress)
-            .storeAddress(gasPoolAddress)
+            .storeAddress(gasRouterAddress)
             .storeRef(jettonWalletCode)
             .storeDict(pendingTransfers)
             .endCell()
@@ -84,21 +84,27 @@ fun deletePendingTransfer(queryId: int) {
     pendingTransfers.uDictDelete(64, queryId);
 }
 
-fun tryClearSettledPending(queryId: int, senderAddress: address) {
-    if (senderAddress != gasPoolAddress) {
+fun settlePendingTransfer(queryId: int) {
+    var (_, found) = readPendingTransfer(queryId);
+
+    if (!found) {
         return;
     }
 
-    if (queryId < 2) {
+    deletePendingTransfer(queryId);
+    saveData();
+}
+
+fun restorePendingTransfer(queryId: int) {
+    var (totalSpend, found) = readPendingTransfer(queryId);
+
+    if (!found) {
         return;
     }
 
-    var originalQueryId = queryId - 2;
-    var (_, found) = readPendingTransfer(originalQueryId);
-
-    if (found) {
-        deletePendingTransfer(originalQueryId);
-    }
+    balance += totalSpend;
+    deletePendingTransfer(queryId);
+    saveData();
 }
 
 // -----------------------------------------------------
@@ -109,7 +115,7 @@ fun buildWalletData(owner: address): cell {
         .storeCoins(0)
         .storeAddress(owner)
         .storeAddress(masterAddress)
-        .storeAddress(gasPoolAddress)
+        .storeAddress(gasRouterAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -145,7 +151,7 @@ fun requireInternalSender(
         return;
     }
 
-    if (senderAddress == gasPoolAddress) {
+    if (senderAddress == gasRouterAddress) {
         return;
     }
 
@@ -185,23 +191,19 @@ fun notifyOwner(
 // -----------------------------------------------------
 // BOUNCE HANDLER
 // -----------------------------------------------------
-fun handleBouncedMessage(msgBody: slice) {
+fun handleBouncedMessage(senderAddress: address, msgBody: slice) {
     var bouncedOp = msgBody.loadUint(32);
     var bouncedQueryId = msgBody.loadUint(64);
 
-    if (bouncedOp == OP_GAS_POOL_EXECUTE) {
-        var (totalSpend, found) = readPendingTransfer(bouncedQueryId);
-
-        if (found) {
-            balance += totalSpend;
-            deletePendingTransfer(bouncedQueryId);
-            saveData();
-        }
-
+    if (bouncedOp == OP_GAS_ROUTER_EXECUTE) {
+        assert(senderAddress == gasRouterAddress, ERROR_NOT_VALID_WALLET);
+        restorePendingTransfer(bouncedQueryId);
         return;
     }
 
     if (bouncedOp == OP_BURN_NOTIFICATION) {
+        assert(senderAddress == masterAddress, ERROR_NOT_MASTER);
+
         var burnAmount = msgBody.loadCoins();
 
         if (burnAmount > 0) {
@@ -211,6 +213,14 @@ fun handleBouncedMessage(msgBody: slice) {
 
         return;
     }
+}
+
+fun onBouncedMessage(in: InMessageBounced) {
+    var msgBody = in.bouncedBody;
+    msgBody.skipBouncedPrefix();
+
+    loadData();
+    handleBouncedMessage(in.senderAddress, msgBody);
 }
 
 // -----------------------------------------------------
@@ -230,12 +240,19 @@ fun onInternalMessage(in: InMessage) {
 
     var op = msgBody.loadUint(32);
 
-    if (op == 0xffffffff) {
-        handleBouncedMessage(msgBody);
+    var queryId = msgBody.loadUint(64);
+
+    if (op == OP_EXCESSES) {
+        assert(senderAddress == gasRouterAddress, ERROR_NOT_VALID_WALLET);
+        settlePendingTransfer(queryId);
         return;
     }
 
-    var queryId = msgBody.loadUint(64);
+    if (op == OP_GAS_ROUTER_FAILED) {
+        assert(senderAddress == gasRouterAddress, ERROR_NOT_VALID_WALLET);
+        restorePendingTransfer(queryId);
+        return;
+    }
 
     // =====================================================
     // OP_INTERNAL_TRANSFER
@@ -249,9 +266,6 @@ fun onInternalMessage(in: InMessage) {
         requireInternalSender(senderAddress, fromOwner);
 
         balance += amount;
-
-        // GasPool settlement clears pending by derived query id.
-        tryClearSettledPending(queryId, senderAddress);
 
         saveData();
 
@@ -288,7 +302,7 @@ fun onInternalMessage(in: InMessage) {
         saveData();
 
         var gasPoolBody = beginCell()
-            .storeUint(OP_GAS_POOL_EXECUTE, 32)
+            .storeUint(OP_GAS_ROUTER_EXECUTE, 32)
             .storeUint(queryId, 64)
             .storeCoins(jettonAmount)
             .storeAddress(toOwner)
@@ -298,7 +312,7 @@ fun onInternalMessage(in: InMessage) {
 
         var msg = beginCell()
             .storeUint(0x18, 6)
-            .storeAddress(gasPoolAddress)
+            .storeAddress(gasRouterAddress)
             .storeCoins(0)
             .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .storeRef(gasPoolBody)
@@ -359,7 +373,7 @@ get fun getWalletData(): (
         balance,
         ownerAddress,
         masterAddress,
-        gasPoolAddress
+        gasRouterAddress
     );
 }
 

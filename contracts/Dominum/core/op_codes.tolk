@@ -17,6 +17,9 @@ const OP_EXCESSES: int = 0xd53276db;
 // =====================================================
 const OP_MINT: int = 0x15;
 const OP_REPLACE_MINTER: int = 0x43;
+const OP_CONFIRM_MASTER_REQUEST: int = 0x44;
+const OP_REJECT_MASTER_REQUEST: int = 0x45;
+const OP_REPLACE_MANAGER: int = 0x46;
 
 // =====================================================
 // GIVER MANAGER
@@ -46,6 +49,12 @@ const OP_CHANGE_TREASURY: int = 0xA5;
 const OP_UPDATE_RATE: int = 0xA6;
 const OP_CHANGE_TAX: int = 0xA7;
 const OP_INIT_MASTER_CONFIG: int = 0xA8;
+const OP_GAS_ROUTER_EXECUTE: int = 0xA9;
+const OP_GAS_ROUTER_SET_POOL: int = 0xAA;
+const OP_GAS_ROUTER_SETTLE: int = 0xAB;
+const OP_GAS_ROUTER_FAILED: int = 0xAC;
+const OP_GAS_ROUTER_SET_CONTROLLER: int = 0xAD;
+const OP_GAS_ROUTER_DELIVER: int = 0xAE;
 
 // =====================================================
 // treasury_pool

@@ -10,7 +10,11 @@ import { compile } from '@ton/blueprint';
 
 import { AllodWallet } from '../../../wrappers/Allodium/allod/AllodWallet';
 import {
+  AllodGasPool,
+} from '../../../wrappers/Allodium/pools/AllodGasPool';
+import {
   ALLODIUM_COMPILE,
+  ALLODIUM_CONTRACT,
   ALLODIUM_FIXTURE,
   ALLODIUM_QUERY,
   ALLODIUM_STATE,
@@ -24,12 +28,14 @@ describe('AllodWallet', () => {
   let owner: SandboxContract<TreasuryContract>;
   let receiver: SandboxContract<TreasuryContract>;
   let master: SandboxContract<TreasuryContract>;
-  let foundation: SandboxContract<TreasuryContract>;
+  let authority: SandboxContract<TreasuryContract>;
 
   let walletCode: Cell;
+  let gasPoolCode: Cell;
 
   beforeAll(async () => {
     walletCode = await compile(ALLODIUM_COMPILE.wallet);
+    gasPoolCode = await compile(ALLODIUM_COMPILE.allodGasPool);
   });
 
   beforeEach(async () => {
@@ -38,16 +44,19 @@ describe('AllodWallet', () => {
     owner = await blockchain.treasury('owner');
     receiver = await blockchain.treasury('receiver');
     master = await blockchain.treasury('master');
-    foundation = await blockchain.treasury('foundation');
+    authority = await blockchain.treasury('authority');
   });
 
-  function createWallet(ownerAddress = owner.address) {
+  function createWallet(
+    gasPoolAddress: TreasuryContract['address'],
+    ownerAddress = owner.address
+  ) {
     return AllodWallet.createFromConfig(
       {
         balance: ALLODIUM_STATE.emptyBalance,
         ownerAddress,
         masterAddress: master.address,
-        foundationAddress: foundation.address,
+        gasPoolAddress,
         jettonWalletCode: walletCode,
       },
       walletCode
@@ -55,7 +64,28 @@ describe('AllodWallet', () => {
   }
 
   it('should receive and transfer ALLOD with TON tax', async () => {
-    const ownerWallet = blockchain.openContract(createWallet());
+    const gasPool = blockchain.openContract(
+      AllodGasPool.createFromConfig(
+        {
+          authorityAddress: authority.address,
+          masterAddress: master.address,
+          jettonWalletCode: walletCode,
+          masterConfigured: true,
+          transferFeeAllod:
+            ALLODIUM_CONTRACT.defaultAllodTransferFee,
+        },
+        gasPoolCode
+      )
+    );
+
+    await gasPool.sendDeploy(
+      authority.getSender(),
+      ALLODIUM_VALUE.deployGasPool
+    );
+
+    const ownerWallet = blockchain.openContract(
+      createWallet(gasPool.address)
+    );
 
     await ownerWallet.sendDeploy(
       owner.getSender(),
@@ -87,6 +117,7 @@ describe('AllodWallet', () => {
         value: ALLODIUM_VALUE.transferWithTax,
         amount: ALLODIUM_FIXTURE.walletTransferAmount,
         toOwner: receiver.address,
+        paidFeeAllod: ALLODIUM_CONTRACT.defaultAllodTransferFee,
         responseDestination: owner.address,
         queryId: ALLODIUM_QUERY.walletTransfer,
       }
@@ -96,15 +127,32 @@ describe('AllodWallet', () => {
 
     expect(data.balance).toEqual(
       ALLODIUM_FIXTURE.walletInitialBalance -
-        ALLODIUM_FIXTURE.walletTransferAmount
+        ALLODIUM_FIXTURE.walletTransferAmount -
+        ALLODIUM_CONTRACT.defaultAllodTransferFee
     );
 
+    const pending = await ownerWallet.getPendingTransfer(
+      ALLODIUM_QUERY.walletTransfer
+    );
+
+    expect(pending.found).toBe(false);
+
     const receiverWallet = blockchain.openContract(
-      createWallet(receiver.address)
+      createWallet(gasPool.address, receiver.address)
     );
 
     expect((await receiverWallet.getWalletData()).balance).toEqual(
       ALLODIUM_FIXTURE.walletTransferAmount
+    );
+
+    const poolWallet = blockchain.openContract(
+      AllodWallet.createFromAddress(
+        await gasPool.getPoolWalletAddress()
+      )
+    );
+
+    expect((await poolWallet.getWalletData()).balance).toEqual(
+      ALLODIUM_CONTRACT.defaultAllodTransferFee
     );
   });
 });

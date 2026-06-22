@@ -13,7 +13,7 @@ import "../core/constants.tolk";
 // 40% -> DeFi Treasury
 
 global masterAddress: address;
-global gasPoolAddress: address;
+global gasRouterAddress: address;
 global jettonWalletCode: cell;
 
 global marketAddress: address;
@@ -24,7 +24,7 @@ fun loadData() {
     var ds = contract.getData().beginParse();
 
     masterAddress = ds.loadAddress();
-    gasPoolAddress = ds.loadAddress();
+    gasRouterAddress = ds.loadAddress();
     jettonWalletCode = ds.loadRef();
 
     var targets = ds.loadRef().beginParse();
@@ -39,7 +39,7 @@ fun buildWalletData(owner: address): cell {
         .storeCoins(0)
         .storeAddress(owner)
         .storeAddress(masterAddress)
-        .storeAddress(gasPoolAddress)
+        .storeAddress(gasRouterAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -153,7 +153,7 @@ get fun getGiverData(): (
 
     return (
         masterAddress,
-        gasPoolAddress,
+        gasRouterAddress,
         buildWalletAddress(contract.getAddress()),
         marketAddress,
         foundryAddress,

@@ -49,6 +49,31 @@ fun sendReplaceMinter(
     sendRawMessage(msg, 1);
 }
 
+fun sendReplaceManagerRequest(
+    masterAddress: address,
+    oldManagerAddress: address,
+    newManagerAddress: address,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_REPLACE_MANAGER, 32)
+        .storeUint(queryId, 64)
+        .storeUint(MANAGER_TARGET_MINTER, 8)
+        .storeAddress(oldManagerAddress)
+        .storeAddress(newManagerAddress)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(masterAddress)
+        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -79,6 +104,23 @@ fun onInternalMessage(in: InMessage) {
             queryId
         );
 
+        return;
+    }
+
+    if (op == OP_REPLACE_MANAGER) {
+        requireOwner(senderAddress);
+        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+
+        var masterAddress = msgBody.loadAddress();
+        var oldManagerAddress = msgBody.loadAddress();
+        var newManagerAddress = msgBody.loadAddress();
+
+        sendReplaceManagerRequest(
+            masterAddress,
+            oldManagerAddress,
+            newManagerAddress,
+            queryId
+        );
         return;
     }
 

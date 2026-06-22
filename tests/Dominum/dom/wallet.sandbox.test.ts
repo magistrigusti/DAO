@@ -27,7 +27,7 @@ describe('DomWallet', () => {
 
   let owner: SandboxContract<TreasuryContract>;
   let master: SandboxContract<TreasuryContract>;
-  let gasPool: SandboxContract<TreasuryContract>;
+  let gasRouter: SandboxContract<TreasuryContract>;
   let receiver: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
 
@@ -42,7 +42,7 @@ describe('DomWallet', () => {
 
     owner = await blockchain.treasury('owner');
     master = await blockchain.treasury('master');
-    gasPool = await blockchain.treasury('gas-pool');
+    gasRouter = await blockchain.treasury('gas-router');
     receiver = await blockchain.treasury('receiver');
     outsider = await blockchain.treasury('outsider');
   });
@@ -54,7 +54,7 @@ describe('DomWallet', () => {
           balance: DOM_FIXTURE.walletInitialBalance,
           ownerAddress: owner.address,
           masterAddress: master.address,
-          gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
           jettonWalletCode: walletCode,
         },
         walletCode
@@ -79,7 +79,7 @@ describe('DomWallet', () => {
 
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.masterAddress, master.address);
-    expectAddress(data.gasPoolAddress, gasPool.address);
+    expectAddress(data.gasRouterAddress, gasRouter.address);
   });
 
   it('should debit owner transfer and create pending record', async () => {

@@ -19,6 +19,53 @@ export async function mintAndReport(
 ): Promise<void> {
   const ui = provider.ui();
   const sender = provider.sender();
+  const pending =
+    await graph.domMaster.getMasterPendingRequest();
+  const masterDataBefore =
+    await graph.domMaster.getMasterData();
+  const gasPoolDataBefore =
+    await infrastructure.gasPool.getGasPoolData();
+  const treasuryDataBefore =
+    await infrastructure.treasuryPool.getTreasuryPoolData();
+
+  if (pending.hasPending) {
+    throw new Error(
+      'First mint is blocked while DomMaster has a pending role request'
+    );
+  }
+
+  if (!masterDataBefore.minterAddress.equals(graph.minter.address)) {
+    throw new Error(
+      'First mint is blocked until Master confirms the real Minter'
+    );
+  }
+
+  const giversBefore =
+    await graph.domMaster.getGiversData();
+
+  const giversConfigured =
+    giversBefore.giverAllodiumAddress.equals(graph.giverAllodium.address) &&
+    giversBefore.giverDefiAddress.equals(graph.giverDefi.address) &&
+    giversBefore.giverDaoAddress.equals(graph.giverDao.address) &&
+    giversBefore.giverDominumAddress.equals(graph.giverDominum.address);
+
+  if (!giversConfigured) {
+    throw new Error(
+      'First mint is blocked until Master confirms all four real Giver contracts'
+    );
+  }
+
+  if (!gasPoolDataBefore.masterConfigured) {
+    throw new Error(
+      'First mint is blocked until GasPool master configuration is initialized'
+    );
+  }
+
+  if (!treasuryDataBefore.walletConfigured) {
+    throw new Error(
+      'First mint is blocked until TreasuryPool wallet is initialized'
+    );
+  }
 
   ui.write('--- Step 14: First mint through Minter ---');
   ui.write(
@@ -75,6 +122,9 @@ export async function mintAndReport(
   );
   ui.write(
     `GasPool: ${infrastructure.gasPool.address.toString()}`
+  );
+  ui.write(
+    `GasRouter: ${infrastructure.gasRouter.address.toString()}`
   );
   ui.write(
     `GiverManager: ${graph.giverManager.address.toString()}`

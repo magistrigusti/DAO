@@ -23,6 +23,7 @@ fun requireOwner(senderAddress: address) {
 
 fun sendAddressRequest(
     treasuryPoolAddress: address,
+    targetKind: int,
     oldAddress: address,
     newAddress: address,
     queryId: int
@@ -30,6 +31,7 @@ fun sendAddressRequest(
     var body = beginCell()
         .storeUint(OP_REPLACE_TREASURY_ADDRESS, 32)
         .storeUint(queryId, 64)
+        .storeUint(targetKind, 8)
         .storeAddress(oldAddress)
         .storeAddress(newAddress)
         .endCell();
@@ -87,11 +89,13 @@ fun onInternalMessage(in: InMessage) {
         requireOwner(senderAddress);
 
         var treasuryPoolAddress = msgBody.loadAddress();
+        var targetKind = msgBody.loadUint(8);
         var oldAddress = msgBody.loadAddress();
         var newAddress = msgBody.loadAddress();
 
         sendAddressRequest(
             treasuryPoolAddress,
+            targetKind,
             oldAddress,
             newAddress,
             queryId

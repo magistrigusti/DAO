@@ -2,11 +2,12 @@ import {
   NetworkProvider,
 } from '@ton/blueprint';
 
+import {
+  loadDomSignerAddresses,
+} from '../core/config';
 import { compileContracts } from './compileContracts';
 import { deployInfrastructure } from '../foundation/deployInfrastructure';
 import { deployTokenGraph } from './deployTokenGraph';
-import { configureTokenGraph } from '../management/configureTokenGraph';
-import { mintAndReport } from '../foundation/mintAndReport';
 
 export async function run(
   provider: NetworkProvider
@@ -26,6 +27,8 @@ export async function run(
       `Deployer: ${deployer.toString()}`
   );
 
+  const signers = loadDomSignerAddresses();
+
   const compiled = await compileContracts(
       provider
   );
@@ -34,27 +37,34 @@ export async function run(
       await deployInfrastructure(
           provider,
           compiled,
-          deployer
+          deployer,
+          signers
       );
 
   const graph = await deployTokenGraph(
       provider,
       compiled,
       infrastructure,
-      deployer
+      signers
   );
 
-  await configureTokenGraph(
-      provider,
-      compiled,
-      infrastructure,
-      graph
+  ui.write(
+    'Контракты развёрнуты без автоматической подмены ролей.'
   );
-
-  await mintAndReport(
-      provider,
-      infrastructure,
-      graph
+  ui.write(
+    'Запросы Manager и подтверждения Master выполняются отдельными signer-кошельками.'
+  );
+  ui.write(
+    'Первый mint заблокирован до подтверждения реальных Minter/Giver и настройки GasPool.'
+  );
+  ui.write(
+    `DomMaster: ${graph.domMaster.address.toString()}`
+  );
+  ui.write(
+    `GasRouter: ${infrastructure.gasRouter.address.toString()}`
+  );
+  ui.write(
+    `GasPool: ${infrastructure.gasPool.address.toString()}`
   );
 
   ui.write('========== DOM DEPLOY END ==========');

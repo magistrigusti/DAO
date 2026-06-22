@@ -21,22 +21,34 @@ fun loadData() {
     var ds = contract.getData().beginParse();
 
     ownerAddress = ds.loadAddress();
-    domWalletAddress = ds.loadAddress();
-    allodMasterAddress = ds.loadAddress();
-    giverAllodiumAddress = ds.loadAddress();
-    allodiumFoundationAddress = ds.loadAddress();
     lockedDom = ds.loadCoins();
+
+    var protocolAddresses = ds.loadRef().beginParse();
+    domWalletAddress = protocolAddresses.loadAddress();
+    allodMasterAddress = protocolAddresses.loadAddress();
+
+    var distributionAddresses = ds.loadRef().beginParse();
+    giverAllodiumAddress = distributionAddresses.loadAddress();
+    allodiumFoundationAddress = distributionAddresses.loadAddress();
 }
 
 fun saveData() {
+    var protocolAddresses = beginCell()
+        .storeAddress(domWalletAddress)
+        .storeAddress(allodMasterAddress)
+        .endCell();
+
+    var distributionAddresses = beginCell()
+        .storeAddress(giverAllodiumAddress)
+        .storeAddress(allodiumFoundationAddress)
+        .endCell();
+
     contract.setData(
         beginCell()
             .storeAddress(ownerAddress)
-            .storeAddress(domWalletAddress)
-            .storeAddress(allodMasterAddress)
-            .storeAddress(giverAllodiumAddress)
-            .storeAddress(allodiumFoundationAddress)
             .storeCoins(lockedDom)
+            .storeRef(protocolAddresses)
+            .storeRef(distributionAddresses)
             .endCell()
     );
 }

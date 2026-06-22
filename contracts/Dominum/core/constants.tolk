@@ -90,3 +90,25 @@ const SECONDS_PER_MONTH: int = 2592000;
 const PENDING_NONE: int = 0;
 const PENDING_ADDRESS: int = 1;
 const PENDING_TAX: int = 2;
+
+// Явные цели TreasuryPool. Старый адрес не определяет изменяемый слот.
+const TREASURY_TARGET_BANK_DAO: int = 1;
+const TREASURY_TARGET_BANK_DEFI: int = 2;
+const TREASURY_TARGET_BANK_DOMINUM: int = 3;
+const TREASURY_TARGET_GAS_POOL: int = 4;
+
+// Явные цели GiverManager.
+const GIVER_TARGET_ALLODIUM: int = 1;
+const GIVER_TARGET_DEFI: int = 2;
+const GIVER_TARGET_DAO: int = 3;
+const GIVER_TARGET_DOMINUM: int = 4;
+
+// Типы двухключевых запросов внутри DomMaster.
+const MASTER_REQUEST_NONE: int = 0;
+const MASTER_REQUEST_MINTER: int = 1;
+const MASTER_REQUEST_GIVER: int = 2;
+const MASTER_REQUEST_MINTER_MANAGER: int = 3;
+const MASTER_REQUEST_GIVER_MANAGER: int = 4;
+
+const MANAGER_TARGET_MINTER: int = 1;
+const MANAGER_TARGET_GIVER: int = 2;

@@ -10,7 +10,10 @@ import {
 
 import {
   OP_MINT,
+  OP_CONFIRM_MASTER_REQUEST,
+  OP_REJECT_MASTER_REQUEST,
   OP_REPLACE_GIVER,
+  OP_REPLACE_MANAGER,
   OP_REPLACE_MINTER,
 } from '../core/op_code';
 
@@ -19,7 +22,7 @@ export type DomMasterConfig = {
   ownerAddress: Address;
   lastMintTime: bigint;
   isStarted: boolean;
-  gasPoolAddress: Address;
+  gasRouterAddress: Address;
   minterAddress: Address;
   minterManagerAddress: Address;
   giverManagerAddress: Address;
@@ -27,6 +30,11 @@ export type DomMasterConfig = {
   giverDefiAddress: Address;
   giverDaoAddress: Address;
   giverDominumAddress: Address;
+  hasPendingMasterRequest?: boolean;
+  pendingMasterRequestKind?: number;
+  pendingMasterTargetKind?: number;
+  pendingMasterOldAddress?: Address | null;
+  pendingMasterNewAddress?: Address | null;
   content: Cell;
   jettonWalletCode: Cell;
 };
@@ -35,7 +43,7 @@ export function domMasterConfigToCell(
   config: DomMasterConfig
 ): Cell {
   const roleCore = beginCell()
-    .storeAddress(config.gasPoolAddress)
+    .storeAddress(config.gasRouterAddress)
     .storeAddress(config.minterAddress)
     .endCell();
 
@@ -64,6 +72,19 @@ export function domMasterConfigToCell(
     .storeRef(giversSecond)
     .endCell();
 
+  const pending = beginCell()
+    .storeBit(config.hasPendingMasterRequest ?? false)
+    .storeUint(config.pendingMasterRequestKind ?? 0, 8)
+    .storeUint(config.pendingMasterTargetKind ?? 0, 8)
+    .storeAddress(config.pendingMasterOldAddress ?? null)
+    .storeAddress(config.pendingMasterNewAddress ?? null)
+    .endCell();
+
+  const metadataAndCode = beginCell()
+    .storeRef(config.content)
+    .storeRef(config.jettonWalletCode)
+    .endCell();
+
   return beginCell()
     .storeCoins(config.totalSupply)
     .storeAddress(config.ownerAddress)
@@ -71,8 +92,8 @@ export function domMasterConfigToCell(
     .storeBit(config.isStarted)
     .storeRef(roles)
     .storeRef(givers)
-    .storeRef(config.content)
-    .storeRef(config.jettonWalletCode)
+    .storeRef(pending)
+    .storeRef(metadataAndCode)
     .endCell();
 }
 
@@ -160,6 +181,7 @@ export class DomMaster implements Contract {
     via: Sender,
     opts: {
       value: bigint;
+      targetKind: number;
       oldGiverAddress: Address;
       newGiverAddress: Address;
       queryId?: bigint;
@@ -168,6 +190,7 @@ export class DomMaster implements Contract {
     const body = beginCell()
       .storeUint(OP_REPLACE_GIVER, 32)
       .storeUint(opts.queryId ?? 0n, 64)
+      .storeUint(opts.targetKind, 8)
       .storeAddress(opts.oldGiverAddress)
       .storeAddress(opts.newGiverAddress)
       .endCell();
@@ -176,6 +199,57 @@ export class DomMaster implements Contract {
       value: opts.value,
       body,
     });
+  }
+
+  async sendReplaceManager(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      targetKind: number;
+      oldManagerAddress: Address;
+      newManagerAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_REPLACE_MANAGER, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeUint(opts.targetKind, 8)
+      .storeAddress(opts.oldManagerAddress)
+      .storeAddress(opts.newManagerAddress)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
+  async sendConfirmMasterRequest(
+    provider: ContractProvider,
+    via: Sender,
+    opts: { value: bigint; queryId?: bigint }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_CONFIRM_MASTER_REQUEST, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
+  async sendRejectMasterRequest(
+    provider: ContractProvider,
+    via: Sender,
+    opts: { value: bigint; queryId?: bigint }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_REJECT_MASTER_REQUEST, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
   }
 
   async getJettonData(provider: ContractProvider) {
@@ -220,13 +294,28 @@ export class DomMaster implements Contract {
 
     return {
       ownerAddress: stack.readAddress(),
-      gasPoolAddress: stack.readAddress(),
+      gasRouterAddress: stack.readAddress(),
       minterAddress: stack.readAddress(),
       minterManagerAddress: stack.readAddress(),
       giverManagerAddress: stack.readAddress(),
       lastMintTime: stack.readBigNumber(),
       nextMintTime: stack.readBigNumber(),
       isStarted: stack.readBoolean(),
+    };
+  }
+
+  async getMasterPendingRequest(provider: ContractProvider) {
+    const { stack } = await provider.get(
+      'getMasterPendingRequest',
+      []
+    );
+
+    return {
+      hasPending: stack.readBoolean(),
+      requestKind: stack.readBigNumber(),
+      targetKind: stack.readBigNumber(),
+      oldAddress: stack.readAddressOpt(),
+      newAddress: stack.readAddressOpt(),
     };
   }
 

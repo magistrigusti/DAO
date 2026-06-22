@@ -16,7 +16,7 @@ global ownerAddress: address;
 global lastMintTime: int;
 global isStarted: bool;
 
-global gasPoolAddress: address;
+global gasRouterAddress: address;
 
 global minterAddress: address;
 global minterManagerAddress: address;
@@ -26,6 +26,12 @@ global giverAllodiumAddress: address;
 global giverDefiAddress: address;
 global giverDaoAddress: address;
 global giverDominumAddress: address;
+
+global hasPendingMasterRequest: bool;
+global pendingMasterRequestKind: int;
+global pendingMasterTargetKind: int;
+global pendingMasterOldAddress: address?;
+global pendingMasterNewAddress: address?;
 
 global content: cell;
 global jettonWalletCode: cell;
@@ -42,7 +48,7 @@ fun loadData() {
     var roleCore = roles.loadRef().beginParse();
     var roleManagers = roles.loadRef().beginParse();
 
-    gasPoolAddress = roleCore.loadAddress();
+    gasRouterAddress = roleCore.loadAddress();
     minterAddress = roleCore.loadAddress();
 
     minterManagerAddress = roleManagers.loadAddress();
@@ -58,13 +64,21 @@ fun loadData() {
     giverDaoAddress = giversSecond.loadAddress();
     giverDominumAddress = giversSecond.loadAddress();
 
-    content = ds.loadRef();
-    jettonWalletCode = ds.loadRef();
+    var pending = ds.loadRef().beginParse();
+    hasPendingMasterRequest = pending.loadBool();
+    pendingMasterRequestKind = pending.loadUint(8);
+    pendingMasterTargetKind = pending.loadUint(8);
+    pendingMasterOldAddress = pending.loadAddressOpt();
+    pendingMasterNewAddress = pending.loadAddressOpt();
+
+    var metadataAndCode = ds.loadRef().beginParse();
+    content = metadataAndCode.loadRef();
+    jettonWalletCode = metadataAndCode.loadRef();
 }
 
 fun saveData() {
     var roleCore = beginCell()
-        .storeAddress(gasPoolAddress)
+        .storeAddress(gasRouterAddress)
         .storeAddress(minterAddress)
         .endCell();
 
@@ -93,6 +107,19 @@ fun saveData() {
         .storeRef(giversSecond)
         .endCell();
 
+    var pending = beginCell()
+        .storeBool(hasPendingMasterRequest)
+        .storeUint(pendingMasterRequestKind, 8)
+        .storeUint(pendingMasterTargetKind, 8)
+        .storeAddressOpt(pendingMasterOldAddress)
+        .storeAddressOpt(pendingMasterNewAddress)
+        .endCell();
+
+    var metadataAndCode = beginCell()
+        .storeRef(content)
+        .storeRef(jettonWalletCode)
+        .endCell();
+
     contract.setData(
         beginCell()
             .storeCoins(totalSupply)
@@ -101,8 +128,8 @@ fun saveData() {
             .storeBool(isStarted)
             .storeRef(roles)
             .storeRef(givers)
-            .storeRef(content)
-            .storeRef(jettonWalletCode)
+            .storeRef(pending)
+            .storeRef(metadataAndCode)
             .endCell()
     );
 }
@@ -112,7 +139,7 @@ fun calculateWalletData(owner: address): cell {
         .storeCoins(0)
         .storeAddress(owner)
         .storeAddress(contract.getAddress())
-        .storeAddress(gasPoolAddress)
+        .storeAddress(gasRouterAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -141,6 +168,10 @@ fun requireMinter(senderAddress: address) {
     assert(senderAddress == minterAddress, ERROR_NOT_MINTER);
 }
 
+fun requireOwner(senderAddress: address) {
+    assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+}
+
 fun requireMinterManager(senderAddress: address) {
     assert(senderAddress == minterManagerAddress, ERROR_NOT_MANAGER);
 }
@@ -149,40 +180,106 @@ fun requireGiverManager(senderAddress: address) {
     assert(senderAddress == giverManagerAddress, ERROR_NOT_MANAGER);
 }
 
-fun replaceMinterAddress(
-    oldMinterAddress: address,
-    newMinterAddress: address
-) {
-    assert(oldMinterAddress == minterAddress, ERROR_NOT_MINTER);
-
-    minterAddress = newMinterAddress;
+fun clearMasterRequest() {
+    hasPendingMasterRequest = false;
+    pendingMasterRequestKind = MASTER_REQUEST_NONE;
+    pendingMasterTargetKind = 0;
+    pendingMasterOldAddress = null;
+    pendingMasterNewAddress = null;
 }
 
-fun replaceGiverAddress(
-    oldGiverAddress: address,
-    newGiverAddress: address
+fun createMasterRequest(
+    requestKind: int,
+    targetKind: int,
+    oldAddress: address,
+    newAddress: address
 ) {
-    if (oldGiverAddress == giverAllodiumAddress) {
-        giverAllodiumAddress = newGiverAddress;
+    assert(!hasPendingMasterRequest, ERROR_ALREADY_INITIALIZED);
+    assert(oldAddress != newAddress, ERROR_INVALID_AMOUNT);
+
+    hasPendingMasterRequest = true;
+    pendingMasterRequestKind = requestKind;
+    pendingMasterTargetKind = targetKind;
+    pendingMasterOldAddress = oldAddress;
+    pendingMasterNewAddress = newAddress;
+}
+
+fun applyGiverChange(
+    targetKind: int,
+    oldAddress: address,
+    newAddress: address
+) {
+    if (targetKind == GIVER_TARGET_ALLODIUM) {
+        assert(oldAddress == giverAllodiumAddress, ERROR_NOT_IN_WHITELIST);
+        giverAllodiumAddress = newAddress;
         return;
     }
 
-    if (oldGiverAddress == giverDefiAddress) {
-        giverDefiAddress = newGiverAddress;
+    if (targetKind == GIVER_TARGET_DEFI) {
+        assert(oldAddress == giverDefiAddress, ERROR_NOT_IN_WHITELIST);
+        giverDefiAddress = newAddress;
         return;
     }
 
-    if (oldGiverAddress == giverDaoAddress) {
-        giverDaoAddress = newGiverAddress;
+    if (targetKind == GIVER_TARGET_DAO) {
+        assert(oldAddress == giverDaoAddress, ERROR_NOT_IN_WHITELIST);
+        giverDaoAddress = newAddress;
         return;
     }
 
-    if (oldGiverAddress == giverDominumAddress) {
-        giverDominumAddress = newGiverAddress;
+    if (targetKind == GIVER_TARGET_DOMINUM) {
+        assert(oldAddress == giverDominumAddress, ERROR_NOT_IN_WHITELIST);
+        giverDominumAddress = newAddress;
         return;
     }
 
-    throw(ERROR_NOT_IN_WHITELIST);
+    throw(ERROR_WRONG_TARGET);
+}
+
+fun applyMasterRequest() {
+    assert(hasPendingMasterRequest, ERROR_NO_PENDING);
+    assert(pendingMasterOldAddress != null, ERROR_NO_PENDING);
+    assert(pendingMasterNewAddress != null, ERROR_NO_PENDING);
+
+    var oldAddress = pendingMasterOldAddress!;
+    var newAddress = pendingMasterNewAddress!;
+
+    if (pendingMasterRequestKind == MASTER_REQUEST_MINTER) {
+        assert(oldAddress == minterAddress, ERROR_NOT_MINTER);
+        minterAddress = newAddress;
+        return;
+    }
+
+    if (pendingMasterRequestKind == MASTER_REQUEST_GIVER) {
+        applyGiverChange(
+            pendingMasterTargetKind,
+            oldAddress,
+            newAddress
+        );
+        return;
+    }
+
+    if (pendingMasterRequestKind == MASTER_REQUEST_MINTER_MANAGER) {
+        assert(
+            pendingMasterTargetKind == MANAGER_TARGET_MINTER,
+            ERROR_WRONG_TARGET
+        );
+        assert(oldAddress == minterManagerAddress, ERROR_NOT_MANAGER);
+        minterManagerAddress = newAddress;
+        return;
+    }
+
+    if (pendingMasterRequestKind == MASTER_REQUEST_GIVER_MANAGER) {
+        assert(
+            pendingMasterTargetKind == MANAGER_TARGET_GIVER,
+            ERROR_WRONG_TARGET
+        );
+        assert(oldAddress == giverManagerAddress, ERROR_NOT_MANAGER);
+        giverManagerAddress = newAddress;
+        return;
+    }
+
+    throw(ERROR_WRONG_TARGET);
 }
 
 fun canMintInternal(): bool {
@@ -271,6 +368,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_MINT) {
         requireMinter(senderAddress);
+        assert(!hasPendingMasterRequest, ERROR_ALREADY_INITIALIZED);
 
         var amount = msgBody.loadCoins();
 
@@ -298,7 +396,11 @@ fun onInternalMessage(in: InMessage) {
         var oldMinterAddress = msgBody.loadAddress();
         var newMinterAddress = msgBody.loadAddress();
 
-        replaceMinterAddress(
+        assert(oldMinterAddress == minterAddress, ERROR_NOT_MINTER);
+
+        createMasterRequest(
+            MASTER_REQUEST_MINTER,
+            0,
             oldMinterAddress,
             newMinterAddress
         );
@@ -310,14 +412,97 @@ fun onInternalMessage(in: InMessage) {
     if (op == OP_REPLACE_GIVER) {
         requireGiverManager(senderAddress);
 
+        var targetKind = msgBody.loadUint(8);
         var oldGiverAddress = msgBody.loadAddress();
         var newGiverAddress = msgBody.loadAddress();
 
-        replaceGiverAddress(
+        if (targetKind == GIVER_TARGET_ALLODIUM) {
+            assert(
+                oldGiverAddress == giverAllodiumAddress,
+                ERROR_NOT_IN_WHITELIST
+            );
+        } else if (targetKind == GIVER_TARGET_DEFI) {
+            assert(
+                oldGiverAddress == giverDefiAddress,
+                ERROR_NOT_IN_WHITELIST
+            );
+        } else if (targetKind == GIVER_TARGET_DAO) {
+            assert(
+                oldGiverAddress == giverDaoAddress,
+                ERROR_NOT_IN_WHITELIST
+            );
+        } else if (targetKind == GIVER_TARGET_DOMINUM) {
+            assert(
+                oldGiverAddress == giverDominumAddress,
+                ERROR_NOT_IN_WHITELIST
+            );
+        } else {
+            throw(ERROR_WRONG_TARGET);
+        }
+
+        createMasterRequest(
+            MASTER_REQUEST_GIVER,
+            targetKind,
             oldGiverAddress,
             newGiverAddress
         );
 
+        saveData();
+        return;
+    }
+
+    if (op == OP_REPLACE_MANAGER) {
+        var targetKind = msgBody.loadUint(8);
+        var oldManagerAddress = msgBody.loadAddress();
+        var newManagerAddress = msgBody.loadAddress();
+
+        if (targetKind == MANAGER_TARGET_MINTER) {
+            requireMinterManager(senderAddress);
+            assert(
+                oldManagerAddress == minterManagerAddress,
+                ERROR_NOT_MANAGER
+            );
+            createMasterRequest(
+                MASTER_REQUEST_MINTER_MANAGER,
+                targetKind,
+                oldManagerAddress,
+                newManagerAddress
+            );
+            saveData();
+            return;
+        }
+
+        if (targetKind == MANAGER_TARGET_GIVER) {
+            requireGiverManager(senderAddress);
+            assert(
+                oldManagerAddress == giverManagerAddress,
+                ERROR_NOT_MANAGER
+            );
+            createMasterRequest(
+                MASTER_REQUEST_GIVER_MANAGER,
+                targetKind,
+                oldManagerAddress,
+                newManagerAddress
+            );
+            saveData();
+            return;
+        }
+
+        throw(ERROR_WRONG_TARGET);
+    }
+
+    if (op == OP_CONFIRM_MASTER_REQUEST) {
+        requireOwner(senderAddress);
+        applyMasterRequest();
+        clearMasterRequest();
+        saveData();
+        return;
+    }
+
+    if (op == OP_REJECT_MASTER_REQUEST) {
+        requireOwner(senderAddress);
+        assert(hasPendingMasterRequest, ERROR_NO_PENDING);
+        clearMasterRequest();
         saveData();
         return;
     }
@@ -397,7 +582,7 @@ get fun getMasterData(): (
 
     return (
         ownerAddress,
-        gasPoolAddress,
+        gasRouterAddress,
         minterAddress,
         minterManagerAddress,
         giverManagerAddress,
@@ -429,5 +614,19 @@ get fun getGiversData(): (address, address, address, address) {
         giverDefiAddress,
         giverDaoAddress,
         giverDominumAddress
+    );
+}
+
+get fun getMasterPendingRequest(): (
+    bool, int, int, address?, address?
+) {
+    loadData();
+
+    return (
+        hasPendingMasterRequest,
+        pendingMasterRequestKind,
+        pendingMasterTargetKind,
+        pendingMasterOldAddress,
+        pendingMasterNewAddress
     );
 }

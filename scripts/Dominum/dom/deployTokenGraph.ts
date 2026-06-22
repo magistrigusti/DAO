@@ -1,5 +1,4 @@
 import {
-  Address,
   toNano,
 } from '@ton/core';
 import {
@@ -8,10 +7,13 @@ import {
 
 import {
   DEPLOY_VALUES,
-  FORWARDED_MESSAGE_WAIT_MS,
+  DomSignerAddresses,
   METADATA_URL,
 } from '../core/config';
-import { buildOffChainContent, sleep } from '../core/helpers';
+import {
+  buildOffChainContent,
+  buildTypedPlaceholderAddress,
+} from '../core/helpers';
 import {
   CompiledContracts,
   InfrastructureContracts,
@@ -31,7 +33,7 @@ export async function deployTokenGraph(
   provider: NetworkProvider,
   compiled: CompiledContracts,
   infrastructure: InfrastructureContracts,
-  deployer: Address
+  signers: DomSignerAddresses
 ): Promise<TokenGraphContracts> {
   const ui = provider.ui();
   const sender = provider.sender();
@@ -39,7 +41,7 @@ export async function deployTokenGraph(
   const giverManager = await deployGiverManager(
     provider,
     compiled,
-    deployer
+    signers.giverManager
   );
 
   ui.write('--- Step 4: Deploy MinterManager ---');
@@ -47,7 +49,7 @@ export async function deployTokenGraph(
   const minterManager = provider.open(
     MinterManager.createFromConfig(
       {
-        ownerAddress: deployer,
+        ownerAddress: signers.minterManager,
       },
       compiled.minterManagerCode
     )
@@ -69,23 +71,24 @@ export async function deployTokenGraph(
     METADATA_URL
   );
 
-  const placeholderGiverAllodium = deployer;
-  const placeholderGiverDefi = giverManager.address;
-  const placeholderGiverDao = minterManager.address;
-  const placeholderGiverDominum = infrastructure.gasPool.address;
+  const placeholderMinter = buildTypedPlaceholderAddress(20, 1);
+  const placeholderGiverAllodium = buildTypedPlaceholderAddress(21, 1);
+  const placeholderGiverDefi = buildTypedPlaceholderAddress(21, 2);
+  const placeholderGiverDao = buildTypedPlaceholderAddress(21, 3);
+  const placeholderGiverDominum = buildTypedPlaceholderAddress(21, 4);
 
   const domMaster = provider.open(
     DomMaster.createFromConfig(
       {
         totalSupply: 0n,
-        ownerAddress: deployer,
+        ownerAddress: signers.master,
         lastMintTime: 0n,
         isStarted: false,
 
-        gasPoolAddress: infrastructure.gasPool.address,
+        gasRouterAddress: infrastructure.gasRouter.address,
 
         // Временный minter. После деплоя Minter заменим через MinterManager.
-        minterAddress: deployer,
+        minterAddress: placeholderMinter,
         minterManagerAddress: minterManager.address,
         giverManagerAddress: giverManager.address,
 
@@ -95,6 +98,7 @@ export async function deployTokenGraph(
         giverDefiAddress: placeholderGiverDefi,
         giverDaoAddress: placeholderGiverDao,
         giverDominumAddress: placeholderGiverDominum,
+        hasPendingMasterRequest: false,
 
         content,
         jettonWalletCode: compiled.walletCode,
@@ -118,7 +122,7 @@ export async function deployTokenGraph(
   const minter = provider.open(
     Minter.createFromConfig(
       {
-        ownerAddress: deployer,
+        ownerAddress: signers.minter,
         masterAddress: domMaster.address,
       },
       compiled.minterCode
@@ -135,82 +139,16 @@ export async function deployTokenGraph(
     `Minter: ${minter.address.toString()}`
   );
 
-  ui.write('--- Step 7: Connect Minter to DomMaster ---');
-
-  await minterManager.sendReplaceMinter(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.roleConfig),
-      masterAddress: domMaster.address,
-      oldMinterAddress: deployer,
-      newMinterAddress: minter.address,
-      queryId: 31n,
-    }
-  );
-
-  await provider.waitForLastTransaction();
-  await sleep(FORWARDED_MESSAGE_WAIT_MS);
-
   const givers = await deployGivers(
     provider,
     compiled,
     domMaster.address,
-    infrastructure.gasPool.address,
-    deployer
+    infrastructure.gasRouter.address
   );
 
-  ui.write('--- Step 9: Connect Givers to DomMaster ---');
-
-  await giverManager.sendReplaceGiver(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.roleConfig),
-      masterAddress: domMaster.address,
-      oldGiverAddress: placeholderGiverAllodium,
-      newGiverAddress: givers.giverAllodium.address,
-      queryId: 41n,
-    }
+  ui.write(
+    'Role contracts deployed. Separate signer transactions must create and confirm Master requests.'
   );
-  await provider.waitForLastTransaction();
-
-  await giverManager.sendReplaceGiver(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.roleConfig),
-      masterAddress: domMaster.address,
-      oldGiverAddress: placeholderGiverDefi,
-      newGiverAddress: givers.giverDefi.address,
-      queryId: 42n,
-    }
-  );
-  await provider.waitForLastTransaction();
-
-  await giverManager.sendReplaceGiver(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.roleConfig),
-      masterAddress: domMaster.address,
-      oldGiverAddress: placeholderGiverDao,
-      newGiverAddress: givers.giverDao.address,
-      queryId: 43n,
-    }
-  );
-  await provider.waitForLastTransaction();
-
-  await giverManager.sendReplaceGiver(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.roleConfig),
-      masterAddress: domMaster.address,
-      oldGiverAddress: placeholderGiverDominum,
-      newGiverAddress: givers.giverDominum.address,
-      queryId: 44n,
-    }
-  );
-  await provider.waitForLastTransaction();
-  await sleep(FORWARDED_MESSAGE_WAIT_MS);
-
-  ui.write('DomMaster roles configured.');
 
   return {
     giverManager,

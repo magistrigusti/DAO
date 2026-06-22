@@ -7,7 +7,10 @@ import {
   ContractProvider,
   Sender,
 } from '@ton/core';
-import { OP_REPLACE_MINTER } from '../core/op_code';
+import {
+  OP_REPLACE_MANAGER,
+  OP_REPLACE_MINTER,
+} from '../core/op_code';
 
 export type MinterManagerConfig = {
   ownerAddress: Address;
@@ -27,6 +30,31 @@ export class MinterManager implements Contract {
     const init = { code, data };
 
     return new MinterManager(contractAddress(workchain, init), init);
+  }
+
+  async sendReplaceManager(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      masterAddress: Address;
+      oldManagerAddress: Address;
+      newManagerAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_REPLACE_MANAGER, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.masterAddress)
+      .storeAddress(opts.oldManagerAddress)
+      .storeAddress(opts.newManagerAddress)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   static createFromAddress(address: Address) {

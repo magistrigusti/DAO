@@ -46,6 +46,7 @@ export class TreasuryManager implements Contract {
     opts: {
       value: bigint;
       treasuryPoolAddress: Address;
+      targetKind: number;
       oldAddress: Address;
       newAddress: Address;
       queryId?: bigint;
@@ -55,6 +56,7 @@ export class TreasuryManager implements Contract {
       .storeUint(OP_REPLACE_TREASURY_ADDRESS, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .storeAddress(opts.treasuryPoolAddress)
+      .storeUint(opts.targetKind, 8)
       .storeAddress(opts.oldAddress)
       .storeAddress(opts.newAddress)
       .endCell();

@@ -12,6 +12,7 @@ const CONTRACTS = {
   treasuryManager: 'Dominum/management/TreasuryManager',
   treasuryPool: 'Dominum/treasury/TreasuryPool',
   gasPool: 'Dominum/pools/GasPool',
+  gasRouter: 'Dominum/pools/GasRouter',
 
   minter: 'Dominum/treasury/Minter',
   minterManager: 'Dominum/management/MinterManager',
@@ -38,6 +39,7 @@ export async function compileContracts(
     treasuryManagerCode: await compile(CONTRACTS.treasuryManager),
     treasuryPoolCode: await compile(CONTRACTS.treasuryPool),
     gasPoolCode: await compile(CONTRACTS.gasPool),
+    gasRouterCode: await compile(CONTRACTS.gasRouter),
 
     minterCode: await compile(CONTRACTS.minter),
     minterManagerCode: await compile(CONTRACTS.minterManager),

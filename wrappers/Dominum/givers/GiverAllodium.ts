@@ -10,7 +10,7 @@ import {
 
 export type GiverAllodiumConfig = {
   masterAddress: Address;
-  gasPoolAddress: Address;
+  gasRouterAddress: Address;
   jettonWalletCode: Cell;
   frsAllodiumAddress: Address;
   allodiumFoundationAddress: Address;
@@ -26,7 +26,7 @@ export function giverAllodiumConfigToCell(
 
   return beginCell()
     .storeAddress(config.masterAddress)
-    .storeAddress(config.gasPoolAddress)
+    .storeAddress(config.gasRouterAddress)
     .storeRef(config.jettonWalletCode)
     .storeRef(targets)
     .endCell();
@@ -75,7 +75,7 @@ export class GiverAllodium implements Contract {
 
     return {
       masterAddress: stack.readAddress(),
-      gasPoolAddress: stack.readAddress(),
+      gasRouterAddress: stack.readAddress(),
       walletAddress: stack.readAddress(),
       frsAllodiumAddress: stack.readAddress(),
       allodiumFoundationAddress: stack.readAddress(),

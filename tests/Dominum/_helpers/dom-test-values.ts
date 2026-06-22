@@ -9,6 +9,7 @@ export const DOM_COMPILE = {
   treasuryManager: 'Dominum/management/TreasuryManager',
 
   gasPool: 'Dominum/pools/GasPool',
+  gasRouter: 'Dominum/pools/GasRouter',
 
   minterManager: 'Dominum/management/MinterManager',
   giverManager: 'Dominum/management/GiverManager',
@@ -94,12 +95,14 @@ export const DOM_QUERY = {
 
   replaceMinter: 31n,
   replaceMinterRejected: 32n,
+  replaceMinterManager: 33n,
 
   replaceGiverAllodium: 41n,
   replaceGiverDefi: 42n,
   replaceGiverDao: 43n,
   replaceGiverDominum: 44n,
   replaceGiverRejected: 45n,
+  replaceGiverManager: 46n,
 
   treasuryWalletInit: 51n,
   treasuryWalletInitRejected: 52n,

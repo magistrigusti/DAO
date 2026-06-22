@@ -29,12 +29,14 @@ export type TreasuryPoolConfig = {
   bankDefiAddress: Address;
   bankDominumAddress: Address;
   gasPoolAddress: Address;
+  gasRouterAddress: Address;
   taxMultiplier?: number;
   totalReceivedDom?: bigint;
   totalSentDom?: bigint;
   totalSentTon?: bigint;
   hasPending?: boolean;
   pendingKind?: number;
+  pendingTargetKind?: number;
   pendingOldAddress?: Address | null;
   pendingNewAddress?: Address | null;
   pendingOldValue?: number;
@@ -50,6 +52,7 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
   const poolTargets = beginCell()
     .storeAddress(config.bankDominumAddress)
     .storeAddress(config.gasPoolAddress)
+    .storeAddress(config.gasRouterAddress)
     .endCell();
 
   const targets = beginCell()
@@ -67,6 +70,7 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
   const pending = beginCell()
     .storeBit(config.hasPending ?? false)
     .storeUint(config.pendingKind ?? 0, 8)
+    .storeUint(config.pendingTargetKind ?? 0, 8)
     .storeAddress(config.pendingOldAddress ?? null)
     .storeAddress(config.pendingNewAddress ?? null)
     .storeUint(config.pendingOldValue ?? 0, 32)
@@ -165,6 +169,7 @@ export class TreasuryPool implements Contract {
     via: Sender,
     opts: {
       value: bigint;
+      targetKind: number;
       oldAddress: Address;
       newAddress: Address;
       queryId?: bigint;
@@ -173,6 +178,7 @@ export class TreasuryPool implements Contract {
     const body = beginCell()
       .storeUint(OP_REPLACE_TREASURY_ADDRESS, 32)
       .storeUint(opts.queryId ?? 0n, 64)
+      .storeUint(opts.targetKind, 8)
       .storeAddress(opts.oldAddress)
       .storeAddress(opts.newAddress)
       .endCell();
@@ -344,6 +350,7 @@ export class TreasuryPool implements Contract {
       bankDefiAddress: stack.readAddress(),
       bankDominumAddress: stack.readAddress(),
       gasPoolAddress: stack.readAddress(),
+      gasRouterAddress: stack.readAddress(),
       taxMultiplier: stack.readBigNumber(),
       totalReceivedDom: stack.readBigNumber(),
       totalSentDom: stack.readBigNumber(),
@@ -357,6 +364,7 @@ export class TreasuryPool implements Contract {
     return {
       hasPending: stack.readBoolean(),
       pendingKind: stack.readBigNumber(),
+      pendingTargetKind: stack.readBigNumber(),
       pendingOldAddress: stack.readAddressOpt(),
       pendingNewAddress: stack.readAddressOpt(),
       pendingOldValue: stack.readBigNumber(),

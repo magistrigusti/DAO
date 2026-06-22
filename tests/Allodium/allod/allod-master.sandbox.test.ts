@@ -56,7 +56,7 @@ describe('AllodMaster', () => {
           totalSupply: ALLODIUM_STATE.emptySupply,
           ownerAddress: owner.address,
           frsAddress: frs.address,
-          foundationAddress: foundation.address,
+          gasPoolAddress: foundation.address,
           mintAllowancePool: ALLODIUM_STATE.emptyAllowance,
           content: beginCell().endCell(),
           jettonWalletCode: walletCode,
@@ -78,7 +78,7 @@ describe('AllodMaster', () => {
 
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.frsAddress, frs.address);
-    expectAddress(data.foundationAddress, foundation.address);
+    expectAddress(data.gasPoolAddress, foundation.address);
 
     expect(data.mintAllowancePool).toEqual(
       ALLODIUM_STATE.emptyAllowance
@@ -89,7 +89,7 @@ describe('AllodMaster', () => {
         balance: ALLODIUM_STATE.emptyBalance,
         ownerAddress: player.address,
         masterAddress: allodMaster.address,
-        foundationAddress: foundation.address,
+        gasPoolAddress: foundation.address,
         jettonWalletCode: walletCode,
       },
       walletCode

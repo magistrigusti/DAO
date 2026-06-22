@@ -10,6 +10,7 @@ import {
 
 import {
   OP_REPLACE_GIVER,
+  OP_REPLACE_MANAGER,
 } from '../core/op_code';
 
 export type GiverManagerConfig = {
@@ -65,6 +66,7 @@ export class GiverManager implements Contract {
     opts: {
       value: bigint;
       masterAddress: Address;
+      targetKind: number;
       oldGiverAddress: Address;
       newGiverAddress: Address;
       queryId?: bigint;
@@ -74,8 +76,34 @@ export class GiverManager implements Contract {
       .storeUint(OP_REPLACE_GIVER, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .storeAddress(opts.masterAddress)
+      .storeUint(opts.targetKind, 8)
       .storeAddress(opts.oldGiverAddress)
       .storeAddress(opts.newGiverAddress)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
+  async sendReplaceManager(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      masterAddress: Address;
+      oldManagerAddress: Address;
+      newManagerAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_REPLACE_MANAGER, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.masterAddress)
+      .storeAddress(opts.oldManagerAddress)
+      .storeAddress(opts.newManagerAddress)
       .endCell();
 
     await provider.internal(via, {

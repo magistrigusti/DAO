@@ -28,12 +28,13 @@ import {
 describe('MinterManager', () => {
   let blockchain: Blockchain;
 
-  let owner: SandboxContract<TreasuryContract>;
+  let managerOwner: SandboxContract<TreasuryContract>;
+  let masterOwner: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
   let oldMinter: SandboxContract<TreasuryContract>;
   let newMinter: SandboxContract<TreasuryContract>;
   let giverManager: SandboxContract<TreasuryContract>;
-  let gasPool: SandboxContract<TreasuryContract>;
+  let gasRouter: SandboxContract<TreasuryContract>;
   let giver1: SandboxContract<TreasuryContract>;
   let giver2: SandboxContract<TreasuryContract>;
   let giver3: SandboxContract<TreasuryContract>;
@@ -52,12 +53,13 @@ describe('MinterManager', () => {
   beforeEach(async () => {
     blockchain = await Blockchain.create();
 
-    owner = await blockchain.treasury('owner');
+    managerOwner = await blockchain.treasury('manager-owner');
+    masterOwner = await blockchain.treasury('master-owner');
     outsider = await blockchain.treasury('outsider');
     oldMinter = await blockchain.treasury('old-minter');
     newMinter = await blockchain.treasury('new-minter');
     giverManager = await blockchain.treasury('giver-manager');
-    gasPool = await blockchain.treasury('gas-pool');
+    gasRouter = await blockchain.treasury('gas-router');
     giver1 = await blockchain.treasury('giver-1');
     giver2 = await blockchain.treasury('giver-2');
     giver3 = await blockchain.treasury('giver-3');
@@ -68,14 +70,14 @@ describe('MinterManager', () => {
     const minterManager = blockchain.openContract(
       MinterManager.createFromConfig(
         {
-          ownerAddress: owner.address,
+          ownerAddress: managerOwner.address,
         },
         minterManagerCode
       )
     );
 
     await minterManager.sendDeploy(
-      owner.getSender(),
+      managerOwner.getSender(),
       DOM_VALUE.deploySmall
     );
 
@@ -83,11 +85,11 @@ describe('MinterManager', () => {
       DomMaster.createFromConfig(
         {
           totalSupply: DOM_STATE.emptySupply,
-          ownerAddress: owner.address,
+          ownerAddress: masterOwner.address,
           lastMintTime: DOM_STATE.noLastMintTime,
           isStarted: DOM_STATE.notStarted,
 
-          gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
 
           minterAddress: oldMinter.address,
           minterManagerAddress: minterManager.address,
@@ -106,7 +108,7 @@ describe('MinterManager', () => {
     );
 
     await domMaster.sendDeploy(
-      owner.getSender(),
+      masterOwner.getSender(),
       DOM_VALUE.deploySmall
     );
 
@@ -119,10 +121,10 @@ describe('MinterManager', () => {
   it('should expose owner address', async () => {
     const { minterManager } = await deployFlow();
 
-    const managerOwner =
+    const storedManagerOwner =
       await minterManager.getMinterManagerData();
 
-    expectAddress(managerOwner, owner.address);
+    expectAddress(storedManagerOwner, managerOwner.address);
   });
 
   it('should replace minter through DomMaster from owner', async () => {
@@ -132,7 +134,7 @@ describe('MinterManager', () => {
     } = await deployFlow();
 
     await minterManager.sendReplaceMinter(
-      owner.getSender(),
+      managerOwner.getSender(),
       {
         value: DOM_VALUE.config,
         masterAddress: domMaster.address,
@@ -142,8 +144,28 @@ describe('MinterManager', () => {
       }
     );
 
-    const masterData =
+    let masterData =
       await domMaster.getMasterData();
+
+    expectAddress(
+      masterData.minterAddress,
+      oldMinter.address
+    );
+
+    const pending =
+      await domMaster.getMasterPendingRequest();
+
+    expect(pending.hasPending).toBe(true);
+
+    await domMaster.sendConfirmMasterRequest(
+      masterOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        queryId: DOM_QUERY.replaceMinter + 1n,
+      }
+    );
+
+    masterData = await domMaster.getMasterData();
 
     expectAddress(
       masterData.minterAddress,
@@ -177,5 +199,83 @@ describe('MinterManager', () => {
       masterData.minterAddress,
       oldMinter.address
     );
+  });
+
+  it('should replace MinterManager only after Master owner confirmation', async () => {
+    const {
+      minterManager,
+      domMaster,
+    } = await deployFlow();
+
+    const newMinterManager =
+      await blockchain.treasury('new-minter-manager');
+
+    await minterManager.sendReplaceManager(
+      managerOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        masterAddress: domMaster.address,
+        oldManagerAddress: minterManager.address,
+        newManagerAddress: newMinterManager.address,
+        queryId: DOM_QUERY.replaceMinterManager,
+      }
+    );
+
+    let masterData = await domMaster.getMasterData();
+
+    expectAddress(
+      masterData.minterManagerAddress,
+      minterManager.address
+    );
+
+    await domMaster.sendConfirmMasterRequest(
+      masterOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        queryId: DOM_QUERY.replaceMinterManager + 1n,
+      }
+    );
+
+    masterData = await domMaster.getMasterData();
+
+    expectAddress(
+      masterData.minterManagerAddress,
+      newMinterManager.address
+    );
+  });
+
+  it('should keep current Minter when Master owner rejects request', async () => {
+    const {
+      minterManager,
+      domMaster,
+    } = await deployFlow();
+
+    await minterManager.sendReplaceMinter(
+      managerOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        masterAddress: domMaster.address,
+        oldMinterAddress: oldMinter.address,
+        newMinterAddress: newMinter.address,
+        queryId: DOM_QUERY.replaceMinter,
+      }
+    );
+
+    await domMaster.sendRejectMasterRequest(
+      masterOwner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        queryId: DOM_QUERY.replaceMinter + 2n,
+      }
+    );
+
+    const masterData = await domMaster.getMasterData();
+    const pending = await domMaster.getMasterPendingRequest();
+
+    expectAddress(
+      masterData.minterAddress,
+      oldMinter.address
+    );
+    expect(pending.hasPending).toBe(false);
   });
 });

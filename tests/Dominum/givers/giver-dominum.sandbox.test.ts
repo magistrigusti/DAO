@@ -25,7 +25,7 @@ describe('GiverDominum', () => {
 
   let deployer: SandboxContract<TreasuryContract>;
   let master: SandboxContract<TreasuryContract>;
-  let gasPool: SandboxContract<TreasuryContract>;
+  let gasRouter: SandboxContract<TreasuryContract>;
   let bankDominum: SandboxContract<TreasuryContract>;
   let dominumFoundation: SandboxContract<TreasuryContract>;
 
@@ -42,7 +42,7 @@ describe('GiverDominum', () => {
 
     deployer = await blockchain.treasury('deployer');
     master = await blockchain.treasury('master');
-    gasPool = await blockchain.treasury('gas-pool');
+    gasRouter = await blockchain.treasury('gas-router');
     bankDominum = await blockchain.treasury('bank-dominum');
     dominumFoundation = await blockchain.treasury('dominum-foundation');
   });
@@ -52,7 +52,7 @@ describe('GiverDominum', () => {
       GiverDominum.createFromConfig(
         {
           masterAddress: master.address,
-          gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
           jettonWalletCode: walletCode,
           bankDominumAddress: bankDominum.address,
           dominumFoundationAddress: dominumFoundation.address,
@@ -70,7 +70,7 @@ describe('GiverDominum', () => {
         balance: DOM_STATE.emptyBalance,
         ownerAddress: giver.address,
         masterAddress: master.address,
-        gasPoolAddress: gasPool.address,
+        gasRouterAddress: gasRouter.address,
         jettonWalletCode: walletCode,
       },
       walletCode
@@ -88,7 +88,7 @@ describe('GiverDominum', () => {
     const data = await giver.getGiverData();
 
     expectAddress(data.masterAddress, master.address);
-    expectAddress(data.gasPoolAddress, gasPool.address);
+    expectAddress(data.gasRouterAddress, gasRouter.address);
     expectAddress(data.walletAddress, expectedWalletAddress(giver));
     expectAddress(data.bankDominumAddress, bankDominum.address);
     expectAddress(

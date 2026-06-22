@@ -93,6 +93,7 @@ export class AllodWallet implements Contract {
       value: bigint;
       amount: bigint;
       toOwner: Address;
+      paidFeeAllod: bigint;
       responseDestination?: Address | null;
       queryId?: bigint;
     }
@@ -103,9 +104,7 @@ export class AllodWallet implements Contract {
       .storeCoins(opts.amount)
       .storeAddress(opts.toOwner)
       .storeAddress(opts.responseDestination ?? null)
-      .storeBit(false)
-      .storeCoins(0n)
-      .storeBit(false)
+      .storeCoins(opts.paidFeeAllod)
       .endCell();
 
     await provider.internal(via, { value: opts.value, body });
@@ -139,6 +138,26 @@ export class AllodWallet implements Contract {
       ownerAddress: stack.readAddress(),
       masterAddress: stack.readAddress(),
       gasPoolAddress: stack.readAddress(),
+    };
+  }
+
+  async getPendingTransfer(
+    provider: ContractProvider,
+    queryId: bigint
+  ) {
+    const { stack } = await provider.get(
+      'getPendingTransfer',
+      [
+        {
+          type: 'int',
+          value: queryId,
+        },
+      ]
+    );
+
+    return {
+      totalSpend: stack.readBigNumber(),
+      found: stack.readBoolean(),
     };
   }
 }

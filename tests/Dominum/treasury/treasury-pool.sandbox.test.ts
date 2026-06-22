@@ -22,6 +22,9 @@ import {
   expectOptionalAddress,
   ignoreFailure,
 } from '../core/dom-test-utils';
+import {
+  TREASURY_TARGET,
+} from '../../../wrappers/Dominum/core/constants';
 
 describe('TreasuryPool', () => {
   let blockchain: Blockchain;
@@ -33,6 +36,7 @@ describe('TreasuryPool', () => {
   let bankDefi: SandboxContract<TreasuryContract>;
   let bankDominum: SandboxContract<TreasuryContract>;
   let gasPool: SandboxContract<TreasuryContract>;
+  let gasRouter: SandboxContract<TreasuryContract>;
   let newGasPool: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
 
@@ -52,6 +56,7 @@ describe('TreasuryPool', () => {
     bankDefi = await blockchain.treasury('bank-defi');
     bankDominum = await blockchain.treasury('bank-dominum');
     gasPool = await blockchain.treasury('gas-pool');
+    gasRouter = await blockchain.treasury('gas-router');
     newGasPool = await blockchain.treasury('new-gas-pool');
     outsider = await blockchain.treasury('outsider');
   });
@@ -68,6 +73,7 @@ describe('TreasuryPool', () => {
           bankDefiAddress: bankDefi.address,
           bankDominumAddress: bankDominum.address,
           gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
         },
         treasuryPoolCode
       )
@@ -145,6 +151,7 @@ describe('TreasuryPool', () => {
       manager.getSender(),
       {
         value: DOM_VALUE.config,
+        targetKind: TREASURY_TARGET.gasPool,
         oldAddress: gasPool.address,
         newAddress: newGasPool.address,
         queryId: DOM_QUERY.treasuryAddressRequest,
@@ -156,6 +163,9 @@ describe('TreasuryPool', () => {
     expect(pending.hasPending).toBe(true);
     expect(pending.pendingKind).toEqual(
       DOM_CONTRACT.pendingAddressKind
+    );
+    expect(pending.pendingTargetKind).toEqual(
+      BigInt(TREASURY_TARGET.gasPool)
     );
 
     expectOptionalAddress(

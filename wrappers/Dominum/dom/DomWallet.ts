@@ -18,7 +18,7 @@ export type DomWalletConfig = {
     balance: bigint;
     ownerAddress: Address;
     masterAddress: Address;
-    gasPoolAddress: Address;
+    gasRouterAddress: Address;
     jettonWalletCode: Cell;
     pendingTransfers?: Dictionary<bigint, Cell> | null;
 };
@@ -28,7 +28,7 @@ export function domWalletConfigToCell(config: DomWalletConfig): Cell {
         .storeCoins(config.balance)
         .storeAddress(config.ownerAddress)
         .storeAddress(config.masterAddress)
-        .storeAddress(config.gasPoolAddress)
+        .storeAddress(config.gasRouterAddress)
         .storeRef(config.jettonWalletCode);
 
     if (config.pendingTransfers) {
@@ -147,7 +147,7 @@ export class DomWallet implements Contract {
             balance: stack.readBigNumber(),
             ownerAddress: stack.readAddress(),
             masterAddress: stack.readAddress(),
-            gasPoolAddress: stack.readAddress(),
+            gasRouterAddress: stack.readAddress(),
         };
     }
 

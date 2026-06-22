@@ -26,13 +26,21 @@ export type FrsAllodiumConfig = {
 export function frsAllodiumConfigToCell(
   config: FrsAllodiumConfig
 ): Cell {
-  return beginCell()
-    .storeAddress(config.ownerAddress)
+  const protocolAddresses = beginCell()
     .storeAddress(config.domWalletAddress)
     .storeAddress(config.allodMasterAddress)
+    .endCell();
+
+  const distributionAddresses = beginCell()
     .storeAddress(config.giverAllodiumAddress)
     .storeAddress(config.allodiumFoundationAddress)
+    .endCell();
+
+  return beginCell()
+    .storeAddress(config.ownerAddress)
     .storeCoins(config.lockedDom ?? 0n)
+    .storeRef(protocolAddresses)
+    .storeRef(distributionAddresses)
     .endCell();
 }
 

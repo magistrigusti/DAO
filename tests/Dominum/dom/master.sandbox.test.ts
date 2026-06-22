@@ -33,7 +33,7 @@ describe('DomMaster', () => {
 
   let owner: SandboxContract<TreasuryContract>;
   let minter: SandboxContract<TreasuryContract>;
-  let gasPool: SandboxContract<TreasuryContract>;
+  let gasRouter: SandboxContract<TreasuryContract>;
   let minterManager: SandboxContract<TreasuryContract>;
   let giverManager: SandboxContract<TreasuryContract>;
   let giverAllodium: SandboxContract<TreasuryContract>;
@@ -58,7 +58,7 @@ describe('DomMaster', () => {
     minter = await blockchain.treasury('minter');
     minterManager = await blockchain.treasury('minter-manager');
     giverManager = await blockchain.treasury('giver-manager');
-    gasPool = await blockchain.treasury('gas-pool');
+    gasRouter = await blockchain.treasury('gas-router');
 
     giverAllodium = await blockchain.treasury('giver-allodium');
     giverDefi = await blockchain.treasury('giver-defi');
@@ -77,7 +77,7 @@ describe('DomMaster', () => {
           lastMintTime: DOM_STATE.noLastMintTime,
           isStarted: DOM_STATE.notStarted,
 
-          gasPoolAddress: gasPool.address,
+          gasRouterAddress: gasRouter.address,
 
           minterAddress: minter.address,
           minterManagerAddress: minterManager.address,
