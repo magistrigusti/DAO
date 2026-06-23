@@ -124,9 +124,6 @@ export async function mintAndReport(
     `GasPool: ${infrastructure.gasPool.address.toString()}`
   );
   ui.write(
-    `GasRouter: ${infrastructure.gasRouter.address.toString()}`
-  );
-  ui.write(
     `GiverManager: ${graph.giverManager.address.toString()}`
   );
   ui.write(

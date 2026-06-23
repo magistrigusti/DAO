@@ -10,7 +10,7 @@ import {
 
 export type GiverDominumConfig = {
   masterAddress: Address;
-  gasRouterAddress: Address;
+  treasuryPoolAddress: Address;
   jettonWalletCode: Cell;
   bankDominumAddress: Address;
   dominumFoundationAddress: Address;
@@ -26,7 +26,7 @@ export function giverDominumConfigToCell(
 
   return beginCell()
     .storeAddress(config.masterAddress)
-    .storeAddress(config.gasRouterAddress)
+    .storeAddress(config.treasuryPoolAddress)
     .storeRef(config.jettonWalletCode)
     .storeRef(targets)
     .endCell();
@@ -75,7 +75,7 @@ export class GiverDominum implements Contract {
 
     return {
       masterAddress: stack.readAddress(),
-      gasRouterAddress: stack.readAddress(),
+      treasuryPoolAddress: stack.readAddress(),
       walletAddress: stack.readAddress(),
       bankDominumAddress: stack.readAddress(),
       dominumFoundationAddress: stack.readAddress(),

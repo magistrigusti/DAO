@@ -6,7 +6,6 @@ import {
 
 import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
 import { GasPool } from '../../../wrappers/Dominum/pools/GasPool';
-import { GasRouter } from '../../../wrappers/Dominum/pools/GasRouter';
 import { TreasuryPool } from '../../../wrappers/Dominum/treasury/TreasuryPool';
 import { Minter } from '../../../wrappers/Dominum/treasury/Minter';
 
@@ -39,7 +38,6 @@ export type CompiledContracts = {
   treasuryManagerCode: Cell;
   treasuryPoolCode: Cell;
   gasPoolCode: Cell;
-  gasRouterCode: Cell;
 
   minterCode: Cell;
   minterManagerCode: Cell;
@@ -56,7 +54,6 @@ export type InfrastructureContracts = {
   treasuryManager: OpenedContract<TreasuryManager>;
   treasuryPool: OpenedContract<TreasuryPool>;
   gasPool: OpenedContract<GasPool>;
-  gasRouter: OpenedContract<GasRouter>;
 };
 
 export type TokenGraphContracts = {

@@ -35,7 +35,7 @@ export async function deployGivers(
   provider: NetworkProvider,
   compiled: CompiledContracts,
   masterAddress: Address,
-  gasRouterAddress: Address
+  treasuryPoolAddress: Address
 ): Promise<DeployedGivers> {
   const ui = provider.ui();
   const sender = provider.sender();
@@ -46,7 +46,7 @@ export async function deployGivers(
     GiverAllodium.createFromConfig(
       {
         masterAddress,
-        gasRouterAddress,
+        treasuryPoolAddress,
         jettonWalletCode: compiled.walletCode,
         frsAllodiumAddress: buildTypedPlaceholderAddress(10, 1),
         allodiumFoundationAddress: buildTypedPlaceholderAddress(10, 2),
@@ -69,7 +69,7 @@ export async function deployGivers(
     GiverDefi.createFromConfig(
       {
         masterAddress,
-        gasRouterAddress,
+        treasuryPoolAddress,
         jettonWalletCode: compiled.walletCode,
         marketAddress: buildTypedPlaceholderAddress(11, 1),
         foundryAddress: buildTypedPlaceholderAddress(11, 2),
@@ -93,7 +93,7 @@ export async function deployGivers(
     GiverDao.createFromConfig(
       {
         masterAddress,
-        gasRouterAddress,
+        treasuryPoolAddress,
         jettonWalletCode: compiled.walletCode,
         bankDaoAddress: buildTypedPlaceholderAddress(12, 1),
         daoFoundationAddress: buildTypedPlaceholderAddress(12, 2),
@@ -116,7 +116,7 @@ export async function deployGivers(
     GiverDominum.createFromConfig(
       {
         masterAddress,
-        gasRouterAddress,
+        treasuryPoolAddress,
         jettonWalletCode: compiled.walletCode,
         bankDominumAddress: buildTypedPlaceholderAddress(13, 1),
         dominumFoundationAddress: buildTypedPlaceholderAddress(13, 2),

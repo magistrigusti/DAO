@@ -8,7 +8,8 @@ import "@stdlib/tvm-dicts";
 // OP_TRANSFER | queryId | amount | toOwner | responseDest | paidFeeDom
 //
 // Wallet debits amount + paidFeeDom.
-// If the message bounces before GasPool settlement, wallet restores full debit
+// TreasuryPool — постоянная точка маршрута между Wallet и активным GasPool.
+// Если запрос отклонён или отскочил, Wallet восстанавливает полное списание
 // from pendingTransfers by queryId.
 // =====================================
 
@@ -18,7 +19,7 @@ import "@stdlib/tvm-dicts";
 global balance: int;
 global ownerAddress: address;
 global masterAddress: address;
-global gasRouterAddress: address;
+global treasuryPoolAddress: address;
 global jettonWalletCode: cell;
 
 // queryId -> totalSpend
@@ -33,7 +34,7 @@ fun loadData() {
     balance = ds.loadCoins();
     ownerAddress = ds.loadAddress();
     masterAddress = ds.loadAddress();
-    gasRouterAddress = ds.loadAddress();
+    treasuryPoolAddress = ds.loadAddress();
     jettonWalletCode = ds.loadRef();
 
     var (bitsLeft, refsLeft) = ds.remainingBitsAndRefsCount();
@@ -50,7 +51,7 @@ fun saveData() {
             .storeCoins(balance)
             .storeAddress(ownerAddress)
             .storeAddress(masterAddress)
-            .storeAddress(gasRouterAddress)
+            .storeAddress(treasuryPoolAddress)
             .storeRef(jettonWalletCode)
             .storeDict(pendingTransfers)
             .endCell()
@@ -115,7 +116,7 @@ fun buildWalletData(owner: address): cell {
         .storeCoins(0)
         .storeAddress(owner)
         .storeAddress(masterAddress)
-        .storeAddress(gasRouterAddress)
+        .storeAddress(treasuryPoolAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -151,7 +152,7 @@ fun requireInternalSender(
         return;
     }
 
-    if (senderAddress == gasRouterAddress) {
+    if (senderAddress == treasuryPoolAddress) {
         return;
     }
 
@@ -195,8 +196,8 @@ fun handleBouncedMessage(senderAddress: address, msgBody: slice) {
     var bouncedOp = msgBody.loadUint(32);
     var bouncedQueryId = msgBody.loadUint(64);
 
-    if (bouncedOp == OP_GAS_ROUTER_EXECUTE) {
-        assert(senderAddress == gasRouterAddress, ERROR_NOT_VALID_WALLET);
+    if (bouncedOp == OP_TREASURY_EXECUTE) {
+        assert(senderAddress == treasuryPoolAddress, ERROR_NOT_VALID_WALLET);
         restorePendingTransfer(bouncedQueryId);
         return;
     }
@@ -242,14 +243,14 @@ fun onInternalMessage(in: InMessage) {
 
     var queryId = msgBody.loadUint(64);
 
-    if (op == OP_EXCESSES) {
-        assert(senderAddress == gasRouterAddress, ERROR_NOT_VALID_WALLET);
+    if (op == OP_TREASURY_SETTLE) {
+        assert(senderAddress == treasuryPoolAddress, ERROR_NOT_VALID_WALLET);
         settlePendingTransfer(queryId);
         return;
     }
 
-    if (op == OP_GAS_ROUTER_FAILED) {
-        assert(senderAddress == gasRouterAddress, ERROR_NOT_VALID_WALLET);
+    if (op == OP_TREASURY_FAILED) {
+        assert(senderAddress == treasuryPoolAddress, ERROR_NOT_VALID_WALLET);
         restorePendingTransfer(queryId);
         return;
     }
@@ -302,7 +303,7 @@ fun onInternalMessage(in: InMessage) {
         saveData();
 
         var gasPoolBody = beginCell()
-            .storeUint(OP_GAS_ROUTER_EXECUTE, 32)
+            .storeUint(OP_TREASURY_EXECUTE, 32)
             .storeUint(queryId, 64)
             .storeCoins(jettonAmount)
             .storeAddress(toOwner)
@@ -312,7 +313,7 @@ fun onInternalMessage(in: InMessage) {
 
         var msg = beginCell()
             .storeUint(0x18, 6)
-            .storeAddress(gasRouterAddress)
+            .storeAddress(treasuryPoolAddress)
             .storeCoins(0)
             .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .storeRef(gasPoolBody)
@@ -373,7 +374,7 @@ get fun getWalletData(): (
         balance,
         ownerAddress,
         masterAddress,
-        gasRouterAddress
+        treasuryPoolAddress
     );
 }
 

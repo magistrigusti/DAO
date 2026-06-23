@@ -18,7 +18,6 @@ import {
 
 export type GasPoolConfig = {
   treasuryPoolAddress: Address;
-  gasRouterAddress: Address;
   masterAddress: Address;
   jettonWalletCode: Cell;
   masterConfigured?: boolean;
@@ -33,7 +32,6 @@ export function gasPoolConfigToCell(
 ): Cell {
   return beginCell()
     .storeAddress(config.treasuryPoolAddress)
-    .storeAddress(config.gasRouterAddress)
     .storeAddress(config.masterAddress)
     .storeRef(config.jettonWalletCode)
     .storeBit(config.masterConfigured ?? false)
@@ -207,7 +205,6 @@ export class GasPool implements Contract {
 
     return {
       treasuryPoolAddress: stack.readAddress(),
-      gasRouterAddress: stack.readAddress(),
       masterAddress: stack.readAddress(),
       masterConfigured: stack.readBoolean(),
       taxMultiplier: stack.readBigNumber(),

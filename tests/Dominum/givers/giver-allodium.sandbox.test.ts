@@ -25,7 +25,7 @@ describe('GiverAllodium', () => {
 
   let deployer: SandboxContract<TreasuryContract>;
   let master: SandboxContract<TreasuryContract>;
-  let gasRouter: SandboxContract<TreasuryContract>;
+  let treasuryPool: SandboxContract<TreasuryContract>;
   let frsAllodium: SandboxContract<TreasuryContract>;
   let allodiumFoundation: SandboxContract<TreasuryContract>;
 
@@ -42,7 +42,7 @@ describe('GiverAllodium', () => {
 
     deployer = await blockchain.treasury('deployer');
     master = await blockchain.treasury('master');
-    gasRouter = await blockchain.treasury('gas-router');
+    treasuryPool = await blockchain.treasury('treasury-pool');
     frsAllodium = await blockchain.treasury('frs-allodium');
     allodiumFoundation = await blockchain.treasury('allodium-foundation');
   });
@@ -52,7 +52,7 @@ describe('GiverAllodium', () => {
       GiverAllodium.createFromConfig(
         {
           masterAddress: master.address,
-          gasRouterAddress: gasRouter.address,
+          treasuryPoolAddress: treasuryPool.address,
           jettonWalletCode: walletCode,
           frsAllodiumAddress: frsAllodium.address,
           allodiumFoundationAddress: allodiumFoundation.address,
@@ -70,7 +70,7 @@ describe('GiverAllodium', () => {
         balance: DOM_STATE.emptyBalance,
         ownerAddress: giver.address,
         masterAddress: master.address,
-        gasRouterAddress: gasRouter.address,
+        treasuryPoolAddress: treasuryPool.address,
         jettonWalletCode: walletCode,
       },
       walletCode
@@ -88,7 +88,7 @@ describe('GiverAllodium', () => {
     const data = await giver.getGiverData();
 
     expectAddress(data.masterAddress, master.address);
-    expectAddress(data.gasRouterAddress, gasRouter.address);
+    expectAddress(data.treasuryPoolAddress, treasuryPool.address);
     expectAddress(data.walletAddress, expectedWalletAddress(giver));
     expectAddress(data.frsAllodiumAddress, frsAllodium.address);
     expectAddress(

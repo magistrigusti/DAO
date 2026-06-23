@@ -22,7 +22,7 @@ export type DomMasterConfig = {
   ownerAddress: Address;
   lastMintTime: bigint;
   isStarted: boolean;
-  gasRouterAddress: Address;
+  treasuryPoolAddress: Address;
   minterAddress: Address;
   minterManagerAddress: Address;
   giverManagerAddress: Address;
@@ -43,7 +43,7 @@ export function domMasterConfigToCell(
   config: DomMasterConfig
 ): Cell {
   const roleCore = beginCell()
-    .storeAddress(config.gasRouterAddress)
+    .storeAddress(config.treasuryPoolAddress)
     .storeAddress(config.minterAddress)
     .endCell();
 
@@ -294,7 +294,7 @@ export class DomMaster implements Contract {
 
     return {
       ownerAddress: stack.readAddress(),
-      gasRouterAddress: stack.readAddress(),
+      treasuryPoolAddress: stack.readAddress(),
       minterAddress: stack.readAddress(),
       minterManagerAddress: stack.readAddress(),
       giverManagerAddress: stack.readAddress(),

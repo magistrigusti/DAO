@@ -25,7 +25,7 @@ describe('GiverDao', () => {
 
   let deployer: SandboxContract<TreasuryContract>;
   let master: SandboxContract<TreasuryContract>;
-  let gasRouter: SandboxContract<TreasuryContract>;
+  let treasuryPool: SandboxContract<TreasuryContract>;
   let bankDao: SandboxContract<TreasuryContract>;
   let daoFoundation: SandboxContract<TreasuryContract>;
 
@@ -42,7 +42,7 @@ describe('GiverDao', () => {
 
     deployer = await blockchain.treasury('deployer');
     master = await blockchain.treasury('master');
-    gasRouter = await blockchain.treasury('gas-router');
+    treasuryPool = await blockchain.treasury('treasury-pool');
     bankDao = await blockchain.treasury('bank-dao');
     daoFoundation = await blockchain.treasury('dao-foundation');
   });
@@ -52,7 +52,7 @@ describe('GiverDao', () => {
       GiverDao.createFromConfig(
         {
           masterAddress: master.address,
-          gasRouterAddress: gasRouter.address,
+          treasuryPoolAddress: treasuryPool.address,
           jettonWalletCode: walletCode,
           bankDaoAddress: bankDao.address,
           daoFoundationAddress: daoFoundation.address,
@@ -70,7 +70,7 @@ describe('GiverDao', () => {
         balance: DOM_STATE.emptyBalance,
         ownerAddress: giver.address,
         masterAddress: master.address,
-        gasRouterAddress: gasRouter.address,
+        treasuryPoolAddress: treasuryPool.address,
         jettonWalletCode: walletCode,
       },
       walletCode
@@ -88,7 +88,7 @@ describe('GiverDao', () => {
     const data = await giver.getGiverData();
 
     expectAddress(data.masterAddress, master.address);
-    expectAddress(data.gasRouterAddress, gasRouter.address);
+    expectAddress(data.treasuryPoolAddress, treasuryPool.address);
     expectAddress(data.walletAddress, expectedWalletAddress(giver));
     expectAddress(data.bankDaoAddress, bankDao.address);
     expectAddress(data.daoFoundationAddress, daoFoundation.address);

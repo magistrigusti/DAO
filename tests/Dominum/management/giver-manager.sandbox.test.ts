@@ -34,7 +34,7 @@ describe('GiverManager', () => {
   let managerOwner: SandboxContract<TreasuryContract>;
   let masterOwner: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
-  let gasRouter: SandboxContract<TreasuryContract>;
+  let treasuryPool: SandboxContract<TreasuryContract>;
   let minter: SandboxContract<TreasuryContract>;
   let minterManager: SandboxContract<TreasuryContract>;
   let oldAllodiumGiver: SandboxContract<TreasuryContract>;
@@ -59,7 +59,7 @@ describe('GiverManager', () => {
     managerOwner = await blockchain.treasury('manager-owner');
     masterOwner = await blockchain.treasury('master-owner');
     outsider = await blockchain.treasury('outsider');
-    gasRouter = await blockchain.treasury('gas-router');
+    treasuryPool = await blockchain.treasury('treasury-pool');
     minter = await blockchain.treasury('minter');
     minterManager = await blockchain.treasury('minter-manager');
     oldAllodiumGiver = await blockchain.treasury('old-allodium-giver');
@@ -91,7 +91,7 @@ describe('GiverManager', () => {
           ownerAddress: masterOwner.address,
           lastMintTime: DOM_STATE.noLastMintTime,
           isStarted: DOM_STATE.notStarted,
-          gasRouterAddress: gasRouter.address,
+          treasuryPoolAddress: treasuryPool.address,
           minterAddress: minter.address,
           minterManagerAddress: minterManager.address,
           giverManagerAddress: giverManager.address,

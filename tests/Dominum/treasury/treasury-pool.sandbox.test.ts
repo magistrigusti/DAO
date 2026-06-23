@@ -36,7 +36,6 @@ describe('TreasuryPool', () => {
   let bankDefi: SandboxContract<TreasuryContract>;
   let bankDominum: SandboxContract<TreasuryContract>;
   let gasPool: SandboxContract<TreasuryContract>;
-  let gasRouter: SandboxContract<TreasuryContract>;
   let newGasPool: SandboxContract<TreasuryContract>;
   let outsider: SandboxContract<TreasuryContract>;
 
@@ -56,7 +55,6 @@ describe('TreasuryPool', () => {
     bankDefi = await blockchain.treasury('bank-defi');
     bankDominum = await blockchain.treasury('bank-dominum');
     gasPool = await blockchain.treasury('gas-pool');
-    gasRouter = await blockchain.treasury('gas-router');
     newGasPool = await blockchain.treasury('new-gas-pool');
     outsider = await blockchain.treasury('outsider');
   });
@@ -73,7 +71,6 @@ describe('TreasuryPool', () => {
           bankDefiAddress: bankDefi.address,
           bankDominumAddress: bankDominum.address,
           gasPoolAddress: gasPool.address,
-          gasRouterAddress: gasRouter.address,
         },
         treasuryPoolCode
       )
@@ -189,5 +186,80 @@ describe('TreasuryPool', () => {
     const data = await treasuryPool.getTreasuryPoolData();
 
     expectAddress(data.gasPoolAddress, newGasPool.address);
+  });
+
+  it('should cancel or confirm tax request only by TreasuryPool owner', async () => {
+    const treasuryPool = await deployPool();
+    const newTaxMultiplier = 400;
+
+    await treasuryPool.sendTaxRequest(
+      manager.getSender(),
+      {
+        value: DOM_VALUE.config,
+        oldTaxMultiplier: Number(DOM_CONTRACT.taxMultiplier),
+        newTaxMultiplier,
+        queryId: DOM_QUERY.treasuryAddressRequest,
+      }
+    );
+
+    await ignoreFailure(
+      treasuryPool.sendConfirmRequest(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          queryId: DOM_QUERY.treasuryAddressConfirm,
+        }
+      )
+    );
+
+    let pending = await treasuryPool.getTreasuryPendingData();
+    let data = await treasuryPool.getTreasuryPoolData();
+
+    expect(pending.hasPending).toBe(true);
+    expect(data.taxMultiplier).toEqual(
+      DOM_CONTRACT.taxMultiplier
+    );
+
+    await treasuryPool.sendCancelRequest(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        queryId: DOM_QUERY.treasuryAddressRejected,
+      }
+    );
+
+    pending = await treasuryPool.getTreasuryPendingData();
+    data = await treasuryPool.getTreasuryPoolData();
+
+    expect(pending.hasPending).toBe(false);
+    expect(data.taxMultiplier).toEqual(
+      DOM_CONTRACT.taxMultiplier
+    );
+
+    await treasuryPool.sendTaxRequest(
+      manager.getSender(),
+      {
+        value: DOM_VALUE.config,
+        oldTaxMultiplier: Number(DOM_CONTRACT.taxMultiplier),
+        newTaxMultiplier,
+        queryId: DOM_QUERY.treasuryAddressRequest + 10n,
+      }
+    );
+
+    await treasuryPool.sendConfirmRequest(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        queryId: DOM_QUERY.treasuryAddressConfirm + 10n,
+      }
+    );
+
+    pending = await treasuryPool.getTreasuryPendingData();
+    data = await treasuryPool.getTreasuryPoolData();
+
+    expect(pending.hasPending).toBe(false);
+    expect(data.taxMultiplier).toEqual(
+      BigInt(newTaxMultiplier)
+    );
   });
 });

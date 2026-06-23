@@ -5,6 +5,7 @@ import {
   Contract,
   contractAddress,
   ContractProvider,
+  Dictionary,
   Sender,
 } from '@ton/core';
 import {
@@ -29,7 +30,6 @@ export type TreasuryPoolConfig = {
   bankDefiAddress: Address;
   bankDominumAddress: Address;
   gasPoolAddress: Address;
-  gasRouterAddress: Address;
   taxMultiplier?: number;
   totalReceivedDom?: bigint;
   totalSentDom?: bigint;
@@ -41,6 +41,8 @@ export type TreasuryPoolConfig = {
   pendingNewAddress?: Address | null;
   pendingOldValue?: number;
   pendingNewValue?: number;
+  nextRouteId?: bigint;
+  pendingRoutes?: Dictionary<bigint, Cell> | null;
 };
 
 export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
@@ -52,7 +54,6 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
   const poolTargets = beginCell()
     .storeAddress(config.bankDominumAddress)
     .storeAddress(config.gasPoolAddress)
-    .storeAddress(config.gasRouterAddress)
     .endCell();
 
   const targets = beginCell()
@@ -77,6 +78,11 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
     .storeUint(config.pendingNewValue ?? 0, 32)
     .endCell();
 
+  const routing = beginCell()
+    .storeUint(config.nextRouteId ?? 1n, 64)
+    .storeDict(config.pendingRoutes ?? null)
+    .endCell();
+
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.treasuryManagerAddress)
@@ -85,6 +91,7 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
     .storeRef(targets)
     .storeRef(stats)
     .storeRef(pending)
+    .storeRef(routing)
     .endCell();
 }
 
@@ -350,11 +357,11 @@ export class TreasuryPool implements Contract {
       bankDefiAddress: stack.readAddress(),
       bankDominumAddress: stack.readAddress(),
       gasPoolAddress: stack.readAddress(),
-      gasRouterAddress: stack.readAddress(),
       taxMultiplier: stack.readBigNumber(),
       totalReceivedDom: stack.readBigNumber(),
       totalSentDom: stack.readBigNumber(),
       totalSentTon: stack.readBigNumber(),
+      nextRouteId: stack.readBigNumber(),
     };
   }
 

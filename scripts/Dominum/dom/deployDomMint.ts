@@ -61,7 +61,7 @@ export async function run(
     `DomMaster: ${graph.domMaster.address.toString()}`
   );
   ui.write(
-    `GasRouter: ${infrastructure.gasRouter.address.toString()}`
+    `TreasuryPool: ${infrastructure.treasuryPool.address.toString()}`
   );
   ui.write(
     `GasPool: ${infrastructure.gasPool.address.toString()}`

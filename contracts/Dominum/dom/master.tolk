@@ -16,7 +16,7 @@ global ownerAddress: address;
 global lastMintTime: int;
 global isStarted: bool;
 
-global gasRouterAddress: address;
+global treasuryPoolAddress: address;
 
 global minterAddress: address;
 global minterManagerAddress: address;
@@ -48,7 +48,7 @@ fun loadData() {
     var roleCore = roles.loadRef().beginParse();
     var roleManagers = roles.loadRef().beginParse();
 
-    gasRouterAddress = roleCore.loadAddress();
+    treasuryPoolAddress = roleCore.loadAddress();
     minterAddress = roleCore.loadAddress();
 
     minterManagerAddress = roleManagers.loadAddress();
@@ -78,7 +78,7 @@ fun loadData() {
 
 fun saveData() {
     var roleCore = beginCell()
-        .storeAddress(gasRouterAddress)
+        .storeAddress(treasuryPoolAddress)
         .storeAddress(minterAddress)
         .endCell();
 
@@ -139,7 +139,7 @@ fun calculateWalletData(owner: address): cell {
         .storeCoins(0)
         .storeAddress(owner)
         .storeAddress(contract.getAddress())
-        .storeAddress(gasRouterAddress)
+        .storeAddress(treasuryPoolAddress)
         .storeRef(jettonWalletCode)
         .endCell();
 }
@@ -582,7 +582,7 @@ get fun getMasterData(): (
 
     return (
         ownerAddress,
-        gasRouterAddress,
+        treasuryPoolAddress,
         minterAddress,
         minterManagerAddress,
         giverManagerAddress,

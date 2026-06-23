@@ -10,7 +10,7 @@ import {
 
 export type GiverDefiConfig = {
   masterAddress: Address;
-  gasRouterAddress: Address;
+  treasuryPoolAddress: Address;
   jettonWalletCode: Cell;
   marketAddress: Address;
   foundryAddress: Address;
@@ -28,7 +28,7 @@ export function giverDefiConfigToCell(
 
   return beginCell()
     .storeAddress(config.masterAddress)
-    .storeAddress(config.gasRouterAddress)
+    .storeAddress(config.treasuryPoolAddress)
     .storeRef(config.jettonWalletCode)
     .storeRef(targets)
     .endCell();
@@ -77,7 +77,7 @@ export class GiverDefi implements Contract {
 
     return {
       masterAddress: stack.readAddress(),
-      gasRouterAddress: stack.readAddress(),
+      treasuryPoolAddress: stack.readAddress(),
       walletAddress: stack.readAddress(),
       marketAddress: stack.readAddress(),
       foundryAddress: stack.readAddress(),

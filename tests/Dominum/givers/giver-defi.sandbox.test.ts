@@ -25,7 +25,7 @@ describe('GiverDefi', () => {
 
   let deployer: SandboxContract<TreasuryContract>;
   let master: SandboxContract<TreasuryContract>;
-  let gasRouter: SandboxContract<TreasuryContract>;
+  let treasuryPool: SandboxContract<TreasuryContract>;
   let market: SandboxContract<TreasuryContract>;
   let foundry: SandboxContract<TreasuryContract>;
   let defiTreasury: SandboxContract<TreasuryContract>;
@@ -43,7 +43,7 @@ describe('GiverDefi', () => {
 
     deployer = await blockchain.treasury('deployer');
     master = await blockchain.treasury('master');
-    gasRouter = await blockchain.treasury('gas-router');
+    treasuryPool = await blockchain.treasury('treasury-pool');
     market = await blockchain.treasury('market');
     foundry = await blockchain.treasury('foundry');
     defiTreasury = await blockchain.treasury('defi-treasury');
@@ -54,7 +54,7 @@ describe('GiverDefi', () => {
       GiverDefi.createFromConfig(
         {
           masterAddress: master.address,
-          gasRouterAddress: gasRouter.address,
+          treasuryPoolAddress: treasuryPool.address,
           jettonWalletCode: walletCode,
           marketAddress: market.address,
           foundryAddress: foundry.address,
@@ -73,7 +73,7 @@ describe('GiverDefi', () => {
         balance: DOM_STATE.emptyBalance,
         ownerAddress: giver.address,
         masterAddress: master.address,
-        gasRouterAddress: gasRouter.address,
+        treasuryPoolAddress: treasuryPool.address,
         jettonWalletCode: walletCode,
       },
       walletCode
@@ -91,7 +91,7 @@ describe('GiverDefi', () => {
     const data = await giver.getGiverData();
 
     expectAddress(data.masterAddress, master.address);
-    expectAddress(data.gasRouterAddress, gasRouter.address);
+    expectAddress(data.treasuryPoolAddress, treasuryPool.address);
     expectAddress(data.walletAddress, expectedWalletAddress(giver));
     expectAddress(data.marketAddress, market.address);
     expectAddress(data.foundryAddress, foundry.address);

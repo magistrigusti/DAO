@@ -85,7 +85,7 @@ export async function deployTokenGraph(
         lastMintTime: 0n,
         isStarted: false,
 
-        gasRouterAddress: infrastructure.gasRouter.address,
+        treasuryPoolAddress: infrastructure.treasuryPool.address,
 
         // Временный minter. После деплоя Minter заменим через MinterManager.
         minterAddress: placeholderMinter,
@@ -143,7 +143,7 @@ export async function deployTokenGraph(
     provider,
     compiled,
     domMaster.address,
-    infrastructure.gasRouter.address
+    infrastructure.treasuryPool.address
   );
 
   ui.write(

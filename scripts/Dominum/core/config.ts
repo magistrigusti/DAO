@@ -15,7 +15,6 @@ export const DEPLOY_VALUES = {
   treasuryManager: '0.05',
   treasuryPool: '0.2',
   gasPool: '0.5',
-  gasRouter: '0.1',
 
   giverManager: '0.05',
   minterManager: '0.05',

@@ -25,9 +25,6 @@ import {
 import {
   GasPool,
 } from '../../../wrappers/Dominum/pools/GasPool';
-import {
-  GasRouter,
-} from '../../../wrappers/Dominum/pools/GasRouter';
 
 export async function deployInfrastructure(
   provider: NetworkProvider,
@@ -59,27 +56,7 @@ export async function deployInfrastructure(
     `TreasuryManager: ${treasuryManager.address.toString()}`
   );
 
-  ui.write('--- Step 2: Prepare stable GasRouter ---');
-
-  const gasRouter = provider.open(
-    GasRouter.createFromConfig(
-      {
-        controllerAddress: deployer,
-        controllerConfigured: false,
-        activeGasPoolAddress: buildTypedPlaceholderAddress(3, 1),
-      },
-      compiled.gasRouterCode
-    )
-  );
-
-  await gasRouter.sendDeploy(
-    sender,
-    toNano(DEPLOY_VALUES.gasRouter)
-  );
-  await provider.waitForDeploy(gasRouter.address);
-
-  ui.write(`GasRouter: ${gasRouter.address.toString()}`);
-  ui.write('--- Step 3: Deploy TreasuryPool ---');
+  ui.write('--- Step 2: Deploy permanent TreasuryPool ---');
 
   const treasuryPool = provider.open(
     TreasuryPool.createFromConfig(
@@ -98,7 +75,6 @@ export async function deployInfrastructure(
         bankDefiAddress: buildTypedPlaceholderAddress(1, 2),
         bankDominumAddress: buildTypedPlaceholderAddress(1, 3),
         gasPoolAddress: buildTypedPlaceholderAddress(1, 4),
-        gasRouterAddress: gasRouter.address,
       },
       compiled.treasuryPoolCode
     )
@@ -114,13 +90,12 @@ export async function deployInfrastructure(
     `TreasuryPool: ${treasuryPool.address.toString()}`
   );
 
-  ui.write('--- Step 4: Deploy GasPool ---');
+  ui.write('--- Step 3: Deploy GasPool ---');
 
   const gasPool = provider.open(
     GasPool.createFromConfig(
       {
-          treasuryPoolAddress: treasuryPool.address,
-          gasRouterAddress: gasRouter.address,
+        treasuryPoolAddress: treasuryPool.address,
 
         // Временная связка. Реальный Master пишем позже
         // через TreasuryPool -> GasPool OP_INIT_MASTER_CONFIG.
@@ -142,31 +117,24 @@ export async function deployInfrastructure(
     `GasPool: ${gasPool.address.toString()}`
   );
 
-  await gasRouter.sendSetActiveGasPool(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.treasuryConfig),
-      activeGasPoolAddress: gasPool.address,
-      queryId: 21n,
-    }
-  );
-  await provider.waitForLastTransaction();
+  const treasuryData = await treasuryPool.getTreasuryPoolData();
+  const gasPoolData = await gasPool.getGasPoolData();
 
-  await gasRouter.sendSetController(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.treasuryConfig),
-      controllerAddress: treasuryPool.address,
-      queryId: 22n,
-    }
-  );
-  await provider.waitForLastTransaction();
+  if (
+    !treasuryData.gasPoolAddress.equals(
+      buildTypedPlaceholderAddress(1, 4)
+    ) ||
+    !gasPoolData.treasuryPoolAddress.equals(treasuryPool.address)
+  ) {
+    throw new Error(
+      'Treasury gas topology bootstrap failed'
+    );
+  }
 
   return {
     deployer,
     treasuryManager,
     treasuryPool,
     gasPool,
-    gasRouter,
   };
 }

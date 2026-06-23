@@ -49,12 +49,10 @@ const OP_CHANGE_TREASURY: int = 0xA5;
 const OP_UPDATE_RATE: int = 0xA6;
 const OP_CHANGE_TAX: int = 0xA7;
 const OP_INIT_MASTER_CONFIG: int = 0xA8;
-const OP_GAS_ROUTER_EXECUTE: int = 0xA9;
-const OP_GAS_ROUTER_SET_POOL: int = 0xAA;
-const OP_GAS_ROUTER_SETTLE: int = 0xAB;
-const OP_GAS_ROUTER_FAILED: int = 0xAC;
-const OP_GAS_ROUTER_SET_CONTROLLER: int = 0xAD;
-const OP_GAS_ROUTER_DELIVER: int = 0xAE;
+const OP_TREASURY_EXECUTE: int = 0xA9;
+const OP_TREASURY_SETTLE: int = 0xAB;
+const OP_TREASURY_FAILED: int = 0xAC;
+const OP_TREASURY_DELIVER: int = 0xAE;
 
 // =====================================================
 // treasury_pool

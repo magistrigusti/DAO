@@ -9,7 +9,6 @@ export const DOM_COMPILE = {
   treasuryManager: 'Dominum/management/TreasuryManager',
 
   gasPool: 'Dominum/pools/GasPool',
-  gasRouter: 'Dominum/pools/GasRouter',
 
   minterManager: 'Dominum/management/MinterManager',
   giverManager: 'Dominum/management/GiverManager',

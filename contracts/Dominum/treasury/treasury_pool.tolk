@@ -1,6 +1,7 @@
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+import "@stdlib/tvm-dicts";
 
 // =====================================================
 // TREASURY POOL — казна налогов DOM.
@@ -21,7 +22,6 @@ global bankDaoAddress: address;
 global bankDefiAddress: address;
 global bankDominumAddress: address;
 global gasPoolAddress: address;
-global gasRouterAddress: address;
 
 global taxMultiplier: int;
 
@@ -36,6 +36,11 @@ global pendingOldAddress: address?;
 global pendingNewAddress: address?;
 global pendingOldValue: int;
 global pendingNewValue: int;
+
+// Внутренний routeId отделён от queryId конкретного Wallet.
+// Это позволяет безопасно вернуть отказ при bounce от GasPool.
+global nextRouteId: int;
+global pendingRoutes: dict;
 
 fun loadData() {
     var ds = contract.getData().beginParse();
@@ -53,7 +58,6 @@ fun loadData() {
     bankDefiAddress = bankTargets.loadAddress();
     bankDominumAddress = poolTargets.loadAddress();
     gasPoolAddress = poolTargets.loadAddress();
-    gasRouterAddress = poolTargets.loadAddress();
 
     var stats = ds.loadRef().beginParse();
     taxMultiplier = stats.loadUint(16);
@@ -69,6 +73,17 @@ fun loadData() {
     pendingNewAddress = pending.loadAddressOpt();
     pendingOldValue = pending.loadUint(32);
     pendingNewValue = pending.loadUint(32);
+
+    var (bitsLeft, refsLeft) = ds.remainingBitsAndRefsCount();
+
+    if (refsLeft > 0) {
+        var routing = ds.loadRef().beginParse();
+        nextRouteId = routing.loadUint(64);
+        pendingRoutes = routing.loadDict();
+    } else {
+        nextRouteId = 1;
+        pendingRoutes = createEmptyDict();
+    }
 }
 
 fun saveData() {
@@ -80,7 +95,6 @@ fun saveData() {
     var poolTargets = beginCell()
         .storeAddress(bankDominumAddress)
         .storeAddress(gasPoolAddress)
-        .storeAddress(gasRouterAddress)
         .endCell();
 
     var targets = beginCell()
@@ -105,6 +119,11 @@ fun saveData() {
         .storeUint(pendingNewValue, 32)
         .endCell();
 
+    var routing = beginCell()
+        .storeUint(nextRouteId, 64)
+        .storeDict(pendingRoutes)
+        .endCell();
+
     contract.setData(
         beginCell()
             .storeAddress(ownerAddress)
@@ -114,6 +133,7 @@ fun saveData() {
             .storeRef(targets)
             .storeRef(stats)
             .storeRef(pending)
+            .storeRef(routing)
             .endCell()
     );
 }
@@ -196,6 +216,45 @@ fun clearPending() {
     pendingNewValue = 0;
 }
 
+fun createPendingRoute(
+    walletAddress: address,
+    walletQueryId: int
+): int {
+    var routeId = nextRouteId;
+
+    nextRouteId = nextRouteId + 1;
+
+    var route = beginCell()
+        .storeAddress(walletAddress)
+        .storeUint(walletQueryId, 64)
+        .endCell()
+        .beginParse();
+
+    pendingRoutes.uDictSet(64, routeId, route);
+
+    return routeId;
+}
+
+fun readPendingRoute(
+    routeId: int
+): (address?, int, bool) {
+    var (route, found) = pendingRoutes.uDictGet(64, routeId);
+
+    if (!found) {
+        return (null, 0, false);
+    }
+
+    var routeSlice = route!;
+    var walletAddress = routeSlice.loadAddress();
+    var walletQueryId = routeSlice.loadUint(64);
+
+    return (walletAddress, walletQueryId, true);
+}
+
+fun deletePendingRoute(routeId: int) {
+    pendingRoutes.uDictDelete(64, routeId);
+}
+
 fun requestAddressChange(
     targetKind: int,
     oldAddress: address,
@@ -235,27 +294,6 @@ fun requestTaxChange(
     pendingNewValue = newTaxMultiplier;
 }
 
-fun sendGasPoolChangeToRouter(
-    newGasPoolAddress: address,
-    queryId: int
-) {
-    var body = beginCell()
-        .storeUint(OP_GAS_ROUTER_SET_POOL, 32)
-        .storeUint(queryId, 64)
-        .storeAddress(newGasPoolAddress)
-        .endCell();
-
-    var msg = beginCell()
-        .storeUint(0x18, 6)
-        .storeAddress(gasRouterAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
-        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .storeRef(body)
-        .endCell();
-
-    sendRawMessage(msg, 1);
-}
-
 fun applyAddressChange(queryId: int) {
     assert(pendingOldAddress != null, ERROR_NO_PENDING);
     assert(pendingNewAddress != null, ERROR_NO_PENDING);
@@ -284,7 +322,7 @@ fun applyAddressChange(queryId: int) {
     if (pendingTargetKind == TREASURY_TARGET_GAS_POOL) {
         assert(oldAddress == gasPoolAddress, ERROR_NOT_IN_WHITELIST);
         gasPoolAddress = newAddress;
-        sendGasPoolChangeToRouter(newAddress, queryId);
+        sendTaxToGasPool(queryId);
         return;
     }
 
@@ -429,6 +467,112 @@ fun requestDomFromGasPool(
     sendRawMessage(msg, 1);
 }
 
+fun forwardExecution(
+    senderWalletAddress: address,
+    msgBody: slice,
+    walletQueryId: int
+) {
+    var jettonAmount = msgBody.loadCoins();
+    var toOwner = msgBody.loadAddress();
+    var fromOwner = msgBody.loadAddress();
+    var paidFeeDom = msgBody.loadCoins();
+
+    var routeId = createPendingRoute(
+        senderWalletAddress,
+        walletQueryId
+    );
+
+    saveData();
+
+    var body = beginCell()
+        .storeUint(OP_GAS_POOL_EXECUTE, 32)
+        .storeUint(routeId, 64)
+        .storeAddress(senderWalletAddress)
+        .storeCoins(jettonAmount)
+        .storeAddress(toOwner)
+        .storeAddress(fromOwner)
+        .storeCoins(paidFeeDom)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(gasPoolAddress)
+        .storeCoins(0)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 64);
+}
+
+fun forwardSettlement(
+    routeId: int,
+    success: bool
+) {
+    var (walletAddressOpt, walletQueryId, found) =
+        readPendingRoute(routeId);
+
+    assert(found, ERROR_NO_PENDING);
+    assert(walletAddressOpt != null, ERROR_NO_PENDING);
+
+    var walletAddress = walletAddressOpt!;
+    var settlementOp = OP_TREASURY_FAILED;
+
+    if (success) {
+        settlementOp = OP_TREASURY_SETTLE;
+    }
+
+    deletePendingRoute(routeId);
+    saveData();
+
+    var body = beginCell()
+        .storeUint(settlementOp, 32)
+        .storeUint(walletQueryId, 64)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(walletAddress)
+        .storeCoins(0)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 64);
+}
+
+fun forwardWalletDelivery(msgBody: slice) {
+    var walletAddress = msgBody.loadAddress();
+    var walletStateInit = msgBody.loadRef();
+    var walletBody = msgBody.loadRef();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(walletAddress)
+        .storeCoins(0)
+        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+        .storeRef(walletStateInit)
+        .storeRef(walletBody)
+        .endCell();
+
+    sendRawMessage(msg, 64);
+}
+
+fun onBouncedMessage(in: InMessageBounced) {
+    var msgBody = in.bouncedBody;
+    msgBody.skipBouncedPrefix();
+
+    loadData();
+
+    var bouncedOp = msgBody.loadUint(32);
+    var routeId = msgBody.loadUint(64);
+
+    if (bouncedOp == OP_GAS_POOL_EXECUTE) {
+        assert(in.senderAddress == gasPoolAddress, ERROR_NOT_OWNER);
+        forwardSettlement(routeId, false);
+    }
+}
+
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -444,6 +588,26 @@ fun onInternalMessage(in: InMessage) {
 
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
+
+    if (op == OP_TREASURY_EXECUTE) {
+        forwardExecution(senderAddress, msgBody, queryId);
+        return;
+    }
+
+    if (op == OP_TREASURY_SETTLE) {
+        assert(senderAddress == gasPoolAddress, ERROR_NOT_OWNER);
+
+        var success = msgBody.loadBool();
+
+        forwardSettlement(queryId, success);
+        return;
+    }
+
+    if (op == OP_TREASURY_DELIVER) {
+        assert(senderAddress == gasPoolAddress, ERROR_NOT_OWNER);
+        forwardWalletDelivery(msgBody);
+        return;
+    }
 
     if (op == OP_INIT_TREASURY_WALLET_CONFIG) {
         requireOwner(senderAddress);
@@ -605,8 +769,8 @@ fun onInternalMessage(in: InMessage) {
 
 get fun getTreasuryPoolData(): (
     address, address, address, bool,
-    address, address, address, address, address,
-    int, int, int, int
+    address, address, address, address,
+    int, int, int, int, int
 ) {
     loadData();
 
@@ -619,11 +783,11 @@ get fun getTreasuryPoolData(): (
         bankDefiAddress,
         bankDominumAddress,
         gasPoolAddress,
-        gasRouterAddress,
         taxMultiplier,
         totalReceivedDom,
         totalSentDom,
-        totalSentTon
+        totalSentTon,
+        nextRouteId
     );
 }
 

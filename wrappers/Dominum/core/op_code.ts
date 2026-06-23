@@ -62,12 +62,10 @@ export const OP_SEND_JETTONS = 0x59n;
 export const OP_UPDATE_RATE = 0xa6n;
 export const OP_CHANGE_TAX = 0xa7n;
 export const OP_INIT_MASTER_CONFIG = 0xa8n;
-export const OP_GAS_ROUTER_EXECUTE = 0xa9n;
-export const OP_GAS_ROUTER_SET_POOL = 0xaan;
-export const OP_GAS_ROUTER_SETTLE = 0xabn;
-export const OP_GAS_ROUTER_FAILED = 0xacn;
-export const OP_GAS_ROUTER_SET_CONTROLLER = 0xadn;
-export const OP_GAS_ROUTER_DELIVER = 0xaen;
+export const OP_TREASURY_EXECUTE = 0xa9n;
+export const OP_TREASURY_SETTLE = 0xabn;
+export const OP_TREASURY_FAILED = 0xacn;
+export const OP_TREASURY_DELIVER = 0xaen;
 
 export const OP_UNLOCK_MONTH = 0xf0n;
 export const OP_SET_RELEASE = 0xf1n;
