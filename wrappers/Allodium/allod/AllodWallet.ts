@@ -12,6 +12,7 @@ import {
 import {
     OP_BURN,
     OP_INTERNAL_TRANSFER,
+    OP_PROTOCOL_TRANSFER,
     OP_TRANSFER,
 } from '../core/op_code';
 
@@ -72,6 +73,8 @@ export class AllodWallet implements Contract {
       amount: bigint;
       fromOwner: Address;
       responseDestination?: Address | null;
+      forwardTonAmount?: bigint;
+      forwardPayload?: Cell | null;
       queryId?: bigint;
     }
   ) {
@@ -81,12 +84,60 @@ export class AllodWallet implements Contract {
       .storeCoins(opts.amount)
       .storeAddress(opts.fromOwner)
       .storeAddress(opts.responseDestination ?? null)
-      .endCell();
+      .storeCoins(opts.forwardTonAmount ?? 0n);
 
-    await provider.internal(via, { value: opts.value, body });
+    if (opts.forwardPayload) {
+      body
+        .storeBit(true)
+        .storeRef(opts.forwardPayload);
+    } else {
+      body.storeBit(false);
+    }
+
+    await provider.internal(via, {
+      value: opts.value,
+      body: body.endCell(),
+    });
   }
 
   async sendTransfer(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      amount: bigint;
+      destination: Address;
+      responseDestination?: Address | null;
+      customPayload?: Cell | null;
+      forwardTonAmount?: bigint;
+      forwardPayload?: Cell | null;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_TRANSFER, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeCoins(opts.amount)
+      .storeAddress(opts.destination)
+      .storeAddress(opts.responseDestination ?? null)
+      .storeMaybeRef(opts.customPayload ?? null)
+      .storeCoins(opts.forwardTonAmount ?? 0n);
+
+    if (opts.forwardPayload) {
+      body
+        .storeBit(true)
+        .storeRef(opts.forwardPayload);
+    } else {
+      body.storeBit(false);
+    }
+
+    await provider.internal(via, {
+      value: opts.value,
+      body: body.endCell(),
+    });
+  }
+
+  async sendProtocolTransfer(
     provider: ContractProvider,
     via: Sender,
     opts: {
@@ -99,7 +150,7 @@ export class AllodWallet implements Contract {
     }
   ) {
     const body = beginCell()
-      .storeUint(OP_TRANSFER, 32)
+      .storeUint(OP_PROTOCOL_TRANSFER, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .storeCoins(opts.amount)
       .storeAddress(opts.toOwner)
@@ -117,6 +168,7 @@ export class AllodWallet implements Contract {
       value: bigint;
       amount: bigint;
       responseDestination?: Address | null;
+      customPayload?: Cell | null;
       queryId?: bigint;
     }
   ) {
@@ -125,18 +177,27 @@ export class AllodWallet implements Contract {
       .storeUint(opts.queryId ?? 0n, 64)
       .storeCoins(opts.amount)
       .storeAddress(opts.responseDestination ?? null)
+      .storeMaybeRef(opts.customPayload ?? null)
       .endCell();
 
     await provider.internal(via, { value: opts.value, body });
   }
 
   async getWalletData(provider: ContractProvider) {
-    const { stack } = await provider.get('getWalletData', []);
+    const { stack } = await provider.get('get_wallet_data', []);
 
     return {
       balance: stack.readBigNumber(),
       ownerAddress: stack.readAddress(),
       masterAddress: stack.readAddress(),
+      jettonWalletCode: stack.readCell(),
+    };
+  }
+
+  async getProtocolData(provider: ContractProvider) {
+    const { stack } = await provider.get('get_protocol_data', []);
+
+    return {
       gasPoolAddress: stack.readAddress(),
     };
   }

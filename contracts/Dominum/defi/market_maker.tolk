@@ -70,7 +70,7 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
     }
 
     var body = beginCell()
-        .storeUint(OP_TRANSFER, 32)
+        .storeUint(OP_PROTOCOL_TRANSFER, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeAddress(toAddress)

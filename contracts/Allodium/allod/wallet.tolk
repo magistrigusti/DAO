@@ -6,11 +6,10 @@ import "@stdlib/tvm-dicts";
 // =====================================================
 // ALLOD WALLET
 // =====================================================
-// OP_TRANSFER:
-// jettonAmount | toOwner | responseDestination |
-// paidFeeAllod
+// OP_TRANSFER полностью соответствует TEP-74 и списывает только amount.
+// OP_PROTOCOL_TRANSFER используется внутренними контрактами:
+// amount | destination | responseDestination | paidFeeAllod.
 //
-// Пользователь платит комиссию в ALLOD.
 // AllodGasPool оплачивает внутренние сообщения в TON.
 // =====================================================
 
@@ -173,12 +172,43 @@ fun requireInternalSender(senderAddress: address, fromOwner: address) {
 // OWNER NOTIFICATION
 // -----------------------------------------------------
 
-fun notifyOwner(amount: int, fromOwner: address, queryId: int) {
+fun sendTransferNotification(
+    amount: int,
+    fromOwner: address,
+    queryId: int,
+    forwardTonAmount: int,
+    forwardPayload: slice
+) {
     var body = beginCell()
         .storeUint(OP_TRANSFER_NOTIFICATION, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeAddress(fromOwner)
+        .storeSlice(forwardPayload)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(ownerAddress)
+        .storeCoins(forwardTonAmount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun sendProtocolNotification(
+    amount: int,
+    fromOwner: address,
+    queryId: int
+) {
+    var body = beginCell()
+        .storeUint(OP_TRANSFER_NOTIFICATION, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeAddress(fromOwner)
+        .storeBool(false)
         .endCell();
 
     var msg = beginCell()
@@ -186,6 +216,64 @@ fun notifyOwner(amount: int, fromOwner: address, queryId: int) {
         .storeAddress(ownerAddress)
         .storeCoins(0)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 64);
+}
+
+fun sendExcesses(
+    responseDestination: address?,
+    amount: int,
+    queryId: int
+) {
+    if ((responseDestination == null) | (amount <= 0)) {
+        return;
+    }
+
+    var body = beginCell()
+        .storeUint(OP_EXCESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeAddress(responseDestination!)
+        .storeCoins(amount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun sendStandardInternalTransfer(
+    toOwner: address,
+    amount: int,
+    responseDestination: address?,
+    forwardTonAmount: int,
+    forwardPayload: slice,
+    queryId: int
+) {
+    var stateInit = buildWalletStateInit(toOwner);
+    var toWallet = buildWalletAddress(toOwner);
+
+    var body = beginCell()
+        .storeUint(OP_INTERNAL_TRANSFER, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeAddress(ownerAddress)
+        .storeAddressOpt(responseDestination)
+        .storeCoins(forwardTonAmount)
+        .storeSlice(forwardPayload)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(toWallet)
+        .storeCoins(0)
+        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+        .storeRef(stateInit)
         .storeRef(body)
         .endCell();
 
@@ -230,6 +318,17 @@ fun handleBouncedMessage(senderAddress: address, msgBody: slice) {
         assert(senderAddress == gasPoolAddress, ERROR_NOT_VALID_WALLET);
 
         restorePendingTransfer(bouncedQueryId);
+        return;
+    }
+
+    if (bouncedOp == OP_INTERNAL_TRANSFER) {
+        var bouncedAmount = msgBody.loadCoins();
+
+        if (bouncedAmount > 0) {
+            balance = balance + bouncedAmount;
+            saveData();
+        }
+
         return;
     }
 
@@ -299,6 +398,8 @@ fun onInternalMessage(in: InMessage) {
         var amount = msgBody.loadCoins();
         var fromOwner = msgBody.loadAddress();
         var responseDestination = msgBody.loadAddressOpt();
+        var forwardTonAmount = msgBody.loadCoins();
+        var forwardPayload = msgBody;
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
 
@@ -307,20 +408,79 @@ fun onInternalMessage(in: InMessage) {
         balance = balance + amount;
         saveData();
 
-        notifyOwner(amount, fromOwner, queryId);
+        if (forwardTonAmount > 0) {
+            var excessAmount =
+                msgValue -
+                forwardTonAmount -
+                MIN_TON_FOR_TRANSFER;
+
+            sendTransferNotification(
+                amount,
+                fromOwner,
+                queryId,
+                forwardTonAmount,
+                forwardPayload
+            );
+
+            sendExcesses(
+                responseDestination,
+                excessAmount,
+                queryId
+            );
+            return;
+        }
+
+        if (
+            (senderAddress == masterAddress) |
+            (senderAddress == gasPoolAddress)
+        ) {
+            sendProtocolNotification(amount, fromOwner, queryId);
+            return;
+        }
+
+        sendExcesses(
+            responseDestination,
+            msgValue - MIN_TON_FOR_TRANSFER,
+            queryId
+        );
         return;
     }
 
     // -------------------------------------------------
     // USER TRANSFER
     // -------------------------------------------------
-    // body:
-    // jettonAmount
-    // toOwner
-    // responseDestination
-    // paidFeeAllod
-
     if (op == OP_TRANSFER) {
+        assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+
+        var jettonAmount = msgBody.loadCoins();
+        var toOwner = msgBody.loadAddress();
+        var responseDestination = msgBody.loadAddressOpt();
+        var customPayload = msgBody.loadMaybeRef();
+        var forwardTonAmount = msgBody.loadCoins();
+        var forwardPayload = msgBody;
+
+        assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(balance >= jettonAmount, ERROR_INSUFFICIENT_BALANCE);
+        assert(
+            msgValue >= MIN_TON_FOR_TRANSFER + forwardTonAmount,
+            ERROR_INSUFFICIENT_GAS
+        );
+
+        balance = balance - jettonAmount;
+        saveData();
+
+        sendStandardInternalTransfer(
+            toOwner,
+            jettonAmount,
+            responseDestination,
+            forwardTonAmount,
+            forwardPayload,
+            queryId
+        );
+        return;
+    }
+
+    if (op == OP_PROTOCOL_TRANSFER) {
         assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 
         var jettonAmount = msgBody.loadCoins();
@@ -334,10 +494,6 @@ fun onInternalMessage(in: InMessage) {
         var totalSpend = jettonAmount + paidFeeAllod;
 
         assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
-
-        // Это технический TON для доставки
-        // wallet -> GasPool.
-        // Протокольная комиссия оплачивается ALLOD.
         assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
 
         var (_, pendingExists) = readPendingTransfer(queryId);
@@ -362,6 +518,7 @@ fun onInternalMessage(in: InMessage) {
 
         var burnAmount = msgBody.loadCoins();
         var responseDestination = msgBody.loadAddressOpt();
+        var customPayload = msgBody.loadMaybeRef();
 
         assert(burnAmount > 0, ERROR_INVALID_AMOUNT);
         assert(balance >= burnAmount, ERROR_INSUFFICIENT_BALANCE);
@@ -397,15 +554,20 @@ fun onInternalMessage(in: InMessage) {
 // GETTERS
 // -----------------------------------------------------
 
-get fun getWalletData(): (int, address, address, address) {
+get fun get_wallet_data(): (int, address, address, cell) {
     loadData();
 
     return (
         balance,
         ownerAddress,
         masterAddress,
-        gasPoolAddress
+        jettonWalletCode
     );
+}
+
+get fun get_protocol_data(): address {
+    loadData();
+    return gasPoolAddress;
 }
 
 get fun getPendingTransfer(queryId: int): (int, bool) {

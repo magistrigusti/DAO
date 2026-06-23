@@ -227,7 +227,7 @@ describe('GasPool', () => {
       }
     );
 
-    await senderWallet.sendTransfer(
+    await senderWallet.sendProtocolTransfer(
       owner.getSender(),
       {
         value: DOM_VALUE.deploySmall,
@@ -318,7 +318,7 @@ describe('GasPool', () => {
       DOM_VALUE.deploySmall
     );
 
-    await senderWallet.sendTransfer(
+    await senderWallet.sendProtocolTransfer(
       owner.getSender(),
       {
         value: DOM_VALUE.deploySmall,

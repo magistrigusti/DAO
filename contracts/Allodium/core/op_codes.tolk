@@ -18,6 +18,7 @@ const OP_WITHDRAW: int = 0x51;
 const OP_WITHDRAW_JETTONS: int = 0x52;
 const OP_ADD_WHITELIST: int = 0xe0;
 const OP_REMOVE_WHITELIST: int = 0xe1;
+const OP_PROTOCOL_TRANSFER: int = 0x5A;
 
 // FRS Allodium.
 const OP_INCREASE_MINT_ALLOWANCE: int = 0x100;

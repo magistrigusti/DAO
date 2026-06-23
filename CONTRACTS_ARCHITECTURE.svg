@@ -1,0 +1,512 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1920"
+  height="1200"
+  viewBox="0 0 1920 1200"
+  role="img"
+  aria-labelledby="title description"
+>
+  <title id="title">Схема контрактов Dominum и Allodium</title>
+  <desc id="description">
+    Цифровой рисунок архитектуры контрактов: управление, ядро DOM,
+    четыре giver-контракта, отраслевые банки и фонды, а также контур ALLOD.
+  </desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#090d1a" />
+      <stop offset="55%" stop-color="#10172b" />
+      <stop offset="100%" stop-color="#160f2b" />
+    </linearGradient>
+
+    <linearGradient id="coreGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5533a6" />
+      <stop offset="100%" stop-color="#302069" />
+    </linearGradient>
+
+    <linearGradient id="giverGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#713b9e" />
+      <stop offset="100%" stop-color="#42205f" />
+    </linearGradient>
+
+    <linearGradient id="allodiumGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#126680" />
+      <stop offset="100%" stop-color="#173754" />
+    </linearGradient>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow
+        dx="0"
+        dy="10"
+        stdDeviation="12"
+        flood-color="#000000"
+        flood-opacity="0.42"
+      />
+    </filter>
+
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <marker
+      id="arrow"
+      viewBox="0 0 12 12"
+      refX="10"
+      refY="6"
+      markerWidth="9"
+      markerHeight="9"
+      orient="auto-start-reverse"
+    >
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#a98cff" />
+    </marker>
+
+    <marker
+      id="arrowBlue"
+      viewBox="0 0 12 12"
+      refX="10"
+      refY="6"
+      markerWidth="9"
+      markerHeight="9"
+      orient="auto-start-reverse"
+    >
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#5dc8ff" />
+    </marker>
+
+    <marker
+      id="arrowGold"
+      viewBox="0 0 12 12"
+      refX="10"
+      refY="6"
+      markerWidth="9"
+      markerHeight="9"
+      orient="auto-start-reverse"
+    >
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#f2c76e" />
+    </marker>
+
+    <style>
+      .title {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 38px;
+        font-weight: 800;
+        fill: #ffffff;
+        letter-spacing: 1px;
+      }
+
+      .subtitle {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 17px;
+        fill: #aab8d8;
+      }
+
+      .section-label {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        fill: #8fa0c6;
+        letter-spacing: 2px;
+      }
+
+      .node-title {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 21px;
+        font-weight: 750;
+        fill: #ffffff;
+        text-anchor: middle;
+      }
+
+      .node-subtitle {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 14px;
+        fill: #c8d2ed;
+        text-anchor: middle;
+      }
+
+      .small-title {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+        fill: #ffffff;
+        text-anchor: middle;
+      }
+
+      .small-subtitle {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 12px;
+        fill: #c8d2ed;
+        text-anchor: middle;
+      }
+
+      .edge-label {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 13px;
+        font-weight: 650;
+        fill: #ddd5ff;
+        text-anchor: middle;
+        paint-order: stroke;
+        stroke: #0d1325;
+        stroke-width: 6px;
+        stroke-linejoin: round;
+      }
+
+      .edge-label-blue {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 13px;
+        font-weight: 650;
+        fill: #8bddff;
+        text-anchor: middle;
+        paint-order: stroke;
+        stroke: #0d1325;
+        stroke-width: 6px;
+        stroke-linejoin: round;
+      }
+
+      .edge-label-gold {
+        font-family: "Segoe UI", Arial, sans-serif;
+        font-size: 13px;
+        font-weight: 650;
+        fill: #ffe29a;
+        text-anchor: middle;
+        paint-order: stroke;
+        stroke: #0d1325;
+        stroke-width: 6px;
+        stroke-linejoin: round;
+      }
+
+      .manager {
+        fill: #162d51;
+        stroke: #4ba7e8;
+        stroke-width: 2;
+      }
+
+      .core {
+        fill: url(#coreGradient);
+        stroke: #a98cff;
+        stroke-width: 2.5;
+      }
+
+      .wallet {
+        fill: #202b4b;
+        stroke: #7387c9;
+        stroke-width: 2;
+      }
+
+      .giver {
+        fill: url(#giverGradient);
+        stroke: #d28cff;
+        stroke-width: 2.5;
+      }
+
+      .target {
+        fill: #18223c;
+        stroke: #6679ad;
+        stroke-width: 2;
+      }
+
+      .allodium {
+        fill: url(#allodiumGradient);
+        stroke: #56d1f2;
+        stroke-width: 2.5;
+      }
+
+      .missing {
+        fill: #262936;
+        stroke: #7a8197;
+        stroke-width: 2;
+        stroke-dasharray: 8 7;
+      }
+
+      .solid-edge {
+        fill: none;
+        stroke: #a98cff;
+        stroke-width: 3;
+        marker-end: url(#arrow);
+      }
+
+      .blue-edge {
+        fill: none;
+        stroke: #5dc8ff;
+        stroke-width: 3;
+        marker-end: url(#arrowBlue);
+      }
+
+      .gold-edge {
+        fill: none;
+        stroke: #f2c76e;
+        stroke-width: 3;
+        marker-end: url(#arrowGold);
+      }
+
+      .planned-edge {
+        fill: none;
+        stroke: #a98cff;
+        stroke-width: 2.5;
+        stroke-dasharray: 10 8;
+        marker-end: url(#arrow);
+      }
+
+      .panel {
+        fill: #10182b;
+        fill-opacity: 0.72;
+        stroke: #293755;
+        stroke-width: 1.5;
+      }
+    </style>
+  </defs>
+
+  <!-- Фон -->
+  <rect width="1920" height="1200" fill="url(#background)" />
+  <circle cx="1730" cy="120" r="250" fill="#462487" opacity="0.12" />
+  <circle cx="160" cy="1060" r="290" fill="#076a8c" opacity="0.10" />
+
+  <!-- Заголовок -->
+  <text x="70" y="60" class="title">
+    Архитектура контрактов Dominum / Allodium
+  </text>
+  <text x="72" y="91" class="subtitle">
+    Цифровой рисунок по текущему рабочему дереву C:\projects\DAO
+  </text>
+
+  <!-- Легенда -->
+  <g transform="translate(1405 35)">
+    <rect width="445" height="76" rx="18" class="panel" />
+    <line x1="24" y1="27" x2="84" y2="27" class="solid-edge" />
+    <text x="99" y="32" class="subtitle">действующая связь</text>
+    <line x1="245" y1="27" x2="305" y2="27" class="planned-edge" />
+    <text x="320" y="32" class="subtitle">placeholder</text>
+    <line x1="24" y1="56" x2="84" y2="56" class="blue-edge" />
+    <text x="99" y="61" class="subtitle">контур Allodium</text>
+  </g>
+
+  <!-- Секция управления -->
+  <text x="72" y="145" class="section-label">УПРАВЛЕНИЕ И РОЛИ</text>
+  <rect x="55" y="160" width="1810" height="150" rx="24" class="panel" />
+
+  <g filter="url(#shadow)">
+    <rect x="95" y="195" width="270" height="82" rx="18" class="manager" />
+    <text x="230" y="230" class="node-title">MinterManager</text>
+    <text x="230" y="256" class="node-subtitle">замена Minter</text>
+
+    <rect x="415" y="195" width="270" height="82" rx="18" class="manager" />
+    <text x="550" y="230" class="node-title">GiverManager</text>
+    <text x="550" y="256" class="node-subtitle">замена четырёх Giver</text>
+
+    <rect x="735" y="195" width="270" height="82" rx="18" class="manager" />
+    <text x="870" y="230" class="node-title">TreasuryManager</text>
+    <text x="870" y="256" class="node-subtitle">адреса и налог</text>
+
+    <rect x="1055" y="195" width="270" height="82" rx="18" class="manager" />
+    <text x="1190" y="230" class="node-title">Minter</text>
+    <text x="1190" y="256" class="node-subtitle">разрешение OP_MINT</text>
+
+    <rect x="1375" y="195" width="430" height="82" rx="18" class="manager" />
+    <text x="1590" y="230" class="node-title">Владельцы / signer-кошельки</text>
+    <text x="1590" y="256" class="node-subtitle">раздельные полномочия контрактов</text>
+  </g>
+
+  <!-- Секция ядра -->
+  <text x="72" y="345" class="section-label">ЯДРО DOM И ГАЗОВЫЙ КОНТУР</text>
+  <rect x="55" y="360" width="1810" height="210" rx="24" class="panel" />
+
+  <g filter="url(#shadow)">
+    <rect x="105" y="408" width="280" height="108" rx="22" class="core" />
+    <text x="245" y="451" class="node-title">DomMaster</text>
+    <text x="245" y="479" class="node-subtitle">эмиссия и четыре сектора</text>
+    <text x="245" y="500" class="node-subtitle">25% / 25% / 25% / 25%</text>
+
+    <rect x="500" y="408" width="280" height="108" rx="22" class="wallet" />
+    <text x="640" y="451" class="node-title">DomWallet</text>
+    <text x="640" y="479" class="node-subtitle">баланс и pending transfer</text>
+    <text x="640" y="500" class="node-subtitle">отдельный для владельца</text>
+
+    <rect x="895" y="408" width="300" height="108" rx="22" class="core" />
+    <text x="1045" y="451" class="node-title">TreasuryPool</text>
+    <text x="1045" y="479" class="node-subtitle">постоянная точка маршрута</text>
+    <text x="1045" y="500" class="node-subtitle">pending routes + управление</text>
+
+    <rect x="1310" y="408" width="300" height="108" rx="22" class="core" />
+    <text x="1460" y="451" class="node-title">GasPool</text>
+    <text x="1460" y="479" class="node-subtitle">проверка fee DOM</text>
+    <text x="1460" y="500" class="node-subtitle">оплата TON исполнения</text>
+
+    <rect x="1695" y="425" width="125" height="75" rx="18" class="wallet" />
+    <text x="1757" y="453" class="small-title">Wallet</text>
+    <text x="1757" y="476" class="small-subtitle">получателя</text>
+  </g>
+
+  <!-- Связи управления -->
+  <path d="M 230 277 V 330 H 205 V 408" class="solid-edge" />
+  <text x="255" y="328" class="edge-label">замена роли</text>
+
+  <path d="M 550 277 V 330 H 300 V 408" class="solid-edge" />
+  <text x="480" y="328" class="edge-label">giver-роли</text>
+
+  <path d="M 870 277 V 350 H 1045 V 408" class="solid-edge" />
+  <text x="960" y="345" class="edge-label">request / confirm</text>
+
+  <path d="M 1190 277 V 350 H 350 V 408" class="gold-edge" />
+  <text x="760" y="345" class="edge-label-gold">OP_MINT</text>
+
+  <path d="M 1590 277 V 325" class="solid-edge" />
+
+  <!-- Основной маршрут DOM -->
+  <path d="M 385 462 H 500" class="solid-edge" />
+  <text x="442" y="449" class="edge-label">создаёт</text>
+
+  <path d="M 780 462 H 895" class="solid-edge" />
+  <text x="837" y="449" class="edge-label">transfer + fee</text>
+
+  <path d="M 1195 462 H 1310" class="solid-edge" />
+  <text x="1252" y="449" class="edge-label">execute</text>
+
+  <path d="M 1610 462 H 1695" class="solid-edge" />
+  <text x="1652" y="449" class="edge-label">deliver</text>
+
+  <path d="M 1460 516 V 545 H 1045 V 516" class="gold-edge" />
+  <text x="1252" y="556" class="edge-label-gold">settlement</text>
+
+  <!-- Секция Giver -->
+  <text x="72" y="610" class="section-label">ПЕРВИЧНОЕ РАСПРЕДЕЛЕНИЕ DOM</text>
+  <rect x="55" y="625" width="1810" height="205" rx="24" class="panel" />
+
+  <g filter="url(#shadow)">
+    <rect x="90" y="675" width="360" height="105" rx="22" class="giver" />
+    <text x="270" y="716" class="node-title">GiverAllodium</text>
+    <text x="270" y="744" class="node-subtitle">25% общей эмиссии DOM</text>
+    <text x="270" y="765" class="node-subtitle">автоматический сепаратор</text>
+
+    <rect x="550" y="675" width="360" height="105" rx="22" class="giver" />
+    <text x="730" y="716" class="node-title">GiverDefi</text>
+    <text x="730" y="744" class="node-subtitle">25% общей эмиссии DOM</text>
+    <text x="730" y="765" class="node-subtitle">автоматический сепаратор</text>
+
+    <rect x="1010" y="675" width="360" height="105" rx="22" class="giver" />
+    <text x="1190" y="716" class="node-title">GiverDao</text>
+    <text x="1190" y="744" class="node-subtitle">25% общей эмиссии DOM</text>
+    <text x="1190" y="765" class="node-subtitle">автоматический сепаратор</text>
+
+    <rect x="1470" y="675" width="360" height="105" rx="22" class="giver" />
+    <text x="1650" y="716" class="node-title">GiverDominum</text>
+    <text x="1650" y="744" class="node-subtitle">25% общей эмиссии DOM</text>
+    <text x="1650" y="765" class="node-subtitle">автоматический сепаратор</text>
+  </g>
+
+  <!-- DomMaster к Giver -->
+  <path d="M 245 516 V 595 H 270 V 675" class="solid-edge" />
+  <path d="M 245 516 V 595 H 730 V 675" class="solid-edge" />
+  <path d="M 245 516 V 595 H 1190 V 675" class="solid-edge" />
+  <path d="M 245 516 V 595 H 1650 V 675" class="solid-edge" />
+  <text x="765" y="590" class="edge-label">DomMaster отправляет DOM в кошельки четырёх Giver</text>
+
+  <!-- Секция получателей -->
+  <text x="72" y="870" class="section-label">ОТРАСЛЕВЫЕ ПОЛУЧАТЕЛИ</text>
+
+  <!-- Allodium -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="900" width="180" height="84" rx="18" class="allodium" />
+    <text x="160" y="934" class="small-title">FrsAllodium</text>
+    <text x="160" y="960" class="small-subtitle">50% сектора</text>
+
+    <rect x="290" y="900" width="220" height="84" rx="18" class="allodium" />
+    <text x="400" y="934" class="small-title">AllodiumFoundation</text>
+    <text x="400" y="960" class="small-subtitle">50% сектора</text>
+  </g>
+
+  <path d="M 270 780 V 850 H 160 V 900" class="planned-edge" />
+  <path d="M 270 780 V 850 H 400 V 900" class="planned-edge" />
+  <text x="270" y="846" class="edge-label">50 / 50</text>
+
+  <!-- DeFi -->
+  <g filter="url(#shadow)">
+    <rect x="550" y="900" width="180" height="84" rx="18" class="target" />
+    <text x="640" y="934" class="small-title">MarketMaker</text>
+    <text x="640" y="960" class="small-subtitle">20% сектора</text>
+
+    <rect x="750" y="900" width="180" height="84" rx="18" class="target" />
+    <text x="840" y="934" class="small-title">FoundryLock</text>
+    <text x="840" y="960" class="small-subtitle">40% сектора</text>
+
+    <rect x="950" y="900" width="180" height="84" rx="18" class="target" />
+    <text x="1040" y="934" class="small-title">BankDefi</text>
+    <text x="1040" y="960" class="small-subtitle">40% сектора</text>
+  </g>
+
+  <path d="M 730 780 V 850 H 640 V 900" class="planned-edge" />
+  <path d="M 730 780 V 850 H 840 V 900" class="planned-edge" />
+  <path d="M 730 780 V 850 H 1040 V 900" class="planned-edge" />
+  <text x="820" y="846" class="edge-label">20 / 40 / 40</text>
+
+  <!-- DAO -->
+  <g filter="url(#shadow)">
+    <rect x="1160" y="900" width="180" height="84" rx="18" class="target" />
+    <text x="1250" y="934" class="small-title">BankDao</text>
+    <text x="1250" y="960" class="small-subtitle">50% сектора</text>
+
+    <rect x="1360" y="900" width="190" height="84" rx="18" class="target" />
+    <text x="1455" y="934" class="small-title">DaoFoundation</text>
+    <text x="1455" y="960" class="small-subtitle">50% сектора</text>
+  </g>
+
+  <path d="M 1190 780 V 850 H 1250 V 900" class="planned-edge" />
+  <path d="M 1190 780 V 850 H 1455 V 900" class="planned-edge" />
+  <text x="1325" y="846" class="edge-label">50 / 50</text>
+
+  <!-- Dominum -->
+  <g filter="url(#shadow)">
+    <rect x="1580" y="900" width="160" height="84" rx="18" class="target" />
+    <text x="1660" y="934" class="small-title">BankDominum</text>
+    <text x="1660" y="960" class="small-subtitle">50% сектора</text>
+
+    <rect x="1760" y="900" width="145" height="84" rx="18" class="target" />
+    <text x="1832" y="930" class="small-title">Dominum</text>
+    <text x="1832" y="951" class="small-title">Foundation</text>
+    <text x="1832" y="972" class="small-subtitle">50%</text>
+  </g>
+
+  <path d="M 1650 780 V 850 H 1660 V 900" class="planned-edge" />
+  <path d="M 1650 780 V 850 H 1832 V 900" class="planned-edge" />
+  <text x="1745" y="846" class="edge-label">50 / 50</text>
+
+  <!-- Нижний контур ALLOD -->
+  <text x="72" y="1035" class="section-label">РЕЗЕРВНЫЙ КОНТУР ALLOD</text>
+  <rect x="55" y="1050" width="1810" height="110" rx="24" class="panel" />
+
+  <g filter="url(#shadow)">
+    <rect x="105" y="1074" width="260" height="62" rx="16" class="allodium" />
+    <text x="235" y="1112" class="small-title">FrsAllodium: блокирует DOM</text>
+
+    <rect x="500" y="1074" width="260" height="62" rx="16" class="allodium" />
+    <text x="630" y="1112" class="small-title">AllodMaster: allowance</text>
+
+    <rect x="895" y="1074" width="260" height="62" rx="16" class="allodium" />
+    <text x="1025" y="1112" class="small-title">AllodWallet: ALLOD</text>
+
+    <rect x="1290" y="1074" width="260" height="62" rx="16" class="allodium" />
+    <text x="1420" y="1112" class="small-title">AllodGasPool: fee</text>
+
+    <rect x="1660" y="1074" width="155" height="62" rx="16" class="missing" />
+    <text x="1737" y="1099" class="small-title">DeFi</text>
+    <text x="1737" y="1122" class="small-subtitle">Foundation нет</text>
+  </g>
+
+  <path d="M 365 1105 H 500" class="blue-edge" />
+  <text x="432" y="1092" class="edge-label-blue">allowance</text>
+
+  <path d="M 760 1105 H 895" class="blue-edge" />
+  <text x="827" y="1092" class="edge-label-blue">mint</text>
+
+  <path d="M 1155 1105 H 1290" class="blue-edge" />
+  <text x="1222" y="1092" class="edge-label-blue">transfer</text>
+
+  <path d="M 1025 1136 V 1150 H 235 V 1136" class="gold-edge" />
+  <text x="630" y="1155" class="edge-label-gold">burn ALLOD → освобождение DOM</text>
+
+  <!-- Дата и статус -->
+  <text x="1845" y="1182" class="subtitle" text-anchor="end">
+    Состояние рабочего дерева: 23.06.2026
+  </text>
+</svg>

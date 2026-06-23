@@ -58,6 +58,7 @@ export const OP_CONFIRM_TREASURY_REQUEST = 0x57n;
 export const OP_CANCEL_TREASURY_REQUEST = 0x58n;
 
 export const OP_SEND_JETTONS = 0x59n;
+export const OP_PROTOCOL_TRANSFER = 0x5an;
 
 export const OP_UPDATE_RATE = 0xa6n;
 export const OP_CHANGE_TAX = 0xa7n;

@@ -3,14 +3,13 @@ import "../core/errors.tolk";
 import "../core/constants.tolk";
 import "@stdlib/tvm-dicts";
 
-// ========== DOM WALLET v2.3 ==========
-// User transfer body:
-// OP_TRANSFER | queryId | amount | toOwner | responseDest | paidFeeDom
+// ========== DOM WALLET ==========
+// OP_TRANSFER полностью соответствует TEP-74 и списывает только amount.
+// OP_PROTOCOL_TRANSFER используется внутренними контрактами экосистемы:
+// amount | destination | responseDestination | paidFeeDom.
 //
-// Wallet debits amount + paidFeeDom.
 // TreasuryPool — постоянная точка маршрута между Wallet и активным GasPool.
-// Если запрос отклонён или отскочил, Wallet восстанавливает полное списание
-// from pendingTransfers by queryId.
+// Протокольный перевод списывает amount + paidFeeDom и хранит pending.
 // =====================================
 
 // -----------------------------------------------------
@@ -166,7 +165,33 @@ fun requireInternalSender(
 // -----------------------------------------------------
 // OWNER NOTIFICATION
 // -----------------------------------------------------
-fun notifyOwner(
+fun sendTransferNotification(
+    amount: int,
+    fromOwner: address,
+    queryId: int,
+    forwardTonAmount: int,
+    forwardPayload: slice
+) {
+    var body = beginCell()
+        .storeUint(OP_TRANSFER_NOTIFICATION, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeAddress(fromOwner)
+        .storeSlice(forwardPayload)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(ownerAddress)
+        .storeCoins(forwardTonAmount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun sendProtocolNotification(
     amount: int,
     fromOwner: address,
     queryId: int
@@ -176,6 +201,7 @@ fun notifyOwner(
         .storeUint(queryId, 64)
         .storeCoins(amount)
         .storeAddress(fromOwner)
+        .storeBool(false)
         .endCell();
 
     var msg = beginCell()
@@ -183,6 +209,64 @@ fun notifyOwner(
         .storeAddress(ownerAddress)
         .storeCoins(0)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 64);
+}
+
+fun sendExcesses(
+    responseDestination: address?,
+    amount: int,
+    queryId: int
+) {
+    if ((responseDestination == null) | (amount <= 0)) {
+        return;
+    }
+
+    var body = beginCell()
+        .storeUint(OP_EXCESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeAddress(responseDestination!)
+        .storeCoins(amount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
+fun sendStandardInternalTransfer(
+    toOwner: address,
+    amount: int,
+    responseDestination: address?,
+    forwardTonAmount: int,
+    forwardPayload: slice,
+    queryId: int
+) {
+    var stateInit = buildWalletStateInit(toOwner);
+    var toWallet = buildWalletAddress(stateInit);
+
+    var body = beginCell()
+        .storeUint(OP_INTERNAL_TRANSFER, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeAddress(ownerAddress)
+        .storeAddressOpt(responseDestination)
+        .storeCoins(forwardTonAmount)
+        .storeSlice(forwardPayload)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x18, 6)
+        .storeAddress(toWallet)
+        .storeCoins(0)
+        .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+        .storeRef(stateInit)
         .storeRef(body)
         .endCell();
 
@@ -199,6 +283,17 @@ fun handleBouncedMessage(senderAddress: address, msgBody: slice) {
     if (bouncedOp == OP_TREASURY_EXECUTE) {
         assert(senderAddress == treasuryPoolAddress, ERROR_NOT_VALID_WALLET);
         restorePendingTransfer(bouncedQueryId);
+        return;
+    }
+
+    if (bouncedOp == OP_INTERNAL_TRANSFER) {
+        var bouncedAmount = msgBody.loadCoins();
+
+        if (bouncedAmount > 0) {
+            balance += bouncedAmount;
+            saveData();
+        }
+
         return;
     }
 
@@ -263,22 +358,92 @@ fun onInternalMessage(in: InMessage) {
         var amount = msgBody.loadCoins();
         var fromOwner = msgBody.loadAddress();
         var responseDestination = msgBody.loadAddressOpt();
+        var forwardTonAmount = msgBody.loadCoins();
+        var forwardPayload = msgBody;
 
         requireInternalSender(senderAddress, fromOwner);
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
 
         balance += amount;
 
         saveData();
 
-        notifyOwner(amount, fromOwner, queryId);
+        if (forwardTonAmount > 0) {
+            var excessAmount =
+                msgValue -
+                forwardTonAmount -
+                BASE_TON_COST;
+
+            sendTransferNotification(
+                amount,
+                fromOwner,
+                queryId,
+                forwardTonAmount,
+                forwardPayload
+            );
+
+            sendExcesses(
+                responseDestination,
+                excessAmount,
+                queryId
+            );
+            return;
+        }
+
+        if (
+            (senderAddress == masterAddress) |
+            (senderAddress == treasuryPoolAddress)
+        ) {
+            sendProtocolNotification(amount, fromOwner, queryId);
+            return;
+        }
+
+        sendExcesses(
+            responseDestination,
+            msgValue - BASE_TON_COST,
+            queryId
+        );
         return;
     }
 
     // =====================================================
-    // OP_TRANSFER
-    // body: amount | toOwner | responseDest | paidFeeDom
+    // OP_TRANSFER — точный публичный формат TEP-74.
     // =====================================================
     if (op == OP_TRANSFER) {
+        assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+
+        var jettonAmount = msgBody.loadCoins();
+        var toOwner = msgBody.loadAddress();
+        var responseDestination = msgBody.loadAddressOpt();
+        var customPayload = msgBody.loadMaybeRef();
+        var forwardTonAmount = msgBody.loadCoins();
+        var forwardPayload = msgBody;
+
+        assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(balance >= jettonAmount, ERROR_INSUFFICIENT_BALANCE);
+        assert(
+            msgValue >= MIN_TON_FOR_TRANSFER + forwardTonAmount,
+            ERROR_INSUFFICIENT_GAS
+        );
+
+        balance -= jettonAmount;
+        saveData();
+
+        sendStandardInternalTransfer(
+            toOwner,
+            jettonAmount,
+            responseDestination,
+            forwardTonAmount,
+            forwardPayload,
+            queryId
+        );
+        return;
+    }
+
+    // =====================================================
+    // OP_PROTOCOL_TRANSFER — перевод с комиссией DOM.
+    // =====================================================
+    if (op == OP_PROTOCOL_TRANSFER) {
         assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 
         var jettonAmount = msgBody.loadCoins();
@@ -332,6 +497,7 @@ fun onInternalMessage(in: InMessage) {
 
         var burnAmount = msgBody.loadCoins();
         var responseDestination = msgBody.loadAddressOpt();
+        var customPayload = msgBody.loadMaybeRef();
 
         assert(burnAmount > 0, ERROR_INVALID_AMOUNT);
         assert(balance >= burnAmount, ERROR_INSUFFICIENT_BALANCE);
@@ -365,8 +531,8 @@ fun onInternalMessage(in: InMessage) {
 // -----------------------------------------------------
 // GETTERS
 // -----------------------------------------------------
-get fun getWalletData(): (
-    int, address, address, address
+get fun get_wallet_data(): (
+    int, address, address, cell
 ) {
     loadData();
 
@@ -374,8 +540,13 @@ get fun getWalletData(): (
         balance,
         ownerAddress,
         masterAddress,
-        treasuryPoolAddress
+        jettonWalletCode
     );
+}
+
+get fun get_protocol_data(): address {
+    loadData();
+    return treasuryPoolAddress;
 }
 
 get fun getPendingTransfer(queryId: int): (int, bool) {

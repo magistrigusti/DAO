@@ -5,7 +5,10 @@ import {
   SandboxContract,
   TreasuryContract,
 } from '@ton/sandbox';
-import { Cell } from '@ton/core';
+import {
+  beginCell,
+  Cell,
+} from '@ton/core';
 import { compile } from '@ton/blueprint';
 
 import { AllodWallet } from '../../../wrappers/Allodium/allod/AllodWallet';
@@ -104,14 +107,17 @@ describe('AllodWallet', () => {
     );
 
     let data = await ownerWallet.getWalletData();
+    const protocol = await ownerWallet.getProtocolData();
 
     expectAddress(data.ownerAddress, owner.address);
+    expect(data.jettonWalletCode.equals(walletCode)).toBe(true);
+    expectAddress(protocol.gasPoolAddress, gasPool.address);
 
     expect(data.balance).toEqual(
       ALLODIUM_FIXTURE.walletInitialBalance
     );
 
-    await ownerWallet.sendTransfer(
+    await ownerWallet.sendProtocolTransfer(
       owner.getSender(),
       {
         value: ALLODIUM_VALUE.transferWithTax,
@@ -153,6 +159,64 @@ describe('AllodWallet', () => {
 
     expect((await poolWallet.getWalletData()).balance).toEqual(
       ALLODIUM_CONTRACT.defaultAllodTransferFee
+    );
+  });
+
+  it('should follow TEP-74 and transfer ALLOD without protocol fee', async () => {
+    const protocolAddress = authority.address;
+
+    const ownerWallet = blockchain.openContract(
+      createWallet(protocolAddress)
+    );
+
+    await ownerWallet.sendDeploy(
+      owner.getSender(),
+      ALLODIUM_VALUE.deploySmall
+    );
+
+    await ownerWallet.sendInternalTransfer(
+      master.getSender(),
+      {
+        value: ALLODIUM_VALUE.service,
+        amount: ALLODIUM_FIXTURE.walletInitialBalance,
+        fromOwner: master.address,
+        responseDestination: owner.address,
+        queryId: ALLODIUM_QUERY.walletFund,
+      }
+    );
+
+    const receiverWallet = blockchain.openContract(
+      createWallet(protocolAddress, receiver.address)
+    );
+
+    await ownerWallet.sendTransfer(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.deployGasPool,
+        amount: ALLODIUM_FIXTURE.walletTransferAmount,
+        destination: receiver.address,
+        responseDestination: owner.address,
+        customPayload: beginCell()
+          .storeUint(1, 8)
+          .endCell(),
+        forwardTonAmount: 1n,
+        forwardPayload: beginCell()
+          .storeUint(0, 32)
+          .storeStringTail('ALLOD TEP-74')
+          .endCell(),
+        queryId: ALLODIUM_QUERY.walletTransfer,
+      }
+    );
+
+    const senderData = await ownerWallet.getWalletData();
+    const receiverData = await receiverWallet.getWalletData();
+
+    expect(senderData.balance).toEqual(
+      ALLODIUM_FIXTURE.walletInitialBalance -
+      ALLODIUM_FIXTURE.walletTransferAmount
+    );
+    expect(receiverData.balance).toEqual(
+      ALLODIUM_FIXTURE.walletTransferAmount
     );
   });
 });
