@@ -38,12 +38,12 @@ const MAINNET_MINT_INTERVAL: int = 2592000;
 const MINT_INTERVAL: int = TESTNET_MINT_INTERVAL;
 
 // -----------------------------------------------------
-// TON GAS / STORAGE
+// GRAM GAS / STORAGE
 // -----------------------------------------------------
-const MIN_TON_FOR_STORAGE: int = 5000000;
-const MIN_TON_FOR_TRANSFER: int = 20000000;
-const BASE_TON_COST: int = 50000000;
-const DOM_TRANSFER_TON_BASE: int = 50000000;
+const MIN_GRAMS_FOR_STORAGE: int = 5000000;
+const MIN_GRAMS_FOR_TRANSFER: int = 20000000;
+const BASE_GRAMS_COST: int = 50000000;
+const DOM_TRANSFER_GRAMS_BASE: int = 50000000;
 
 // -----------------------------------------------------
 // DOM FEE
@@ -54,7 +54,7 @@ const MAX_DOM_TRANSFER_FEE: int = ONE_DOM * 3;
 // -----------------------------------------------------
 // TAX SYSTEM
 // -----------------------------------------------------
-// 300 = 100% TON-base compensation + 200% protocol profit.
+// 300 = 100% GRAM-base compensation + 200% protocol profit.
 const TAX_MULTIPLIER: int = 300;
 const TAX_MULTIPLIER_DENOM: int = 100;
 
@@ -65,10 +65,10 @@ const PROFIT_SHARE_GAS_POOL: int = 1;
 const PROFIT_SHARE_TREASURY: int = 1;
 
 // -----------------------------------------------------
-// DOM / TON RATE
+// DOM / GRAM RATE
 // -----------------------------------------------------
-const INITIAL_DOM_PER_TON: int = 10000000;
-const NANO_TON: int = 1000000000;
+const INITIAL_DOM_PER_GRAM: int = 10000000;
+const NANOGRAMS_PER_GRAM: int = 1000000000;
 
 // -----------------------------------------------------
 // GIVER

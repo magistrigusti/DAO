@@ -19,9 +19,9 @@ const ALLOD_TRANSFER_FEE_DEFAULT: int = 100;
 const ALLOD_TRANSFER_FEE_MIN: int = 1;
 const ALLOD_TRANSFER_FEE_MAX: int = 100000000;
 
-// TON нужен только для оплаты сети TON.
-const MIN_TON_FOR_TRANSFER: int = 50000000;
-const MIN_TON_FOR_STORAGE: int = 10000000;
+// GRAM нужен только для оплаты сети TON.
+const MIN_GRAMS_FOR_TRANSFER: int = 50000000;
+const MIN_GRAMS_FOR_STORAGE: int = 10000000;
 
 // Два внутренних сообщения: получателю и wallet пула.
-const ALLOD_GAS_TRANSFER_TON_BUDGET: int = 100000000;
+const ALLOD_GAS_TRANSFER_GRAMS_BUDGET: int = 100000000;

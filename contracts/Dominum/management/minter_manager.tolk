@@ -41,7 +41,7 @@ fun sendReplaceMinter(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(masterAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -66,7 +66,7 @@ fun sendReplaceManagerRequest(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(masterAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -91,7 +91,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_REPLACE_MINTER) {
         requireOwner(senderAddress);
-        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_GRAMS_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
 
         var masterAddress = msgBody.loadAddress();
         var oldMinterAddress = msgBody.loadAddress();
@@ -109,7 +109,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_REPLACE_MANAGER) {
         requireOwner(senderAddress);
-        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_GRAMS_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
 
         var masterAddress = msgBody.loadAddress();
         var oldManagerAddress = msgBody.loadAddress();

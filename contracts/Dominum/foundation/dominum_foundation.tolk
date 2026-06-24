@@ -107,7 +107,7 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(walletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
@@ -116,9 +116,9 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
 }
 
 // -----------------------------------------------------
-// ОТПРАВКА TON
+// ОТПРАВКА GRAM
 // -----------------------------------------------------
-fun sendTon(toAddress: address, amount: int, queryId: int) {
+fun sendGrams(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
@@ -144,13 +144,13 @@ fun sendTon(toAddress: address, amount: int, queryId: int) {
 // -----------------------------------------------------
 fun sendCommand(
     toAddress: address,
-    tonAmount: int,
+    gramsAmount: int,
     payload: cell
 ) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(toAddress)
-        .storeCoins(tonAmount)
+        .storeCoins(gramsAmount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(payload)
         .endCell();
@@ -215,7 +215,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_WITHDRAW — отправить TON (owner, whitelist)
+    // OP_WITHDRAW — отправить GRAM (owner, whitelist)
     // =====================================================
     if (op == OP_WITHDRAW) {
         assert(
@@ -231,14 +231,14 @@ fun onInternalMessage(in: InMessage) {
             ERROR_NOT_IN_WHITELIST
         );
 
-        sendTon(toAddress, amount, queryId);
+        sendGrams(toAddress, amount, queryId);
         return;
     }
 
     // =====================================================
     // OP_SEND_JETTONS — произвольная команда (owner, whitelist)
     // Используется для управления дочерними контрактами.
-    // body: toAddress | tonAmount | payload(ref)
+    // body: toAddress | gramsAmount | payload(ref)
     // =====================================================
     if (op == OP_SEND_JETTONS) {
         assert(
@@ -247,7 +247,7 @@ fun onInternalMessage(in: InMessage) {
         );
 
         var toAddress = msgBody.loadAddress();
-        var tonAmount = msgBody.loadCoins();
+        var gramsAmount = msgBody.loadCoins();
         var payload = msgBody.loadRef();
 
         assert(
@@ -255,7 +255,7 @@ fun onInternalMessage(in: InMessage) {
             ERROR_NOT_IN_WHITELIST
         );
 
-        sendCommand(toAddress, tonAmount, payload);
+        sendCommand(toAddress, gramsAmount, payload);
         return;
     }
 

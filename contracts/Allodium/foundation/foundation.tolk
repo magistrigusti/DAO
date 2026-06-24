@@ -86,7 +86,7 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(domWalletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -94,7 +94,7 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
     sendRawMessage(msg, 1);
 }
 
-fun sendTon(toAddress: address, amount: int, queryId: int) {
+fun sendGrams(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
@@ -170,7 +170,7 @@ fun onInternalMessage(in: InMessage) {
         assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(isWhitelisted(toAddress), ERROR_NOT_IN_WHITELIST);
 
-        sendTon(toAddress, amount, queryId);
+        sendGrams(toAddress, amount, queryId);
         return;
     }
 

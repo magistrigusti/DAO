@@ -199,7 +199,7 @@ fun onInternalMessage(in: InMessage) {
             ERROR_LIMIT_EXCEEDED
         );
         assert(
-            msgValue >= MIN_TON_FOR_STORAGE,
+            msgValue >= MIN_GRAMS_FOR_STORAGE,
             ERROR_INSUFFICIENT_GAS
         );
 

@@ -73,17 +73,17 @@ fun onInternalMessage(in: InMessage) {
         assert(amount >= MIN_MINT_AMOUNT, ERROR_INVALID_AMOUNT);
         assert(amount <= MAX_MINT_AMOUNT, ERROR_LIMIT_EXCEEDED);
 
-        var requiredTon = MIN_TON_FOR_TRANSFER * GIVERS_COUNT;
+        var requiredGrams = MIN_GRAMS_FOR_TRANSFER * GIVERS_COUNT;
 
         assert(
-            msgValue >= requiredTon + MIN_TON_FOR_STORAGE,
+            msgValue >= requiredGrams + MIN_GRAMS_FOR_STORAGE,
             ERROR_INSUFFICIENT_GAS
         );
 
         sendMintPermission(
             amount,
             queryId,
-            requiredTon
+            requiredGrams
         );
 
         return;

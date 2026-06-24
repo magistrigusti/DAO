@@ -10,7 +10,7 @@ global masterConfigured: bool;
 global transferFeeAllod: int;
 
 global totalReceivedAllod: int;
-global totalSpentTon: int;
+global totalSpentNanograms: int;
 global totalExecuted: int;
 
 fun loadData() {
@@ -24,7 +24,7 @@ fun loadData() {
     transferFeeAllod = ds.loadCoins();
 
     totalReceivedAllod = ds.loadCoins();
-    totalSpentTon = ds.loadCoins();
+    totalSpentNanograms = ds.loadCoins();
     totalExecuted = ds.loadUint(64);
 }
 
@@ -37,7 +37,7 @@ fun saveData() {
             .storeBool(masterConfigured)
             .storeCoins(transferFeeAllod)
             .storeCoins(totalReceivedAllod)
-            .storeCoins(totalSpentTon)
+            .storeCoins(totalSpentNanograms)
             .storeUint(totalExecuted, 64)
             .endCell()
     );
@@ -108,7 +108,7 @@ fun sendInternalTransfer(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(toWallet)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
         .storeRef(stateInit)
         .storeRef(body)
@@ -143,7 +143,7 @@ fun initMasterConfig(
 ) {
     assert(!masterConfigured, ERROR_ALREADY_INITIALIZED);
     assert(totalReceivedAllod == 0, ERROR_ALREADY_INITIALIZED);
-    assert(totalSpentTon == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSpentNanograms == 0, ERROR_ALREADY_INITIALIZED);
     assert(totalExecuted == 0, ERROR_ALREADY_INITIALIZED);
 
     masterAddress = newMasterAddress;
@@ -169,10 +169,10 @@ fun executeTransfer(
     assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
     assert(paidFeeAllod == transferFeeAllod, ERROR_INVALID_AMOUNT);
 
-    var tonBudget = ALLOD_GAS_TRANSFER_TON_BUDGET;
+    var gramsBudget = ALLOD_GAS_TRANSFER_GRAMS_BUDGET;
 
     assert(
-        contract.getOriginalBalance() >= tonBudget + MIN_TON_FOR_STORAGE,
+        contract.getOriginalBalance() >= gramsBudget + MIN_GRAMS_FOR_STORAGE,
         ERROR_INSUFFICIENT_GAS
     );
 
@@ -190,7 +190,7 @@ fun executeTransfer(
         queryId + 2
     );
 
-    totalSpentTon = totalSpentTon + tonBudget;
+    totalSpentNanograms = totalSpentNanograms + gramsBudget;
     totalExecuted = totalExecuted + 1;
 
     saveData();
@@ -309,7 +309,7 @@ get fun getAllodGasPoolData(): (
         masterConfigured,
         transferFeeAllod,
         totalReceivedAllod,
-        totalSpentTon,
+        totalSpentNanograms,
         totalExecuted,
         contract.getOriginalBalance()
     );

@@ -169,7 +169,7 @@ fun sendTransferNotification(
     amount: int,
     fromOwner: address,
     queryId: int,
-    forwardTonAmount: int,
+    forwardGramsAmount: int,
     forwardPayload: slice
 ) {
     var body = beginCell()
@@ -183,7 +183,7 @@ fun sendTransferNotification(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(ownerAddress)
-        .storeCoins(forwardTonAmount)
+        .storeCoins(forwardGramsAmount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -244,7 +244,7 @@ fun sendStandardInternalTransfer(
     toOwner: address,
     amount: int,
     responseDestination: address?,
-    forwardTonAmount: int,
+    forwardGramsAmount: int,
     forwardPayload: slice,
     queryId: int
 ) {
@@ -257,7 +257,7 @@ fun sendStandardInternalTransfer(
         .storeCoins(amount)
         .storeAddress(ownerAddress)
         .storeAddressOpt(responseDestination)
-        .storeCoins(forwardTonAmount)
+        .storeCoins(forwardGramsAmount)
         .storeSlice(forwardPayload)
         .endCell();
 
@@ -358,7 +358,7 @@ fun onInternalMessage(in: InMessage) {
         var amount = msgBody.loadCoins();
         var fromOwner = msgBody.loadAddress();
         var responseDestination = msgBody.loadAddressOpt();
-        var forwardTonAmount = msgBody.loadCoins();
+        var forwardGramsAmount = msgBody.loadCoins();
         var forwardPayload = msgBody;
 
         requireInternalSender(senderAddress, fromOwner);
@@ -368,17 +368,17 @@ fun onInternalMessage(in: InMessage) {
 
         saveData();
 
-        if (forwardTonAmount > 0) {
+        if (forwardGramsAmount > 0) {
             var excessAmount =
                 msgValue -
-                forwardTonAmount -
-                BASE_TON_COST;
+                forwardGramsAmount -
+                BASE_GRAMS_COST;
 
             sendTransferNotification(
                 amount,
                 fromOwner,
                 queryId,
-                forwardTonAmount,
+                forwardGramsAmount,
                 forwardPayload
             );
 
@@ -400,7 +400,7 @@ fun onInternalMessage(in: InMessage) {
 
         sendExcesses(
             responseDestination,
-            msgValue - BASE_TON_COST,
+            msgValue - BASE_GRAMS_COST,
             queryId
         );
         return;
@@ -416,13 +416,13 @@ fun onInternalMessage(in: InMessage) {
         var toOwner = msgBody.loadAddress();
         var responseDestination = msgBody.loadAddressOpt();
         var customPayload = msgBody.loadMaybeRef();
-        var forwardTonAmount = msgBody.loadCoins();
+        var forwardGramsAmount = msgBody.loadCoins();
         var forwardPayload = msgBody;
 
         assert(jettonAmount > 0, ERROR_INVALID_AMOUNT);
         assert(balance >= jettonAmount, ERROR_INSUFFICIENT_BALANCE);
         assert(
-            msgValue >= MIN_TON_FOR_TRANSFER + forwardTonAmount,
+            msgValue >= MIN_GRAMS_FOR_TRANSFER + forwardGramsAmount,
             ERROR_INSUFFICIENT_GAS
         );
 
@@ -433,7 +433,7 @@ fun onInternalMessage(in: InMessage) {
             toOwner,
             jettonAmount,
             responseDestination,
-            forwardTonAmount,
+            forwardGramsAmount,
             forwardPayload,
             queryId
         );
@@ -457,7 +457,7 @@ fun onInternalMessage(in: InMessage) {
         var totalSpend = jettonAmount + paidFeeDom;
 
         assert(balance >= totalSpend, ERROR_INSUFFICIENT_BALANCE);
-        assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_GRAMS_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
 
         var (_, pendingExists) = readPendingTransfer(queryId);
         assert(!pendingExists, ERROR_ALREADY_INITIALIZED);

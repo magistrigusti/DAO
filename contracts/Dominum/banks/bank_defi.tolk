@@ -8,7 +8,7 @@ import "@stdlib/tvm-dicts";
 // ========================================
 // Принимает DOM от Giver DeFi.
 // Хранит DOM на своём jetton wallet.
-// Отправляет DOM/TON только на 2 зашитых адреса:
+// Отправляет DOM/GRAM только на 2 зашитых адреса:
 //   - defiFoundationAddress
 //   - marketMakerAddress
 //
@@ -138,7 +138,7 @@ fun sendDom(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(walletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -147,9 +147,9 @@ fun sendDom(
 }
 
 // -----------------------------------------------------
-// ОТПРАВКА TON
+// ОТПРАВКА GRAM
 // -----------------------------------------------------
-fun sendTon(
+fun sendGrams(
     toAddress: address,
     amount: int,
     queryId: int
@@ -240,7 +240,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_WITHDRAW — вывести TON (owner only)
+    // OP_WITHDRAW — вывести GRAM (owner only)
     // body: amount | toAddress
     // Только на defiFoundationAddress или marketMakerAddress.
     // =====================================================
@@ -256,7 +256,7 @@ fun onInternalMessage(in: InMessage) {
             ERROR_NOT_IN_WHITELIST
         );
 
-        sendTon(toAddress, amount, queryId);
+        sendGrams(toAddress, amount, queryId);
         return;
     }
 

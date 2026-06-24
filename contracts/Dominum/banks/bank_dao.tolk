@@ -8,7 +8,7 @@ import "@stdlib/tvm-dicts";
 // ========================================
 // Принимает DOM от Giver DAO.
 // Хранит DOM на своём jetton wallet.
-// Отправляет DOM/TON только на whitelist.
+// Отправляет DOM/GRAM только на whitelist.
 //
 // ВАЖНО:
 // Банк НЕ выпускает облигации и NFT.
@@ -119,7 +119,7 @@ fun sendDom(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(walletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -128,9 +128,9 @@ fun sendDom(
 }
 
 // -----------------------------------------------------
-// ОТПРАВКА TON
+// ОТПРАВКА GRAM
 // -----------------------------------------------------
-fun sendTon(
+fun sendGrams(
     toAddress: address,
     amount: int,
     queryId: int
@@ -160,13 +160,13 @@ fun sendTon(
 // -----------------------------------------------------
 fun sendCommand(
     toAddress: address,
-    tonAmount: int,
+    gramsAmount: int,
     payload: cell
 ) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(toAddress)
-        .storeCoins(tonAmount)
+        .storeCoins(gramsAmount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(payload)
         .endCell();
@@ -240,7 +240,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_WITHDRAW — вывести TON (owner, whitelist)
+    // OP_WITHDRAW — вывести GRAM (owner, whitelist)
     // body: amount | toAddress
     // =====================================================
     if (op == OP_WITHDRAW) {
@@ -255,19 +255,19 @@ fun onInternalMessage(in: InMessage) {
             ERROR_NOT_IN_WHITELIST
         );
 
-        sendTon(toAddress, amount, queryId);
+        sendGrams(toAddress, amount, queryId);
         return;
     }
 
     // =====================================================
     // OP_SEND_JETTONS — команда дочернему контракту
-    // body: toAddress | tonAmount | payload(ref)
+    // body: toAddress | gramsAmount | payload(ref)
     // =====================================================
     if (op == OP_SEND_JETTONS) {
         requireOwner(senderAddress);
 
         var toAddress = msgBody.loadAddress();
-        var tonAmount = msgBody.loadCoins();
+        var gramsAmount = msgBody.loadCoins();
         var payload = msgBody.loadRef();
 
         assert(
@@ -275,7 +275,7 @@ fun onInternalMessage(in: InMessage) {
             ERROR_NOT_IN_WHITELIST
         );
 
-        sendCommand(toAddress, tonAmount, payload);
+        sendCommand(toAddress, gramsAmount, payload);
         return;
     }
 

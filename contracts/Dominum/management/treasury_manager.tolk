@@ -39,7 +39,7 @@ fun sendAddressRequest(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(treasuryPoolAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -63,7 +63,7 @@ fun sendTaxRequest(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(treasuryPoolAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();

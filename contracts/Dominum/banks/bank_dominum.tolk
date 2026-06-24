@@ -78,9 +78,9 @@ fun isAllowedTarget(candidate: address): bool {
 }
 
 // -----------------------------------------------------
-// ОТПРАВКА TON
+// ОТПРАВКА GRAM
 // -----------------------------------------------------
-fun sendTon(toAddress: address, amount: int, queryId: int) {
+fun sendGrams(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
@@ -128,7 +128,7 @@ fun withdrawDomJettons(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(domWalletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(transferBody)
         .endCell();
@@ -161,7 +161,7 @@ fun withdrawFromGasPool(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(gasPoolAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -170,10 +170,10 @@ fun withdrawFromGasPool(
 }
 
 // -----------------------------------------------------
-// ПОПОЛНЕНИЕ GAS POOL В TON
+// ПОПОЛНЕНИЕ GAS POOL В GRAM
 // -----------------------------------------------------
-fun refillGasPool(tonAmount: int, queryId: int) {
-    if (tonAmount <= 0) {
+fun refillGasPool(gramsAmount: int, queryId: int) {
+    if (gramsAmount <= 0) {
         return;
     }
 
@@ -185,7 +185,7 @@ fun refillGasPool(tonAmount: int, queryId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(gasPoolAddress)
-        .storeCoins(tonAmount)
+        .storeCoins(gramsAmount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -199,7 +199,7 @@ fun refillGasPool(tonAmount: int, queryId: int) {
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
-    // Пустое сообщение — просто принимаем TON
+    // Пустое сообщение — просто принимаем GRAM
     if (msgBody.isEmpty()) {
         return;
     }
@@ -227,7 +227,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_WITHDRAW — вывести TON
+    // OP_WITHDRAW — вывести GRAM
     // body: amount | toAddress
     // =====================================================
     if (op == OP_WITHDRAW) {
@@ -239,11 +239,11 @@ fun onInternalMessage(in: InMessage) {
         assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
         assert(
-            amount + MIN_TON_FOR_STORAGE <= myBalance,
+            amount + MIN_GRAMS_FOR_STORAGE <= myBalance,
             ERROR_INSUFFICIENT_BALANCE
         );
 
-        sendTon(toAddress, amount, queryId);
+        sendGrams(toAddress, amount, queryId);
         return;
     }
 
@@ -260,7 +260,7 @@ fun onInternalMessage(in: InMessage) {
         assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
         assert(
-            msgValue >= MIN_TON_FOR_TRANSFER,
+            msgValue >= MIN_GRAMS_FOR_TRANSFER,
             ERROR_INSUFFICIENT_GAS
         );
 
@@ -281,7 +281,7 @@ fun onInternalMessage(in: InMessage) {
         assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
         assert(
-            msgValue >= MIN_TON_FOR_STORAGE,
+            msgValue >= MIN_GRAMS_FOR_STORAGE,
             ERROR_INSUFFICIENT_GAS
         );
 
@@ -290,21 +290,21 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_REFILL_POOL — пополнить gas_pool TON-резервом
-    // body: tonAmount
+    // OP_REFILL_POOL — пополнить gas_pool GRAM-резервом
+    // body: gramsAmount
     // =====================================================
     if (op == OP_REFILL_POOL) {
         requireOwner(senderAddress);
 
-        var tonAmount = msgBody.loadCoins();
+        var gramsAmount = msgBody.loadCoins();
 
-        assert(tonAmount > 0, ERROR_INVALID_AMOUNT);
+        assert(gramsAmount > 0, ERROR_INVALID_AMOUNT);
         assert(
-            msgValue >= tonAmount + MIN_TON_FOR_STORAGE,
+            msgValue >= gramsAmount + MIN_GRAMS_FOR_STORAGE,
             ERROR_INSUFFICIENT_GAS
         );
 
-        refillGasPool(tonAmount, queryId);
+        refillGasPool(gramsAmount, queryId);
         return;
     }
 

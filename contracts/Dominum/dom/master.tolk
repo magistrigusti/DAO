@@ -376,8 +376,8 @@ fun onInternalMessage(in: InMessage) {
         assert(amount <= MAX_MINT_AMOUNT, ERROR_LIMIT_EXCEEDED);
         assert(canMintInternal(), ERROR_TOO_EARLY);
 
-        var requiredTon = MIN_TON_FOR_TRANSFER * GIVERS_COUNT;
-        assert(msgValue >= requiredTon, ERROR_INSUFFICIENT_GAS);
+        var requiredGrams = MIN_GRAMS_FOR_TRANSFER * GIVERS_COUNT;
+        assert(msgValue >= requiredGrams, ERROR_INSUFFICIENT_GAS);
 
         if (!isStarted) {
             isStarted = true;

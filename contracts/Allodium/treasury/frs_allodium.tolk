@@ -67,7 +67,7 @@ fun sendMintAllowance(allowanceAmount: int, queryId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(allodMasterAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -92,7 +92,7 @@ fun unlockDom(amount: int, queryId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(domWalletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();

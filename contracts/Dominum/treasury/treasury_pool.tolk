@@ -6,9 +6,9 @@ import "@stdlib/tvm-dicts";
 // =====================================================
 // TREASURY POOL — казна налогов DOM.
 // =====================================================
-// Хранит DOM и TON.
+// Хранит DOM и GRAM.
 // Принимает DOM-налог только от активного GasPool.
-// Выводит DOM/TON только в банки или в GasPool.
+// Выводит DOM/GRAM только в банки или в GasPool.
 // TreasuryManager не меняет state напрямую: он отправляет распоряжение.
 // Owner TreasuryPool подтверждает или отменяет распоряжение.
 // =====================================================
@@ -27,7 +27,7 @@ global taxMultiplier: int;
 
 global totalReceivedDom: int;
 global totalSentDom: int;
-global totalSentTon: int;
+global totalSentNanograms: int;
 
 global hasPending: bool;
 global pendingKind: int;
@@ -63,7 +63,7 @@ fun loadData() {
     taxMultiplier = stats.loadUint(16);
     totalReceivedDom = stats.loadCoins();
     totalSentDom = stats.loadCoins();
-    totalSentTon = stats.loadCoins();
+    totalSentNanograms = stats.loadCoins();
 
     var pending = ds.loadRef().beginParse();
     hasPending = pending.loadBool();
@@ -106,7 +106,7 @@ fun saveData() {
         .storeUint(taxMultiplier, 16)
         .storeCoins(totalReceivedDom)
         .storeCoins(totalSentDom)
-        .storeCoins(totalSentTon)
+        .storeCoins(totalSentNanograms)
         .endCell();
 
     var pending = beginCell()
@@ -155,7 +155,7 @@ fun initWalletConfig(newJettonWalletAddress: address) {
     assert(!hasPending, ERROR_ALREADY_INITIALIZED);
     assert(totalReceivedDom == 0, ERROR_ALREADY_INITIALIZED);
     assert(totalSentDom == 0, ERROR_ALREADY_INITIALIZED);
-    assert(totalSentTon == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSentNanograms == 0, ERROR_ALREADY_INITIALIZED);
 
     jettonWalletAddress = newJettonWalletAddress;
     walletConfigured = true;
@@ -339,7 +339,7 @@ fun sendTaxToGasPool(queryId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(gasPoolAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -362,7 +362,7 @@ fun sendInitMasterConfigToGasPool(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(gasPoolAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -370,7 +370,7 @@ fun sendInitMasterConfigToGasPool(
     sendRawMessage(msg, 1);
 }
 
-fun sendTon(
+fun sendGrams(
     toAddress: address,
     amount: int,
     queryId: int
@@ -418,7 +418,7 @@ fun sendDom(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(jettonWalletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -459,7 +459,7 @@ fun requestDomFromGasPool(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(gasPoolAddress)
-        .storeCoins(MIN_TON_FOR_STORAGE)
+        .storeCoins(MIN_GRAMS_FOR_STORAGE)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -662,7 +662,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_INIT_MASTER_CONFIG) {
         requireOwner(senderAddress);
-        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_GRAMS_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
 
         var newMasterAddress = msgBody.loadAddress();
         var newJettonWalletCode = msgBody.loadRef();
@@ -711,12 +711,12 @@ fun onInternalMessage(in: InMessage) {
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
-        assert(amount + MIN_TON_FOR_STORAGE <= myBalance, ERROR_INSUFFICIENT_BALANCE);
+        assert(amount + MIN_GRAMS_FOR_STORAGE <= myBalance, ERROR_INSUFFICIENT_BALANCE);
 
-        totalSentTon = totalSentTon + amount;
+        totalSentNanograms = totalSentNanograms + amount;
         saveData();
 
-        sendTon(toAddress, amount, queryId);
+        sendGrams(toAddress, amount, queryId);
         return;
     }
 
@@ -728,7 +728,7 @@ fun onInternalMessage(in: InMessage) {
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(isAllowedTarget(toAddress), ERROR_NOT_IN_WHITELIST);
-        assert(msgValue >= MIN_TON_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_GRAMS_FOR_TRANSFER, ERROR_INSUFFICIENT_GAS);
 
         totalSentDom = totalSentDom + amount;
         saveData();
@@ -743,9 +743,9 @@ fun onInternalMessage(in: InMessage) {
         var amount = msgBody.loadCoins();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
-        assert(amount + MIN_TON_FOR_STORAGE <= myBalance, ERROR_INSUFFICIENT_BALANCE);
+        assert(amount + MIN_GRAMS_FOR_STORAGE <= myBalance, ERROR_INSUFFICIENT_BALANCE);
 
-        totalSentTon = totalSentTon + amount;
+        totalSentNanograms = totalSentNanograms + amount;
         saveData();
 
         refillGasPool(amount, queryId);
@@ -758,7 +758,7 @@ fun onInternalMessage(in: InMessage) {
         var amount = msgBody.loadCoins();
 
         assert(amount > 0, ERROR_INVALID_AMOUNT);
-        assert(msgValue >= MIN_TON_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
+        assert(msgValue >= MIN_GRAMS_FOR_STORAGE, ERROR_INSUFFICIENT_GAS);
 
         requestDomFromGasPool(amount, queryId);
         return;
@@ -786,7 +786,7 @@ get fun getTreasuryPoolData(): (
         taxMultiplier,
         totalReceivedDom,
         totalSentDom,
-        totalSentTon,
+        totalSentNanograms,
         nextRouteId
     );
 }

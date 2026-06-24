@@ -105,7 +105,7 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(walletAddress)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
@@ -114,9 +114,9 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
 }
 
 // -----------------------------------------------------
-// ОТПРАВКА TON
+// ОТПРАВКА GRAM
 // -----------------------------------------------------
-fun sendTon(toAddress: address, amount: int, queryId: int) {
+fun sendGrams(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
@@ -195,7 +195,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     // =====================================================
-    // OP_WITHDRAW — вывести TON (owner, whitelist)
+    // OP_WITHDRAW — вывести GRAM (owner, whitelist)
     // body: amount | toAddress
     // =====================================================
     if (op == OP_WITHDRAW) {
@@ -212,7 +212,7 @@ fun onInternalMessage(in: InMessage) {
             ERROR_NOT_IN_WHITELIST
         );
 
-        sendTon(toAddress, amount, queryId);
+        sendGrams(toAddress, amount, queryId);
         return;
     }
 

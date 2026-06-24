@@ -10,7 +10,7 @@ global masterConfigured: bool;
 global taxMultiplier: int;
 
 global totalReceivedDom: int;
-global totalSpentTon: int;
+global totalSpentNanograms: int;
 global totalExecuted: int;
 
 fun loadData() {
@@ -24,7 +24,7 @@ fun loadData() {
     taxMultiplier = ds.loadUint(16);
 
     totalReceivedDom = ds.loadCoins();
-    totalSpentTon = ds.loadCoins();
+    totalSpentNanograms = ds.loadCoins();
     totalExecuted = ds.loadUint(64);
 }
 
@@ -37,7 +37,7 @@ fun saveData() {
             .storeBool(masterConfigured)
             .storeUint(taxMultiplier, 16)
             .storeCoins(totalReceivedDom)
-            .storeCoins(totalSpentTon)
+            .storeCoins(totalSpentNanograms)
             .storeUint(totalExecuted, 64)
             .endCell()
     );
@@ -57,7 +57,7 @@ fun initMasterConfig(
 ) {
     assert(!masterConfigured, ERROR_ALREADY_INITIALIZED);
     assert(totalReceivedDom == 0, ERROR_ALREADY_INITIALIZED);
-    assert(totalSpentTon == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSpentNanograms == 0, ERROR_ALREADY_INITIALIZED);
     assert(totalExecuted == 0, ERROR_ALREADY_INITIALIZED);
 
     masterAddress = newMasterAddress;
@@ -99,10 +99,10 @@ fun buildWalletAddress(owner: address): address {
 }
 
 fun calculateFee(): int {
-    var feeDom = DOM_TRANSFER_TON_BASE *
-        INITIAL_DOM_PER_TON *
+    var feeDom = DOM_TRANSFER_GRAMS_BASE *
+        INITIAL_DOM_PER_GRAM *
         taxMultiplier /
-        NANO_TON /
+        NANOGRAMS_PER_GRAM /
         TAX_MULTIPLIER_DENOM;
 
     if (feeDom < MIN_DOM_TRANSFER_FEE) {
@@ -150,7 +150,7 @@ fun sendInternalTransfer(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(treasuryPoolAddress)
-        .storeCoins(BASE_TON_COST)
+        .storeCoins(BASE_GRAMS_COST)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(treasuryBody)
         .endCell();
@@ -176,7 +176,7 @@ fun sendDomFromPoolWallet(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(poolWallet)
-        .storeCoins(MIN_TON_FOR_TRANSFER)
+        .storeCoins(MIN_GRAMS_FOR_TRANSFER)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -238,9 +238,9 @@ fun executeTransfer(
         return;
     }
 
-    var tonBudget = BASE_TON_COST * 2;
+    var gramsBudget = BASE_GRAMS_COST * 2;
 
-    if (myBalance < tonBudget + MIN_TON_FOR_STORAGE) {
+    if (myBalance < gramsBudget + MIN_GRAMS_FOR_STORAGE) {
         sendTreasurySettlement(false, queryId);
         return;
     }
@@ -259,7 +259,7 @@ fun executeTransfer(
         queryId + 2
     );
 
-    totalSpentTon = totalSpentTon + tonBudget;
+    totalSpentNanograms = totalSpentNanograms + gramsBudget;
     totalExecuted = totalExecuted + 1;
 
     saveData();
@@ -378,7 +378,7 @@ get fun getGasPoolData(): (
         masterConfigured,
         taxMultiplier,
         totalReceivedDom,
-        totalSpentTon,
+        totalSpentNanograms,
         totalExecuted,
         contract.getOriginalBalance()
     );
