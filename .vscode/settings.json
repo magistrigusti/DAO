@@ -1,8 +1,10 @@
 {
-  "workbench.colorTheme": "Light 2026",
+  "workbench.colorTheme": "Solarized Dark",
   "workbench.preferredHighContrastLightColorTheme": "3024 Day",
   "workbench.preferredLightColorTheme": "Cursor Dark Midnight",
-  "editor.rulers": [150],
+  "editor.rulers": [
+    150
+  ],
   "editor.wordWrap": "bounded",
   "editor.wordWrapColumn": 150,
   "printWidth": 150,
