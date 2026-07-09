@@ -60,9 +60,16 @@ fun saveData() {
 // -----------------------------------------------------
 // PENDING TRANSFERS
 // -----------------------------------------------------
-fun setPendingTransfer(queryId: int, totalSpend: int) {
+fun setPendingTransfer(
+    queryId: int,
+    totalSpend: int,
+    pendingKind: int,
+    expectedSender: address
+) {
     var value = beginCell()
         .storeCoins(totalSpend)
+        .storeUint(pendingKind, 8)
+        .storeAddress(expectedSender)
         .endCell()
         .beginParse();
 
@@ -80,29 +87,98 @@ fun readPendingTransfer(queryId: int): (int, bool) {
     return (valueSlice.loadCoins(), true);
 }
 
+fun readPendingTransferFull(queryId: int): (int, int, address?, bool) {
+    var (value, found) = pendingTransfers.uDictGet(64, queryId);
+    if (!found) {
+        return (0, 0, null, false);
+    }
+
+    var valueSlice = value!;
+    var totalSpend = valueSlice.loadCoins();
+    var (bitsLeft, refsLeft) = valueSlice.remainingBitsAndRefsCount();
+
+    if (bitsLeft == 0) {
+        return (
+            totalSpend,
+            WALLET_PENDING_PROTOCOL,
+            treasuryPoolAddress,
+            true
+        );
+    }
+
+    var pendingKind = valueSlice.loadUint(8);
+    var expectedSender = valueSlice.loadAddress();
+
+    return (
+        totalSpend,
+        pendingKind,
+        expectedSender,
+        true
+    );
+}
+
 fun deletePendingTransfer(queryId: int) {
     pendingTransfers.uDictDelete(64, queryId);
 }
 
 fun settlePendingTransfer(queryId: int) {
-    var (_, found) = readPendingTransfer(queryId);
+    var (_, pendingKind, _, found) =
+        readPendingTransferFull(queryId);
 
     if (!found) {
         return;
     }
+
+    assert(pendingKind == WALLET_PENDING_PROTOCOL, ERROR_WRONG_TARGET);
 
     deletePendingTransfer(queryId);
     saveData();
 }
 
 fun restorePendingTransfer(queryId: int) {
-    var (totalSpend, found) = readPendingTransfer(queryId);
+    var (totalSpend, pendingKind, _, found) =
+        readPendingTransferFull(queryId);
 
     if (!found) {
         return;
     }
 
+    assert(pendingKind == WALLET_PENDING_PROTOCOL, ERROR_WRONG_TARGET);
+
     balance += totalSpend;
+    deletePendingTransfer(queryId);
+    saveData();
+}
+
+fun restoreStandardTransfer(
+    queryId: int,
+    bouncedAmount: int,
+    bouncedSender: address
+) {
+    var (totalSpend, pendingKind, expectedSenderOpt, found) =
+        readPendingTransferFull(queryId);
+
+    if (!found) {
+        return;
+    }
+
+    assert(pendingKind == WALLET_PENDING_STANDARD, ERROR_WRONG_TARGET);
+    assert(expectedSenderOpt != null, ERROR_NO_PENDING);
+    assert(bouncedSender == expectedSenderOpt!, ERROR_NOT_VALID_WALLET);
+    assert(bouncedAmount == totalSpend, ERROR_INVALID_AMOUNT);
+
+    balance += totalSpend;
+    deletePendingTransfer(queryId);
+    saveData();
+}
+
+fun clearPendingStandardTransfer(queryId: int) {
+    var (_, pendingKind, _, found) =
+        readPendingTransferFull(queryId);
+
+    assert(found, ERROR_NO_PENDING);
+    assert(pendingKind == WALLET_PENDING_STANDARD, ERROR_WRONG_TARGET);
+
     deletePendingTransfer(queryId);
     saveData();
 }
@@ -287,6 +363,12 @@ fun handleBouncedMessage(senderAddress: address, msgBody: slice) {
     }
 
     if (bouncedOp == OP_INTERNAL_TRANSFER) {
+        var bouncedAmount = msgBody.loadCoins();
+        restoreStandardTransfer(
+            bouncedQueryId,
+            bouncedAmount,
+            senderAddress
+        );
         return;
     }
 
@@ -340,6 +422,12 @@ fun onInternalMessage(in: InMessage) {
     if (op == OP_TREASURY_FAILED) {
         assert(senderAddress == treasuryPoolAddress, ERROR_NOT_VALID_WALLET);
         restorePendingTransfer(queryId);
+        return;
+    }
+
+    if (op == OP_CLEAR_PENDING_TRANSFER) {
+        assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+        clearPendingStandardTransfer(queryId);
         return;
     }
 
@@ -419,6 +507,18 @@ fun onInternalMessage(in: InMessage) {
             ERROR_INSUFFICIENT_GAS
         );
 
+        var stateInit = buildWalletStateInit(toOwner);
+        var toWallet = buildWalletAddress(stateInit);
+        var (_, pendingExists) = readPendingTransfer(queryId);
+        assert(!pendingExists, ERROR_ALREADY_INITIALIZED);
+
+        setPendingTransfer(
+            queryId,
+            jettonAmount,
+            WALLET_PENDING_STANDARD,
+            toWallet
+        );
+
         balance -= jettonAmount;
         saveData();
 
@@ -455,7 +555,12 @@ fun onInternalMessage(in: InMessage) {
         var (_, pendingExists) = readPendingTransfer(queryId);
         assert(!pendingExists, ERROR_ALREADY_INITIALIZED);
 
-        setPendingTransfer(queryId, totalSpend);
+        setPendingTransfer(
+            queryId,
+            totalSpend,
+            WALLET_PENDING_PROTOCOL,
+            treasuryPoolAddress
+        );
 
         balance -= totalSpend;
         saveData();

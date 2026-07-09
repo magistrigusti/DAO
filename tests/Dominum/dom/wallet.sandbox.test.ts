@@ -218,6 +218,23 @@ describe('DomWallet', () => {
     expect(receiverData.balance).toEqual(
       DOM_FIXTURE.walletTransferAmount
     );
-    expect(pending.found).toBe(false);
+    expect(pending.found).toBe(true);
+    expect(pending.totalSpend).toEqual(
+      DOM_FIXTURE.walletTransferAmount
+    );
+
+    await wallet.sendClearPendingTransfer(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.deploySmall,
+        queryId: DOM_QUERY.walletTransfer,
+      }
+    );
+
+    const cleared = await wallet.getPendingTransfer(
+      DOM_QUERY.walletTransfer
+    );
+
+    expect(cleared.found).toBe(false);
   });
 });

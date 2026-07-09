@@ -10,6 +10,7 @@ import {
 } from '@ton/core';
 import {
     OP_BURN,
+    OP_CLEAR_PENDING_TRANSFER,
     OP_INTERNAL_TRANSFER,
     OP_PROTOCOL_TRANSFER,
     OP_TRANSFER,
@@ -182,6 +183,25 @@ export class DomWallet implements Contract {
             .storeCoins(opts.amount)
             .storeAddress(opts.responseDestination ?? null)
             .storeMaybeRef(opts.customPayload ?? null)
+            .endCell();
+
+        await provider.internal(via, {
+            value: opts.value,
+            body,
+        });
+    }
+
+    async sendClearPendingTransfer(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            queryId: bigint;
+        }
+    ) {
+        const body = beginCell()
+            .storeUint(OP_CLEAR_PENDING_TRANSFER, 32)
+            .storeUint(opts.queryId, 64)
             .endCell();
 
         await provider.internal(via, {
