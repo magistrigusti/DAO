@@ -16,6 +16,7 @@ import {
   OP_INIT_TREASURY_WALLET_CONFIG,
   OP_REFILL_POOL,
   OP_REPLACE_TREASURY_ADDRESS,
+  OP_TREASURY_EXECUTE,
   OP_WITHDRAW,
   OP_WITHDRAW_FROM_POOL,
   OP_WITHDRAW_JETTONS,
@@ -30,6 +31,9 @@ export type TreasuryPoolConfig = {
   bankDefiAddress: Address;
   bankDominumAddress: Address;
   gasPoolAddress: Address;
+  masterAddress?: Address;
+  jettonWalletCode?: Cell;
+  masterConfigured?: boolean;
   taxMultiplier?: number;
   totalReceivedDom?: bigint;
   totalSentDom?: bigint;
@@ -83,6 +87,17 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
     .storeDict(config.pendingRoutes ?? null)
     .endCell();
 
+  const masterConfig = beginCell()
+    .storeAddress(config.masterAddress ?? config.ownerAddress)
+    .storeRef(config.jettonWalletCode ?? beginCell().endCell())
+    .storeBit(config.masterConfigured ?? false)
+    .endCell();
+
+  const extra = beginCell()
+    .storeRef(routing)
+    .storeRef(masterConfig)
+    .endCell();
+
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.treasuryManagerAddress)
@@ -91,7 +106,7 @@ export function treasuryPoolConfigToCell(config: TreasuryPoolConfig): Cell {
     .storeRef(targets)
     .storeRef(stats)
     .storeRef(pending)
-    .storeRef(routing)
+    .storeRef(extra)
     .endCell();
 }
 
@@ -337,6 +352,33 @@ export class TreasuryPool implements Contract {
       .storeUint(OP_WITHDRAW_FROM_POOL, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .storeCoins(opts.amount)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
+  async sendTreasuryExecute(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      jettonAmount: bigint;
+      toOwner: Address;
+      fromOwner: Address;
+      paidFeeDom: bigint;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_TREASURY_EXECUTE, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeCoins(opts.jettonAmount)
+      .storeAddress(opts.toOwner)
+      .storeAddress(opts.fromOwner)
+      .storeCoins(opts.paidFeeDom)
       .endCell();
 
     await provider.internal(via, {

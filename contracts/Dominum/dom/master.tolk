@@ -290,6 +290,34 @@ fun canMintInternal(): bool {
     return blockchain.now() >= lastMintTime + MINT_INTERVAL;
 }
 
+fun hasMintBlockingPendingRequest(): bool {
+    if (!hasPendingMasterRequest) {
+        return false;
+    }
+
+    return pendingMasterRequestKind == MASTER_REQUEST_MINTER;
+}
+
+fun isActiveGiverWallet(walletAddress: address): bool {
+    if (walletAddress == calculateWalletAddress(calculateWalletStateInit(giverAllodiumAddress))) {
+        return true;
+    }
+
+    if (walletAddress == calculateWalletAddress(calculateWalletStateInit(giverDefiAddress))) {
+        return true;
+    }
+
+    if (walletAddress == calculateWalletAddress(calculateWalletStateInit(giverDaoAddress))) {
+        return true;
+    }
+
+    if (walletAddress == calculateWalletAddress(calculateWalletStateInit(giverDominumAddress))) {
+        return true;
+    }
+
+    return false;
+}
+
 fun sendToWallet(
     toOwner: address,
     jettonAmount: int,
@@ -368,7 +396,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_MINT) {
         requireMinter(senderAddress);
-        assert(!hasPendingMasterRequest, ERROR_ALREADY_INITIALIZED);
+        assert(!hasMintBlockingPendingRequest(), ERROR_ALREADY_INITIALIZED);
 
         var amount = msgBody.loadCoins();
 
@@ -540,6 +568,27 @@ fun onInternalMessage(in: InMessage) {
     }
 
     throw(0xffff);
+}
+
+fun onBouncedMessage(in: InMessageBounced) {
+    var msgBody = in.bouncedBody;
+    msgBody.skipBouncedPrefix();
+
+    loadData();
+
+    var bouncedOp = msgBody.loadUint(32);
+
+    if (bouncedOp == OP_INTERNAL_TRANSFER) {
+        var bouncedQueryId = msgBody.loadUint(64);
+        var bouncedAmount = msgBody.loadCoins();
+
+        assert(isActiveGiverWallet(in.senderAddress), ERROR_NOT_VALID_WALLET);
+        assert(totalSupply >= bouncedAmount, ERROR_INSUFFICIENT_BALANCE);
+
+        totalSupply = totalSupply - bouncedAmount;
+        saveData();
+        return;
+    }
 }
 
 get fun getJettonData(): (int, int, address, cell, cell) {

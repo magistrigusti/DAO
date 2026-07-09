@@ -1,6 +1,7 @@
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
+import "@stdlib/tvm-dicts";
 
 global treasuryPoolAddress: address;
 global masterAddress: address;
@@ -12,6 +13,7 @@ global taxMultiplier: int;
 global totalReceivedDom: int;
 global totalSpentNanograms: int;
 global totalExecuted: int;
+global pendingExecutions: dict;
 
 fun loadData() {
     var ds = contract.getData().beginParse();
@@ -26,6 +28,14 @@ fun loadData() {
     totalReceivedDom = ds.loadCoins();
     totalSpentNanograms = ds.loadCoins();
     totalExecuted = ds.loadUint(64);
+
+    var (bitsLeft, refsLeft) = ds.remainingBitsAndRefsCount();
+
+    if ((bitsLeft > 0) | (refsLeft > 0)) {
+        pendingExecutions = ds.loadDict();
+    } else {
+        pendingExecutions = createEmptyDict();
+    }
 }
 
 fun saveData() {
@@ -39,6 +49,7 @@ fun saveData() {
             .storeCoins(totalReceivedDom)
             .storeCoins(totalSpentNanograms)
             .storeUint(totalExecuted, 64)
+            .storeDict(pendingExecutions)
             .endCell()
     );
 }
@@ -114,6 +125,38 @@ fun calculateFee(): int {
     }
 
     return feeDom;
+}
+
+fun setPendingExecution(
+    routeId: int,
+    expectedFeeDom: int,
+    fromOwner: address
+) {
+    var value = beginCell()
+        .storeCoins(expectedFeeDom)
+        .storeAddress(fromOwner)
+        .endCell()
+        .beginParse();
+
+    pendingExecutions.uDictSet(64, routeId, value);
+}
+
+fun readPendingExecution(routeId: int): (int, address?, bool) {
+    var (value, found) = pendingExecutions.uDictGet(64, routeId);
+
+    if (!found) {
+        return (0, null, false);
+    }
+
+    var valueSlice = value!;
+    var expectedFeeDom = valueSlice.loadCoins();
+    var fromOwner = valueSlice.loadAddress();
+
+    return (expectedFeeDom, fromOwner, true);
+}
+
+fun deletePendingExecution(routeId: int) {
+    pendingExecutions.uDictDelete(64, routeId);
 }
 
 fun sendInternalTransfer(
@@ -259,11 +302,15 @@ fun executeTransfer(
         queryId + 2
     );
 
+    setPendingExecution(
+        queryId,
+        expectedFeeDom,
+        fromOwner
+    );
+
     totalSpentNanograms = totalSpentNanograms + gramsBudget;
-    totalExecuted = totalExecuted + 1;
 
     saveData();
-    sendTreasurySettlement(true, queryId);
 }
 
 fun onInternalMessage(in: InMessage) {
@@ -329,8 +376,22 @@ fun onInternalMessage(in: InMessage) {
             return;
         }
 
+        assert(queryId > 2, ERROR_NO_PENDING);
+
+        var routeId = queryId - 2;
+        var (expectedFeeDom, expectedFromOwner, foundExecution) =
+            readPendingExecution(routeId);
+
+        assert(foundExecution, ERROR_NO_PENDING);
+        assert(expectedFromOwner != null, ERROR_NO_PENDING);
+        assert(amount == expectedFeeDom, ERROR_INVALID_AMOUNT);
+        assert(fromAddress == expectedFromOwner!, ERROR_NOT_VALID_WALLET);
+
+        deletePendingExecution(routeId);
         totalReceivedDom = totalReceivedDom + amount;
+        totalExecuted = totalExecuted + 1;
         saveData();
+        sendTreasurySettlement(true, routeId);
         return;
     }
 

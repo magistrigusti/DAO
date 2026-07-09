@@ -83,6 +83,9 @@ describe('GasPool', () => {
           bankDefiAddress: bankDefi.address,
           bankDominumAddress: bankDominum.address,
           gasPoolAddress: outsider.address,
+          masterAddress: master.address,
+          jettonWalletCode: walletCode,
+          masterConfigured: configured,
         },
         treasuryPoolCode
       )
@@ -290,6 +293,9 @@ describe('GasPool', () => {
           bankDefiAddress: bankDefi.address,
           bankDominumAddress: bankDominum.address,
           gasPoolAddress: missingGasPoolAddress,
+          masterAddress: master.address,
+          jettonWalletCode: walletCode,
+          masterConfigured: true,
         },
         treasuryPoolCode
       )

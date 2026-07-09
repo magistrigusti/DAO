@@ -13,9 +13,11 @@ import { TreasuryPool } from '../../../wrappers/Dominum/treasury/TreasuryPool';
 import {
   DOM_COMPILE,
   DOM_CONTRACT,
+  DOM_FIXTURE,
   DOM_QUERY,
   DOM_STATE,
   DOM_VALUE,
+  calculateDefaultDomFee,
 } from '../_helpers/dom-test-values';
 import {
   expectAddress,
@@ -31,6 +33,7 @@ describe('TreasuryPool', () => {
 
   let owner: SandboxContract<TreasuryContract>;
   let manager: SandboxContract<TreasuryContract>;
+  let master: SandboxContract<TreasuryContract>;
   let wallet: SandboxContract<TreasuryContract>;
   let bankDao: SandboxContract<TreasuryContract>;
   let bankDefi: SandboxContract<TreasuryContract>;
@@ -40,9 +43,11 @@ describe('TreasuryPool', () => {
   let outsider: SandboxContract<TreasuryContract>;
 
   let treasuryPoolCode: Cell;
+  let walletCode: Cell;
 
   beforeAll(async () => {
     treasuryPoolCode = await compile(DOM_COMPILE.treasuryPool);
+    walletCode = await compile(DOM_COMPILE.wallet);
   });
 
   beforeEach(async () => {
@@ -50,6 +55,7 @@ describe('TreasuryPool', () => {
 
     owner = await blockchain.treasury('owner');
     manager = await blockchain.treasury('treasury-manager');
+    master = await blockchain.treasury('master');
     wallet = await blockchain.treasury('wallet');
     bankDao = await blockchain.treasury('bank-dao');
     bankDefi = await blockchain.treasury('bank-defi');
@@ -71,6 +77,9 @@ describe('TreasuryPool', () => {
           bankDefiAddress: bankDefi.address,
           bankDominumAddress: bankDominum.address,
           gasPoolAddress: gasPool.address,
+          masterAddress: master.address,
+          jettonWalletCode: walletCode,
+          masterConfigured: true,
         },
         treasuryPoolCode
       )
@@ -186,6 +195,28 @@ describe('TreasuryPool', () => {
     const data = await treasuryPool.getTreasuryPoolData();
 
     expectAddress(data.gasPoolAddress, newGasPool.address);
+  });
+
+  it('should reject treasury execution from non-DOM wallet', async () => {
+    const treasuryPool = await deployPool();
+
+    await ignoreFailure(
+      treasuryPool.sendTreasuryExecute(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          jettonAmount: DOM_FIXTURE.walletSmallTransferAmount,
+          toOwner: bankDao.address,
+          fromOwner: owner.address,
+          paidFeeDom: calculateDefaultDomFee(),
+          queryId: DOM_QUERY.gasTransfer,
+        }
+      )
+    );
+
+    const data = await treasuryPool.getTreasuryPoolData();
+
+    expect(data.nextRouteId).toEqual(1n);
   });
 
   it('should cancel or confirm tax request only by TreasuryPool owner', async () => {

@@ -27,6 +27,9 @@ import {
   expectAddress,
   ignoreFailure,
 } from '../core/dom-test-utils';
+import {
+  GIVER_TARGET,
+} from '../../../wrappers/Dominum/core/constants';
 
 describe('DomMaster', () => {
   let blockchain: Blockchain;
@@ -162,6 +165,47 @@ describe('DomMaster', () => {
     );
 
     jettonData = await domMaster.getJettonData();
+
+    expect(jettonData.totalSupply).toEqual(
+      DOM_FIXTURE.firstMintAmount
+    );
+  });
+
+  it('should allow mint while non-minter role request is pending', async () => {
+    const domMaster = openMaster();
+    const newGiver = await blockchain.treasury('new-giver');
+
+    await domMaster.sendDeploy(
+      owner.getSender(),
+      DOM_VALUE.deploySmall
+    );
+
+    await domMaster.sendReplaceGiver(
+      giverManager.getSender(),
+      {
+        value: DOM_VALUE.deploySmall,
+        targetKind: GIVER_TARGET.defi,
+        oldGiverAddress: giverDefi.address,
+        newGiverAddress: newGiver.address,
+        queryId: DOM_QUERY.replaceGiverDefi,
+      }
+    );
+
+    const pending =
+      await domMaster.getMasterPendingRequest();
+
+    expect(pending.hasPending).toBe(true);
+
+    await domMaster.sendMint(
+      minter.getSender(),
+      {
+        value: DOM_VALUE.mint,
+        amount: DOM_FIXTURE.firstMintAmount,
+        queryId: DOM_QUERY.masterMint,
+      }
+    );
+
+    const jettonData = await domMaster.getJettonData();
 
     expect(jettonData.totalSupply).toEqual(
       DOM_FIXTURE.firstMintAmount

@@ -287,13 +287,6 @@ fun handleBouncedMessage(senderAddress: address, msgBody: slice) {
     }
 
     if (bouncedOp == OP_INTERNAL_TRANSFER) {
-        var bouncedAmount = msgBody.loadCoins();
-
-        if (bouncedAmount > 0) {
-            balance += bouncedAmount;
-            saveData();
-        }
-
         return;
     }
 

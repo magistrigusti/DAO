@@ -40,7 +40,7 @@ const MINT_INTERVAL: int = TESTNET_MINT_INTERVAL;
 // -----------------------------------------------------
 // GRAM GAS / STORAGE
 // -----------------------------------------------------
-const MIN_GRAMS_FOR_STORAGE: int = 5000000;
+const MIN_GRAMS_FOR_STORAGE: int = 20000000;
 const MIN_GRAMS_FOR_TRANSFER: int = 20000000;
 const BASE_GRAMS_COST: int = 50000000;
 const DOM_TRANSFER_GRAMS_BASE: int = 50000000;

@@ -5,6 +5,7 @@ import {
   Contract,
   contractAddress,
   ContractProvider,
+  Dictionary,
   Sender,
 } from '@ton/core';
 
@@ -25,6 +26,7 @@ export type GasPoolConfig = {
   totalReceivedDom?: bigint;
   totalSpentTon?: bigint;
   totalExecuted?: bigint;
+  pendingExecutions?: Dictionary<bigint, Cell> | null;
 };
 
 export function gasPoolConfigToCell(
@@ -39,6 +41,7 @@ export function gasPoolConfigToCell(
     .storeCoins(config.totalReceivedDom ?? 0n)
     .storeCoins(config.totalSpentTon ?? 0n)
     .storeUint(config.totalExecuted ?? 0n, 64)
+    .storeDict(config.pendingExecutions ?? null)
     .endCell();
 }
 

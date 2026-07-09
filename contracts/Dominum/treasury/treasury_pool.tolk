@@ -23,6 +23,10 @@ global bankDefiAddress: address;
 global bankDominumAddress: address;
 global gasPoolAddress: address;
 
+global masterAddress: address;
+global jettonWalletCode: cell;
+global masterConfigured: bool;
+
 global taxMultiplier: int;
 
 global totalReceivedDom: int;
@@ -77,12 +81,21 @@ fun loadData() {
     var (bitsLeft, refsLeft) = ds.remainingBitsAndRefsCount();
 
     if (refsLeft > 0) {
-        var routing = ds.loadRef().beginParse();
+        var extra = ds.loadRef().beginParse();
+        var routing = extra.loadRef().beginParse();
         nextRouteId = routing.loadUint(64);
         pendingRoutes = routing.loadDict();
+
+        var masterConfig = extra.loadRef().beginParse();
+        masterAddress = masterConfig.loadAddress();
+        jettonWalletCode = masterConfig.loadRef();
+        masterConfigured = masterConfig.loadBool();
     } else {
         nextRouteId = 1;
         pendingRoutes = createEmptyDict();
+        masterAddress = ownerAddress;
+        jettonWalletCode = beginCell().endCell();
+        masterConfigured = false;
     }
 }
 
@@ -124,6 +137,17 @@ fun saveData() {
         .storeDict(pendingRoutes)
         .endCell();
 
+    var masterConfig = beginCell()
+        .storeAddress(masterAddress)
+        .storeRef(jettonWalletCode)
+        .storeBool(masterConfigured)
+        .endCell();
+
+    var extra = beginCell()
+        .storeRef(routing)
+        .storeRef(masterConfig)
+        .endCell();
+
     contract.setData(
         beginCell()
             .storeAddress(ownerAddress)
@@ -133,7 +157,7 @@ fun saveData() {
             .storeRef(targets)
             .storeRef(stats)
             .storeRef(pending)
-            .storeRef(routing)
+            .storeRef(extra)
             .endCell()
     );
 }
@@ -148,6 +172,40 @@ fun requireTreasuryManager(senderAddress: address) {
 
 fun requireWalletConfigured() {
     assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
+}
+
+fun requireMasterConfigured() {
+    assert(masterConfigured, ERROR_PROXY_NOT_CONFIGURED);
+}
+
+fun calculateWalletData(owner: address): cell {
+    return beginCell()
+        .storeCoins(0)
+        .storeAddress(owner)
+        .storeAddress(masterAddress)
+        .storeAddress(contract.getAddress())
+        .storeRef(jettonWalletCode)
+        .endCell();
+}
+
+fun calculateWalletStateInit(owner: address): cell {
+    var walletData = calculateWalletData(owner);
+
+    return beginCell()
+        .storeUint(0, 2)
+        .storeMaybeRef(jettonWalletCode)
+        .storeMaybeRef(walletData)
+        .storeUint(0, 1)
+        .endCell();
+}
+
+fun calculateWalletAddress(owner: address): address {
+    var wc = contract.getAddress().getWorkchain();
+
+    return address.fromWorkchainAndHash(
+        wc,
+        calculateWalletStateInit(owner).hash()
+    );
 }
 
 fun initWalletConfig(newJettonWalletAddress: address) {
@@ -352,6 +410,12 @@ fun sendInitMasterConfigToGasPool(
     newJettonWalletCode: cell,
     queryId: int
 ) {
+    assert(!masterConfigured, ERROR_ALREADY_INITIALIZED);
+    masterAddress = newMasterAddress;
+    jettonWalletCode = newJettonWalletCode;
+    masterConfigured = true;
+    saveData();
+
     var body = beginCell()
         .storeUint(OP_INIT_MASTER_CONFIG, 32)
         .storeUint(queryId, 64)
@@ -472,10 +536,17 @@ fun forwardExecution(
     msgBody: slice,
     walletQueryId: int
 ) {
+    requireMasterConfigured();
+
     var jettonAmount = msgBody.loadCoins();
     var toOwner = msgBody.loadAddress();
     var fromOwner = msgBody.loadAddress();
     var paidFeeDom = msgBody.loadCoins();
+
+    assert(
+        senderWalletAddress == calculateWalletAddress(fromOwner),
+        ERROR_NOT_VALID_WALLET
+    );
 
     var routeId = createPendingRoute(
         senderWalletAddress,
@@ -558,6 +629,30 @@ fun forwardWalletDelivery(msgBody: slice) {
     sendRawMessage(msg, 64);
 }
 
+fun forwardDeliveryFailure(deliveryQueryId: int) {
+    if (deliveryQueryId > 1) {
+        var routeIdFromReceiver = deliveryQueryId - 1;
+        var (_, _, foundReceiverRoute) =
+            readPendingRoute(routeIdFromReceiver);
+
+        if (foundReceiverRoute) {
+            forwardSettlement(routeIdFromReceiver, false);
+            return;
+        }
+    }
+
+    if (deliveryQueryId > 2) {
+        var routeIdFromFee = deliveryQueryId - 2;
+        var (_, _, foundFeeRoute) =
+            readPendingRoute(routeIdFromFee);
+
+        if (foundFeeRoute) {
+            forwardSettlement(routeIdFromFee, false);
+            return;
+        }
+    }
+}
+
 fun onBouncedMessage(in: InMessageBounced) {
     var msgBody = in.bouncedBody;
     msgBody.skipBouncedPrefix();
@@ -570,6 +665,13 @@ fun onBouncedMessage(in: InMessageBounced) {
     if (bouncedOp == OP_GAS_POOL_EXECUTE) {
         assert(in.senderAddress == gasPoolAddress, ERROR_NOT_OWNER);
         forwardSettlement(routeId, false);
+        return;
+    }
+
+    if (bouncedOp == OP_TREASURY_DELIVER) {
+        assert(in.senderAddress != gasPoolAddress, ERROR_NOT_VALID_WALLET);
+        forwardDeliveryFailure(routeId);
+        return;
     }
 }
 

@@ -50,6 +50,31 @@ fun sendMintPermission(
     sendRawMessage(msg, 1);
 }
 
+fun sendGrams(
+    toAddress: address,
+    amount: int,
+    queryId: int
+) {
+    if (amount <= 0) {
+        return;
+    }
+
+    var body = beginCell()
+        .storeUint(OP_EXCESSES, 32)
+        .storeUint(queryId, 64)
+        .endCell();
+
+    var msg = beginCell()
+        .storeUint(0x10, 6)
+        .storeAddress(toAddress)
+        .storeCoins(amount)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeRef(body)
+        .endCell();
+
+    sendRawMessage(msg, 1);
+}
+
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -84,6 +109,31 @@ fun onInternalMessage(in: InMessage) {
             amount,
             queryId,
             requiredGrams
+        );
+
+        sendGrams(
+            ownerAddress,
+            msgValue - requiredGrams - MIN_GRAMS_FOR_STORAGE,
+            queryId
+        );
+
+        return;
+    }
+
+    if (op == OP_WITHDRAW) {
+        requireOwner(senderAddress);
+
+        var amount = msgBody.loadCoins();
+        var toAddress = msgBody.loadAddress();
+        var myBalance = contract.getOriginalBalance();
+
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
+        assert(amount + MIN_GRAMS_FOR_STORAGE <= myBalance, ERROR_INSUFFICIENT_BALANCE);
+
+        sendGrams(
+            toAddress,
+            amount,
+            queryId
         );
 
         return;

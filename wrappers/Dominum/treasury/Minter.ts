@@ -7,7 +7,10 @@ import {
   ContractProvider,
   Sender,
 } from '@ton/core';
-import { OP_MINT } from '../core/op_code';
+import {
+  OP_MINT,
+  OP_WITHDRAW,
+} from '../core/op_code';
 
 export type MinterConfig = {
   ownerAddress: Address;
@@ -51,6 +54,29 @@ export class Minter implements Contract {
       .endCell();
 
     await provider.internal(via, { value: opts.value, body });
+  }
+
+  async sendWithdrawTon(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_WITHDRAW, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeCoins(opts.amount)
+      .storeAddress(opts.toAddress)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
   }
 
   async getMinterData(provider: ContractProvider) {

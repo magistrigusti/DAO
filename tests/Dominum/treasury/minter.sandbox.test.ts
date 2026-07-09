@@ -8,6 +8,7 @@ import {
 import {
   beginCell,
   Cell,
+  toNano,
 } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
@@ -157,6 +158,49 @@ describe('Minter', () => {
     );
   });
 
+  it('should refund excess TON after mint', async () => {
+    const { minter } = await deployFlow();
+
+    await minter.sendMint(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.mint,
+        amount: DOM_FIXTURE.firstMintAmount,
+        queryId: DOM_QUERY.minterMint,
+      }
+    );
+
+    const minterAccount =
+      await blockchain.getContract(minter.address);
+
+    expect(minterAccount.balance).toBeLessThan(
+      toNano('0.1')
+    );
+  });
+
+  it('should let owner withdraw stuck TON', async () => {
+    const { minter } = await deployFlow();
+    const before =
+      (await blockchain.getContract(minter.address)).balance;
+
+    await minter.sendWithdrawTon(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        amount: toNano('0.02'),
+        toAddress: owner.address,
+        queryId: DOM_QUERY.minterMint + 10n,
+      }
+    );
+
+    const after =
+      (await blockchain.getContract(minter.address)).balance;
+
+    expect(after).toBeLessThan(
+      before + DOM_VALUE.config
+    );
+  });
+
   it('should reject mint from non-owner', async () => {
     const { domMaster, minter } = await deployFlow();
 
@@ -176,5 +220,28 @@ describe('Minter', () => {
     expect(jettonData.totalSupply).toEqual(
       DOM_STATE.emptySupply
     );
+  });
+
+  it('should reject withdraw from non-owner', async () => {
+    const { minter } = await deployFlow();
+    const before =
+      (await blockchain.getContract(minter.address)).balance;
+
+    await ignoreFailure(
+      minter.sendWithdrawTon(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          amount: toNano('0.01'),
+          toAddress: outsider.address,
+          queryId: DOM_QUERY.minterMintRejected + 10n,
+        }
+      )
+    );
+
+    const after =
+      (await blockchain.getContract(minter.address)).balance;
+
+    expect(after).toEqual(before);
   });
 });
