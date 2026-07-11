@@ -1,13 +1,19 @@
 {
-  "workbench.colorTheme": "Solarized Dark",
+  "workbench.colorTheme": "Quiet Light",
   "workbench.preferredHighContrastLightColorTheme": "3024 Day",
   "workbench.preferredLightColorTheme": "Cursor Dark Midnight",
   "editor.rulers": [
-    150
+    2550
   ],
   "editor.wordWrap": "bounded",
-  "editor.wordWrapColumn": 150,
-  "printWidth": 150,
+  "editor.wordWrapColumn": 250,
+  "editor.quickSuggestions": false,
+  "editor.suggestOnTriggerCharacters": false,
+  "editor.inlineSuggest.enabled": false,
+  "editor.parameterHints.enabled": false,
+  "editor.wordBasedSuggestions": "off",
+  "editor.acceptSuggestionOnEnter": "off",
+  "printWidth": 250,
   "tabWidth": 2,
   "singleQuote": true,
   "typescript.tsdk": "node_modules/typescript/lib",
