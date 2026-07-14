@@ -3,16 +3,22 @@ import "../core/errors.tolk";
 import "../core/constants.tolk";
 import "@stdlib/tvm-dicts";
 
- global ownerAddress: address;
- global walletAddress" address;
- global walletConfigured: bool;
- global whitelistDict: dict;
- global whitelistCount: int;
+// BANK DAO
+// Treasury bank for the DAO branch.
+// Receives DOM from GiverDao.
+// Stores DOM on its own jetton wallet.
+// Sends DOM/GRAM only to whitelist targets.
 
- global totalReceived: int;
- global totalSent: int;
+global ownerAddress: address;
+global walletAddress: address;
+global walletConfigured: bool;
+global whitelistDict: dict;
+global whitelistCount: int;
 
- fun loadData() {
+global totalReceived: int;
+global totalSent: int;
+
+fun loadData() {
     var ds = contract.getData().beginParse();
 
     ownerAddress = ds.loadAddress();
@@ -24,16 +30,16 @@ import "@stdlib/tvm-dicts";
     totalReceived = statsRef.loadCoins();
     totalSent = statsRef.loadCoins();
     whitelistDict = statsRef.loadDict();
- }
+}
 
- fun saveData() {
+fun saveData() {
     var statsRef = beginCell()
         .storeCoins(totalReceived)
         .storeCoins(totalSent)
         .storeDict(whitelistDict)
         .endCell();
 
-    constract.setData(
+    contract.setData(
         beginCell()
             .storeAddress(ownerAddress)
             .storeAddress(walletAddress)
@@ -42,28 +48,28 @@ import "@stdlib/tvm-dicts";
             .storeRef(statsRef)
             .endCell()
     );
- }
+}
 
- fun requireOwner(senderAddress: address) {
+fun requireOwner(senderAddress: address) {
     assert(
         senderAddress == ownerAddress,
         ERROR_NOT_OWNER
     );
- }
+}
 
- fun requireWalletConfigured() {
+fun requireWalletConfigured() {
     assert(
         walletConfigured,
         ERROR_PROXY_NOT_CONFIGURED
     );
- }
+}
 
- fun getAddrHash(addr: address): int {
+fun getAddrHash(addr: address): int {
     var (_, hash) = addr.getWorkchainAndHash();
-    return hasn;
- }
+    return hash;
+}
 
- fun isWhitelisted(addr: address): bool {
+fun isWhitelisted(addr: address): bool {
     var hash = getAddrHash(addr);
     var (_, found) = whitelistDict.uDictGet(256, hash);
 
@@ -72,13 +78,13 @@ import "@stdlib/tvm-dicts";
     }
 
     return false;
- }
+}
 
- fun sendDom(
+fun sendDom(
     toAddress: address,
     amount: int,
     queryId: int
- ) {
+) {
     requireWalletConfigured();
 
     if (amount <= 0) {
@@ -103,13 +109,13 @@ import "@stdlib/tvm-dicts";
         .endCell();
 
     sendRawMessage(msg, 1);
- }
+}
 
- fun sendGrams(
+fun sendGrams(
     toAddress: address,
     amount: int,
     queryId: int
- ) {
+) {
     if (amount <= 0) {
         return;
     }
@@ -125,10 +131,10 @@ import "@stdlib/tvm-dicts";
         .storeCoins(amount)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
-        .endell();
+        .endCell();
 
     sendRawMessage(msg, 1);
- }
+}
 
 fun sendCommand(
     toAddress: address,
@@ -139,7 +145,7 @@ fun sendCommand(
         .storeUint(0x18, 6)
         .storeAddress(toAddress)
         .storeCoins(gramsAmount)
-        .storUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(payload)
         .endCell();
 
@@ -161,8 +167,8 @@ fun onInternalMessage(in: InMessage) {
     var queryId = msgBody.loadUint(64);
 
     if (op == OP_INIT_WALLET_CONFIG) {
-        requireOwner(senederAddress);
-        asert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
+        requireOwner(senderAddress);
+        assert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
 
         walletAddress = msgBody.loadAddress();
         walletConfigured = true;
@@ -249,14 +255,77 @@ fun onInternalMessage(in: InMessage) {
         var newAddress = msgBody.loadAddress();
         var hash = getAddrHash(newAddress);
 
-        var(_, exists) = whitelistDict.uDictGet(256, hash);
+        var (_, exists) = whitelistDict.uDictGet(256, hash);
 
         if (!exists) {
             var addrSlice = beginCell()
                 .storeAddress(newAddress)
                 .endCell()
                 .beginParse();
-            
+
+            whitelistDict.uDictSet(
+                256,
+                hash,
+                addrSlice
+            );
+
+            whitelistCount = whitelistCount + 1;
+            saveData();
         }
+
+        return;
     }
+
+    if (op == OP_REMOVE_WHITELIST) {
+        requireOwner(senderAddress);
+
+        var removeAddress = msgBody.loadAddress();
+        var hash = getAddrHash(removeAddress);
+
+        var deleted = whitelistDict.uDictDelete(256, hash);
+
+        if (deleted) {
+            whitelistCount = whitelistCount - 1;
+            saveData();
+        }
+
+        return;
+    }
+
+    throw(0xffff);
+}
+
+get fun getBankData(): (
+    address, address, bool, int, int, int
+) {
+    loadData();
+
+    return (
+        ownerAddress,
+        walletAddress,
+        walletConfigured,
+        whitelistCount,
+        totalReceived,
+        totalSent
+    );
+}
+
+get fun getDaoBankData(): (
+    address, address, bool, int, int, int
+) {
+    loadData();
+
+    return (
+        ownerAddress,
+        walletAddress,
+        walletConfigured,
+        whitelistCount,
+        totalReceived,
+        totalSent
+    );
+}
+
+get fun isAddressWhitelisted(addr: address): bool {
+    loadData();
+    return isWhitelisted(addr);
 }
