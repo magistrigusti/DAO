@@ -7,6 +7,9 @@
     "build": "npx blueprint build",
     "compile": "npx blueprint build --all",
     "deploy:dom:testnet": "npx ts-node -r dotenv/config scripts/runDeployDomMintV3.ts",
+    "configure:dom:testnet": "npx ts-node -r dotenv/config scripts/runConfigureDomV3.ts",
+    "mint:dom:testnet": "npx ts-node -r dotenv/config scripts/runMintDomV3.ts",
+    "test:dom:e2e": "jest --runInBand tests/Dominum/dom/full-mint-flow.sandbox.test.ts",
     "deploy": "npx blueprint run",
     "test": "jest"
   },

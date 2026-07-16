@@ -1,0 +1,171 @@
+---
+description: Актуальная карта репозитория dominum-dao: TON, Tolk, Blueprint, on-chain архитектура DOM/ALLOD.
+alwaysApply: true
+---
+тарь тебе запрещено трогать проекты из этой папки как тебе C:\Projects\projects
+
+# Репозиторий `dominum-dao`
+
+## Назначение
+
+`dominum-dao` - это on-chain слой экосистемы Dominum/Allodium на TON.
+Здесь лежат смарт-контракты, TypeScript wrappers, Blueprint compile-точки,
+sandbox-тесты и deploy/configuration scripts.
+
+В этом репозитории нет Next.js/TMA фронта. Интерфейсы, Telegram Mini App,
+социальная сеть и игровой клиент живут в других репозиториях.
+
+## Главные правила работы
+
+- Перед ответом по коду сверяйся с реальными файлами проекта.
+- Не придумывай пути и не опирайся на старые заметки, если файл отсутствует.
+- В ответах указывай файл и строку для каждого конкретного утверждения.
+- Не правь `build/` вручную: это артефакты Blueprint-компиляции.
+- Не запускай build/test без причины, если это может изменить артефакты.
+- Для on-chain правок всегда держи связку:
+  `contracts/` -> `compilables/` -> `wrappers/` -> `tests/` -> `scripts/`.
+- Если меняется opcode, layout storage, getter или body сообщения,
+  обновляй обе стороны: Tolk-контракт и TypeScript wrapper/test.
+
+## Корень проекта
+
+| Путь | Назначение |
+|---|---|
+| `package.json` | Проект `dominum-dao`, CommonJS, scripts: `build`, `compile`, `deploy:dom:testnet`, `deploy`, `test`. |
+| `blueprint.config.ts` | Blueprint config, `separateCompilables: true`, testnet Toncenter v3 endpoint, ключ `DOMINUM_TESTNET_API_KEY`. |
+| `tsconfig.json` | Строгий TypeScript: `strict`, `noImplicitAny`, `strictNullChecks`, `noImplicitReturns`; include для `compilables`, `scripts`, `tests`, `wrappers`, `*.ts`. |
+| `jest.config.cjs` | Jest + ts-jest, корень `tests`, маска `**/*.sandbox.test.ts`, timeout 30000. |
+| `metadata/dom-metadata.json` | Метаданные DOM token; URL используется в `scripts/Dominum/core/config.ts`. |
+| `public/DOM.png` | Публичный ассет токена. |
+| `build/` | Сгенерированные BoC/ABI-like артефакты Blueprint; вручную не редактировать. |
+
+## Архитектурные домены
+
+### `contracts/Dominum/`
+
+Главный DOM-домен.
+
+- `core/` - общие `constants.tolk`, `op_codes.tolk`, `errors.tolk`.
+- `dom/` - Jetton-like DOM master/wallet: `master.tolk`, `wallet.tolk`.
+- `treasury/` - `treasury_pool.tolk`, `minter.tolk`.
+- `pools/` - `gas_pool.tolk`.
+- `management/` - `treasury_manager.tolk`, `minter_manager.tolk`, `giver_manager.tolk`.
+- `givers/` - `giver_allodium.tolk`, `giver_defi.tolk`, `giver_dao.tolk`, `giver_dominum.tolk`.
+- `banks/` - `bank_dao.tolk`, `bank_defi.tolk`, `bank_dominum.tolk`.
+- `defi/` - `market_maker.tolk`.
+- `invest/` - `foundry_lock.tolk`.
+- `foundation/` - `dao_foundation.tolk`, `dominum_foundation.tolk`.
+- `bridge/`, `dao/`, `nft/`, `sbt/` - доменные заготовки/будущие контуры, проверять по фактическим файлам.
+
+### `contracts/Allodium/`
+
+Связанный ALLOD-домен.
+
+- `core/` - общие constants/opcodes/errors.
+- `allod/` - ALLOD master/wallet.
+- `treasury/` - `frs_allodium.tolk`.
+- `foundation/` - `foundation.tolk`.
+- `bridge/`, `dao/`, `defi/`, `management/`, `nft/`, `sbt/` - проверять по фактическому дереву перед работой.
+
+## Blueprint compile-точки
+
+`compilables/**` - единственный источник имен для `compile('...')`.
+При `separateCompilables: true` путь в `compile()` должен совпадать с
+расположением `*.compile.ts` без расширения.
+
+Примеры актуальных путей:
+
+- `Dominum/dom/DomMaster` -> `compilables/Dominum/dom/DomMaster.compile.ts`.
+- `Dominum/dom/DomWallet` -> `compilables/Dominum/dom/DomWallet.compile.ts`.
+- `Dominum/treasury/TreasuryPool` -> `compilables/Dominum/treasury/TreasuryPool.compile.ts`.
+- `Dominum/treasury/Minter` -> `compilables/Dominum/treasury/Minter.compile.ts`.
+- `Dominum/pools/GasPool` -> `compilables/Dominum/pools/GasPool.compile.ts`.
+- `Dominum/management/TreasuryManager` -> `compilables/Dominum/management/TreasuryManager.compile.ts`.
+- `Dominum/management/MinterManager` -> `compilables/Dominum/management/MinterManager.compile.ts`.
+- `Dominum/management/GiverManager` -> `compilables/Dominum/management/GiverManager.compile.ts`.
+- `Dominum/givers/GiverAllodium` -> `compilables/Dominum/givers/GiverAllodium.compile.ts`.
+- `Dominum/givers/GiverDefi` -> `compilables/Dominum/givers/GiverDefi.compile.ts`.
+- `Dominum/givers/GiverDao` -> `compilables/Dominum/givers/GiverDao.compile.ts`.
+- `Dominum/givers/GiverDominum` -> `compilables/Dominum/givers/GiverDominum.compile.ts`.
+
+## TypeScript wrappers
+
+`wrappers/**` - TypeScript-обертки для sandbox-тестов, deploy scripts и live provider.
+
+Правило синхронизации:
+
+- `*Config` и `*ConfigToCell()` должны повторять storage layout Tolk.
+- `send*()` должен повторять opcode, field order, bit width, refs и bounce-смысл.
+- `get*()` должен повторять getter name и порядок stack-read.
+- `wrappers/*/core/op_code.ts` должен быть синхронизирован с `contracts/*/core/op_codes.tolk`.
+
+## Tests
+
+`tests/**` - Jest + `@ton/sandbox`.
+
+Текущая схема тестов:
+
+- `tests/Dominum/dom/` - DOM master/wallet.
+- `tests/Dominum/treasury/` - minter и treasury pool.
+- `tests/Dominum/pools/` - gas pool.
+- `tests/Dominum/management/` - manager contracts.
+- `tests/Dominum/givers/` - four givers.
+- `tests/Dominum/banks/`, `defi/`, `foundation/`, `invest/` - доменные контракты.
+- `tests/Allodium/allod/`, `foundation/`, `treasury/` - ALLOD/FRS контур.
+- `_helpers/` - test values/utilities.
+
+Если меняешь контракт, добавляй или обновляй sandbox-тест рядом с доменом.
+
+## Scripts
+
+### Canonical deploy entrypoint
+
+- `scripts/runDeployDomMintV3.ts` - внешний entrypoint для `deploy:dom:testnet`.
+- `scripts/Dominum/dom/deployDomMint.ts` - orchestration:
+  compile -> deploy infrastructure -> deploy token graph -> configure graph -> mint/report.
+
+### Deploy/configuration modules
+
+- `scripts/Dominum/dom/compileContracts.ts` - собирает DOM compile map.
+- `scripts/Dominum/foundation/deployInfrastructure.ts` - treasury manager, treasury pool, gas pool.
+- `scripts/Dominum/dom/deployTokenGraph.ts` - giver manager, minter manager, DOM master, minter, givers.
+- `scripts/Dominum/management/configureTokenGraph.ts` - вызывает gas pipeline и giver wallets.
+- `scripts/Dominum/treasury/configureGasPipeline.ts` - TreasuryPool <-> GasPool <-> DomMaster wallet config.
+- `scripts/Dominum/management/configureGiverWallets.ts` - wallet configuration for givers.
+- `scripts/Dominum/foundation/mintAndReport.ts` - first mint/report step.
+- `scripts/runtime/toncenter-v3/` - кастомный Toncenter v3 provider/sender stack.
+
+## Известные актуальные blockers
+
+Проверять перед deploy/build:
+
+- `scripts/Dominum/dom/compileContracts.ts` может содержать старый путь
+  `Dominum/treasury/TreasuryManager`; реальный compile path должен быть
+  `Dominum/management/TreasuryManager`.
+- `scripts/Dominum/dom/compileContracts.ts` может содержать старый путь
+  `Dominum/givers/GiverManager`; реальный compile path должен быть
+  `Dominum/management/GiverManager`.
+- В `scripts/runtime/toncenter-v3/**` встречаются `any` для provider-compatible
+  мест; не размножай `any` в новом коде без причины.
+
+## Команды
+
+- `npm test` - Jest sandbox tests.
+- `npm run build` - Blueprint build.
+- `npm run compile` - Blueprint build all.
+- `npm run deploy` - интерактивный Blueprint run.
+- `npm run deploy:dom:testnet` - `ts-node` entrypoint `scripts/runDeployDomMintV3.ts`.
+
+## Проверка перед завершением задачи
+
+Для документации Cursor достаточно:
+
+- проверить diff только по `.cursor/**`;
+- не трогать рабочие изменения в wrappers/contracts/scripts/tests;
+- не запускать команды, которые переписывают `build/`, без явной причины.
+
+Для контрактной задачи:
+
+- `npm test` для затронутого контура или всего проекта;
+- `npm run build` / `npm run compile`, если менялись `contracts/` или `compilables/`;
+- отдельно сообщить, если build/test не запускались из-за риска переписать артефакты.

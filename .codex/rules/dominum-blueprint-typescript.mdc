@@ -1,0 +1,70 @@
+---
+description: Правила для Blueprint compile files, wrappers, tests, deploy scripts и Toncenter v3 runtime.
+globs: "compilables/**/*.ts,wrappers/**/*.ts,tests/**/*.ts,scripts/**/*.ts,*.ts"
+alwaysApply: false
+---
+тарь тебе запрещено трогать проекты из этой папки как тебе C:\Projects\projects
+
+# Blueprint и TypeScript слой
+
+## Общий стиль
+
+- TypeScript строгий: не добавляй `any`, если можно описать тип.
+- Сохраняй существующий CommonJS/ts-jest/Blueprint стиль проекта.
+- Не смешивай deploy orchestration, wrapper serialization и test helpers в одном файле.
+- Если файл растет слишком сильно, выноси доменный helper рядом с текущим модулем.
+
+## `compilables/**`
+
+- Имя `compile('...')` должно совпадать с путем compile-файла без расширения.
+- `entrypoint` должен смотреть на реальный `.tolk` файл.
+- Не оставляй старый комментарий, если compile-файл переехал.
+
+Пример:
+
+- `compilables/Dominum/management/GiverManager.compile.ts`
+  соответствует `compile('Dominum/management/GiverManager')`.
+
+## `wrappers/**`
+
+- Wrapper - это контракт между Tolk и TypeScript.
+- `ConfigToCell` обязан повторять storage layout.
+- `send*` обязан повторять opcode и body layout.
+- `get*` обязан повторять getter name и stack order.
+- Используй `bigint` для on-chain чисел.
+- Используй `Address`, `Cell`, `ContractProvider`, `Sender` из `@ton/core`.
+- Не хардкодь opcodes внутри методов, если они уже есть в `core/op_code.ts`.
+
+## `tests/**`
+
+- Тесты строятся на `@ton/sandbox`, `@ton/blueprint` compile и Jest.
+- Для нового контракта тест лежит рядом с доменом:
+  `tests/<Domain>/<module>/<contract>.sandbox.test.ts`.
+- Проверяй не только success path, но и:
+  wrong sender, wrong amount, getter state, outbound messages, whitelist/roles,
+  fee-sensitive behavior, pending state and cancellation.
+
+## `scripts/Dominum/**`
+
+- Canonical DOM deploy entrypoint:
+  `scripts/runDeployDomMintV3.ts` -> `scripts/Dominum/dom/deployDomMint.ts`.
+- Deploy flow:
+  compile -> deploy infrastructure -> deploy token graph -> configure graph -> mint/report.
+- Конфиги deploy value и metadata держи в `scripts/Dominum/core/config.ts`.
+- Общие типы graph держи в `scripts/Dominum/core/types.ts`.
+- Helper-функции без blockchain state держи в `scripts/Dominum/core/helpers.ts`.
+
+## `scripts/runtime/toncenter-v3/**`
+
+- Это live provider слой поверх Toncenter v3.
+- Любую правку проверяй против интерфейсов `NetworkProvider`,
+  `ContractProvider`, `Sender` и `SenderWithSendResult`.
+- `any` здесь допустим только как compatibility boundary с внешним provider API;
+  в новых внутренних типах используй явные interfaces/types.
+
+## Проверка
+
+- После правок wrappers/tests/scripts запускай `npm test`, если задача не только документационная.
+- После правок contracts/compilables запускай `npm run build` или `npm run compile`,
+  если пользователь разрешил команды, которые могут обновить `build/`.
+- Если команды не запускались, честно укажи причину и риск.

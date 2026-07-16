@@ -1,0 +1,60 @@
+---
+description: Правила разработки и ревью Tolk-контрактов Dominum/Allodium.
+globs: contracts/**/*.tolk
+alwaysApply: false
+---
+тарь тебе запрещено трогать проекты из этой папки как тебе C:\Projects\projects
+
+# Tolk contracts
+
+## Базовый принцип
+
+Контрактный код - это on-chain закон проекта. Любая правка должна быть
+минимальной, проверяемой и связанной с тестом или явным сценарием deploy.
+
+## Перед правкой
+
+- Найди домен: `Dominum` или `Allodium`.
+- Прочитай связанный `core/op_codes.tolk`, `core/constants.tolk`, `core/errors.tolk`.
+- Найди wrapper в `wrappers/**` и sandbox-test в `tests/**`.
+- Проверь compile entrypoint в `compilables/**`.
+
+## Storage и message layout
+
+- Не меняй порядок полей storage без миграционного объяснения.
+- Для каждого нового поля укажи bit width, тип, ref/value хранение и default.
+- Для каждого нового message body проверь opcode в `core/op_codes.tolk`.
+- Ошибки добавляй в `core/errors.tolk`, если они общие для домена.
+- Повторяемые экономические параметры держи в `core/constants.tolk`.
+
+## Входящие сообщения
+
+- `onInternalMessage(in: InMessage)` должен явно проверять sender role.
+- Пустые top-up сообщения можно принимать только если это осознанная часть экономики.
+- Unknown opcode должен иметь понятную политику: reject или ignore только по причине.
+- Если outbound-message может bounce-нуться и состояние надо откатить,
+  добавляй/проверяй bounce handling.
+
+## Getters
+
+- Getter names и порядок возвращаемых значений должны совпадать с wrapper.
+- Multi-value getters документируй в wrapper через понятные property names.
+- Не ломай публичный getter без обновления тестов и deploy consumers.
+
+## Газ и TON/DOM экономика
+
+- Проверяй `MIN_TON_FOR_STORAGE`, `MIN_TON_FOR_TRANSFER`, `BASE_TON_COST`
+  и другие лимиты перед отправкой сообщений.
+- Для Jetton-like transfer не теряй `query_id`, `response_destination`,
+  `forward_ton_amount` и custom payload semantics.
+- Если меняешь fee/tax math, добавь тест на lower/upper bound.
+
+## Синхронизация после правки
+
+После изменения `.tolk` проверь:
+
+- соответствующий `compilables/**.compile.ts`;
+- wrapper `*ConfigToCell`, `send*`, `get*`;
+- opcodes в `wrappers/**/core/op_code.ts`;
+- sandbox-test рядом с доменом;
+- deploy/config script, если контракт участвует в graph.
