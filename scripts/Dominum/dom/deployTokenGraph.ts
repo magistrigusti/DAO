@@ -7,14 +7,32 @@ import {
   DomSignerAddresses,
   METADATA_URL,
 } from '../core/config';
-import { buildOffChainContent, buildTypedPlaceholderAddress } from '../core/helpers';
-import { CompiledContracts, InfrastructureContracts, TokenGraphContracts } from '../core/types';
+import {
+  buildOffChainContent,
+  buildTypedPlaceholderAddress,
+} from '../core/helpers';
+import {
+  CompiledContracts,
+  InfrastructureContracts,
+  TokenGraphContracts,
+} from '../core/types';
 
-import { DomMaster } from '../../../wrappers/Dominum/dom/DomMaster';
-import { Minter } from '../../../wrappers/Dominum/treasury/Minter';
-import { MinterManager } from '../../../wrappers/Dominum/management/MinterManager';
+import {
+  DomMaster,
+} from '../../../wrappers/Dominum/dom/DomMaster';
+import {
+  Minter,
+} from '../../../wrappers/Dominum/treasury/Minter';
+import {
+  MinterManager,
+} from '../../../wrappers/Dominum/management/MinterManager';
+import {
+  GIVER_TARGET,
+} from '../../../wrappers/Dominum/core/constants';
 
-import { deployGiverManager } from '../management/deployGiverManager';
+import {
+  deployGiverManager,
+} from '../management/deployGiverManager';
 import { deployGivers } from '../givers/deployGivers';
 
 export async function deployTokenGraph(
@@ -23,7 +41,7 @@ export async function deployTokenGraph(
   infrastructure: InfrastructureContracts,
   signers: DomSignerAddresses,
   distribution: DomDistributionAddresses
-): Promise<TokenGraphContract> {
+): Promise<TokenGraphContracts> {
   const ui = provider.ui();
   const sender = provider.sender();
 
@@ -33,7 +51,7 @@ export async function deployTokenGraph(
     signers.giverManager
   );
 
-  ui.write('Step 5: Deploy MinterManager');
+  ui.write('--- Step 5: Deploy MinterManager ---');
 
   const minterManager = provider.open(
     MinterManager.createFromConfig(
@@ -57,31 +75,37 @@ export async function deployTokenGraph(
     `MinterManager: ${minterManager.address.toString()}`
   );
 
-  const minterPlaceholder = buildTypedPlaceholderAddress(
-    20, 1
-  );
+  const minterPlaceholder =
+    buildTypedPlaceholderAddress(
+      20,
+      1
+    );
 
-  const allodiumPlaceholder = buildTypedPlaceholderAddress(
-    21,
-    GIVER_TARGET.allodium
-  );
+  const allodiumPlaceholder =
+    buildTypedPlaceholderAddress(
+      21,
+      GIVER_TARGET.allodium
+    );
 
-  const defiPlaceholder = buildTypedPlaceholderAddress(
-    21,
-    GIVER_TARGET.defi
-  );
+  const defiPlaceholder =
+    buildTypedPlaceholderAddress(
+      21,
+      GIVER_TARGET.defi
+    );
 
-  const daoPlaceholder = buildTypedPlaceholderAddress(
-    21,
-    GIVER_TARGET.dao
-  );
+  const daoPlaceholder =
+    buildTypedPlaceholderAddress(
+      21,
+      GIVER_TARGET.dao
+    );
 
-  const dominumPlaceholder = buildTypedPlaceholderAddress(
-    21,
-    GIVER_TARGET.dominum
-  );
+  const dominumPlaceholder =
+    buildTypedPlaceholderAddress(
+      21,
+      GIVER_TARGET.dominum
+    );
 
-  ui.write('Step 6: Deploy DomMaster');
+  ui.write('--- Step 6: Deploy DomMaster ---');
 
   const domMaster = provider.open(
     DomMaster.createFromConfig(
@@ -91,12 +115,88 @@ export async function deployTokenGraph(
         lastMintTime: 0n,
         isStarted: false,
 
-        treasuryPoolAddress: infrastructure.treasuryPool.address,
+        treasuryPoolAddress:
+          infrastructure.treasuryPool.address,
 
-        minerAddress: minterPlaceholder,
-        minterManagerAddress: minterManager.address,
-        giverManagerAddress: giverManager.address,
-      }
+        minterAddress: minterPlaceholder,
+        minterManagerAddress:
+          minterManager.address,
+        giverManagerAddress:
+          giverManager.address,
+
+        giverAllodiumAddress:
+          allodiumPlaceholder,
+        giverDefiAddress:
+          defiPlaceholder,
+        giverDaoAddress:
+          daoPlaceholder,
+        giverDominumAddress:
+          dominumPlaceholder,
+
+        content:
+          buildOffChainContent(METADATA_URL),
+
+        jettonWalletCode:
+          compiled.walletCode,
+      },
+      compiled.masterCode
     )
-  )
+  );
+
+  await domMaster.sendDeploy(
+    sender,
+    toNano(DEPLOY_VALUES.master)
+  );
+
+  await provider.waitForDeploy(
+    domMaster.address
+  );
+
+  ui.write(
+    `DomMaster: ${domMaster.address.toString()}`
+  );
+
+  ui.write('--- Step 7: Deploy Minter ---');
+
+  const minter = provider.open(
+    Minter.createFromConfig(
+      {
+        ownerAddress: signers.minter,
+        masterAddress: domMaster.address,
+      },
+      compiled.minterCode
+    )
+  );
+
+  await minter.sendDeploy(
+    sender,
+    toNano(DEPLOY_VALUES.minter)
+  );
+
+  await provider.waitForDeploy(
+    minter.address
+  );
+
+  ui.write(
+    `Minter: ${minter.address.toString()}`
+  );
+
+  const givers = await deployGivers(
+    provider,
+    compiled,
+    domMaster.address,
+    infrastructure.treasuryPool.address,
+    distribution
+  );
+
+  return {
+    giverManager,
+    minterManager,
+    minter,
+    domMaster,
+    giverAllodium: givers.giverAllodium,
+    giverDefi: givers.giverDefi,
+    giverDao: givers.giverDao,
+    giverDominum: givers.giverDominum,
+  };
 }
