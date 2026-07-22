@@ -188,4 +188,194 @@ async function printStatus(
     } = contracts;
 
     const distribution = loadDomDistributionAddresses();
+
+    const [
+        master, pending, givers, gas, treasury, minter, allodium, defi, dao, dominum
+    ] = await Provise.all(
+        [
+            graph.domMaster.getMasterData(),
+            graph.domMaster.getMasterPendingRequest(),
+            graph.domMaster.getGiversData(),
+            infrastructure.gasPool.getGasPoolData(),
+            infrastructure.treasuryPool.getTreasuryPoolData(),
+            graph.minter.getMinterData(),
+            graph.giverAllodium.getGiverData(),
+            graph.giverDefi.getGiverData(),
+            graph.giverDao.getGiverData(),
+            graph.giverDominum.getGiverData(),
+        ]
+    );
+
+    provider.ui().write('DOM CONFIGURATION STATUS');
+
+    printFlag(
+        provider,
+        'Minter role',
+        sameAddress(
+            master.minterAddress,
+            graph.minter.address
+        )
+    );
+
+    printFlag(
+        provider,
+        "minter master",
+        sameAddress(
+            minter.masterAddress,
+            graph.domMaster.address
+        )
+    );
+
+    printFlag(
+        provider,
+        'GiverAllodium role',
+        sameAddress(
+            givers.givberAllodiumAddress,
+            graph.giverAllodium.address
+        )
+    );
+
+    printFlag(
+        provider,
+        'GiverDefi role',
+        sameAddress(
+            givers.giverDefiAddress,
+            graph.giverDefi.address
+        )
+    );
+
+    printFlag(
+        provider,
+        'GiverDao role',
+        sameAddress(
+            givers.giverDaoAddress,
+            graph.giverDao.address
+        )
+    );
+
+    printFlag(
+        provider,
+        'GiverDominum role',
+        sameAddress(
+            givers.giverDominumAddress,
+            graph.giverDominum.address
+        )
+    );
+
+    printFlag(
+        provider,
+        'Master request empty',
+        !pending.hasPending
+    );
+
+    printFlag(
+        provider,
+        'Treasury GasPool',
+        sameAddress(
+            treasury.gasPoolAddress,
+            infrastructure.gasPool.address
+        )
+    );
+
+    printFlag(
+        provider,
+        "GasPool configured",
+        gas.masterConfigured
+    );
+
+    printFlag(
+        provider,
+        'GasPool master',
+        sameAddress(
+            gas.masterAddress,
+            graph.domMaster.address
+        )
+    );
+
+    printFlag(
+        provider,
+        'Treasury wallet',
+        treasury.walletConfigured
+    );
+
+    printFlag(
+        provider,
+        'Allodium FRS',
+        sameAddress(
+            allodium.frsAllodiumAddress,
+            distribution.frsAllodium
+        )
+    );
+
+    printFlag(
+        provider,
+        'Allodium Foundation',
+        sameAddress(
+            allodium.allodiumFoundationAddress,
+            distribution.allodiumFoundation
+        )
+    );
+
+    printFlag(
+        provider,
+        'Defi Market',
+        sameAddress(
+            defi.marketAddress,
+            distribution.defiMarket
+        )
+    );
+
+    printFlag(
+        provider,
+        'Defi Foundry',
+        sameAddress(
+            defi.foundryAddress,
+            distribution.defiFoundry
+        )
+    );
+
+    printFlag(
+        provider,
+        'Defi Treasury',
+        sameAddress(
+            defi.defiTreasuryAddress,
+            distribution.defiTreasury
+        )
+    );
+
+    printFlag(
+        provider,
+        'DAO Bank',
+        sameAddress(
+            dao.bankDaoAddress,
+            distribution.daoBank
+        )
+    );
+
+    printFlag(
+        provider,
+        'DAO Foundation',
+        sameAddress(
+            dao.daoFoundationAddress,
+            distribution.daoFoundation
+        )
+    );
+
+    printFlag(
+        provider,
+        'Dominum Bank',
+        sameAddress(
+            dominum.bankDominumAddress,
+            distribution.dominumBank
+        )
+    );
+
+    printFlag(
+        provider,
+        'Dominum Foundation',
+        sameAddress(
+            dominum.dominumFoundationAddress,
+            distribution.dominumFoundation
+        )
+    );
 }
