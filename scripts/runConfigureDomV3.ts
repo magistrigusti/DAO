@@ -86,13 +86,16 @@ function printFlag(
     label: string,
     value: boolean
 ): void {
-    provider.ui().write(`${label}: ${value ? 'OK' : 'NO'}`);
+    provider.ui().write(
+        `${label}: ${value ? 'OK' : 'NO'}`
+    );
 }
 
 function openContracts(
     provider: NetworkProvider
 ): Contracts {
-    const addresses = loadDomDeploymentAddresses();
+    const addresses =
+        loadDomDeploymentAddresses();
 
     const infrastructure: InfrastructureContracts = {
         deployer: addresses.deployer,
@@ -113,7 +116,7 @@ function openContracts(
             GasPool.createFromAddress(
                 addresses.gasPool
             )
-        )
+        ),
     };
 
     const graph: TokenGraphContracts = {
@@ -134,6 +137,7 @@ function openContracts(
                 addresses.minter
             )
         ),
+
         domMaster: provider.open(
             DomMaster.createFromAddress(
                 addresses.domMaster
@@ -162,12 +166,12 @@ function openContracts(
             GiverDominum.createFromAddress(
                 addresses.giverDominum
             )
-        )
+        ),
     };
 
     return {
         infrastructure,
-        graph
+        graph,
     };
 }
 
@@ -187,17 +191,28 @@ async function printStatus(
         graph,
     } = contracts;
 
-    const distribution = loadDomDistributionAddresses();
+    const distribution =
+        loadDomDistributionAddresses();
 
     const [
-        master, pending, givers, gas, treasury, minter, allodium, defi, dao, dominum
-    ] = await Provise.all(
+        master,
+        pending,
+        givers,
+        gas,
+        treasury,
+        minter,
+        allodium,
+        defi,
+        dao,
+        dominum,
+    ] = await Promise.all(
         [
             graph.domMaster.getMasterData(),
             graph.domMaster.getMasterPendingRequest(),
             graph.domMaster.getGiversData(),
             infrastructure.gasPool.getGasPoolData(),
-            infrastructure.treasuryPool.getTreasuryPoolData(),
+            infrastructure.treasuryPool
+                .getTreasuryPoolData(),
             graph.minter.getMinterData(),
             graph.giverAllodium.getGiverData(),
             graph.giverDefi.getGiverData(),
@@ -219,7 +234,7 @@ async function printStatus(
 
     printFlag(
         provider,
-        "minter master",
+        'Minter master',
         sameAddress(
             minter.masterAddress,
             graph.domMaster.address
@@ -230,7 +245,7 @@ async function printStatus(
         provider,
         'GiverAllodium role',
         sameAddress(
-            givers.givberAllodiumAddress,
+            givers.giverAllodiumAddress,
             graph.giverAllodium.address
         )
     );
@@ -279,7 +294,7 @@ async function printStatus(
 
     printFlag(
         provider,
-        "GasPool configured",
+        'GasPool configured',
         gas.masterConfigured
     );
 
@@ -318,7 +333,7 @@ async function printStatus(
 
     printFlag(
         provider,
-        'Defi Market',
+        'DeFi Market',
         sameAddress(
             defi.marketAddress,
             distribution.defiMarket
@@ -327,7 +342,7 @@ async function printStatus(
 
     printFlag(
         provider,
-        'Defi Foundry',
+        'DeFi Foundry',
         sameAddress(
             defi.foundryAddress,
             distribution.defiFoundry
@@ -336,7 +351,7 @@ async function printStatus(
 
     printFlag(
         provider,
-        'Defi Treasury',
+        'DeFi Treasury',
         sameAddress(
             defi.defiTreasuryAddress,
             distribution.defiTreasury
@@ -379,3 +394,155 @@ async function printStatus(
         )
     );
 }
+
+async function runAction(
+    provider: NetworkProvider,
+    action: string
+): Promise<void> {
+    const contracts =
+        openContracts(provider);
+
+    const {
+        infrastructure,
+        graph,
+    } = contracts;
+
+    if (action === 'status') {
+        await printStatus(
+            provider,
+            contracts
+        );
+
+        return;
+    }
+
+    if (action === 'minter-request') {
+        await requestInitialMinter(
+            provider,
+            graph
+        );
+
+        await waitForForward(provider);
+        return;
+    }
+
+    if (action === 'giver-allodium-request') {
+        await requestInitialGiver(
+            provider,
+            graph,
+            GIVER_TARGET.allodium,
+            41n
+        );
+
+        await waitForForward(provider);
+        return;
+    }
+
+    if (action === 'giver-defi-request') {
+        await requestInitialGiver(
+            provider,
+            graph,
+            GIVER_TARGET.defi,
+            42n
+        );
+
+        await waitForForward(provider);
+        return;
+    }
+
+    if (action === 'giver-dao-request') {
+        await requestInitialGiver(
+            provider,
+            graph,
+            GIVER_TARGET.dao,
+            43n
+        );
+
+        await waitForForward(provider);
+        return;
+    }
+
+    if (action === 'giver-dominum-request') {
+        await requestInitialGiver(
+            provider,
+            graph,
+            GIVER_TARGET.dominum,
+            44n
+        );
+
+        await waitForForward(provider);
+        return;
+    }
+
+    if (action === 'master-confirm') {
+        await confirmCurrentMasterRequest(
+            provider,
+            graph,
+            45n
+        );
+
+        await provider.waitForLastTransaction();
+        return;
+    }
+
+    if (action === 'gas-pool-request') {
+        await requestGasPoolReplacement(
+            provider,
+            infrastructure
+        );
+
+        return;
+    }
+
+    if (action === 'gas-pool-confirm') {
+        await confirmGasPoolReplacement(
+            provider,
+            infrastructure
+        );
+
+        return;
+    }
+
+    if (action === 'gas-pipeline-init') {
+        const compiled =
+            await compileContracts(provider);
+
+        await initializeGasPipeline(
+            provider,
+            compiled,
+            infrastructure,
+            graph
+        );
+
+        return;
+    }
+
+    throw new Error(
+        `Unknown DOM_CONFIG_ACTION: ${action}`
+    );
+}
+
+async function main(): Promise<void> {
+    const provider =
+        await createDomProvider();
+
+    const action =
+        process.env.DOM_CONFIG_ACTION ??
+        'status';
+
+    provider.ui().write(
+        `DOM_CONFIG_ACTION=${action}`
+    );
+
+    await runAction(
+        provider,
+        action
+    );
+}
+
+void main().catch(
+    (error) => {
+        console.error(error);
+        process.exit(1);
+    }
+);
