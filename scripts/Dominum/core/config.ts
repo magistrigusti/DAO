@@ -1,71 +1,27 @@
 import { Address } from '@ton/core';
 
-export const METADATA_URL =
-  'https://raw.githubusercontent.com/magistrigusti/DAO/main/metadata/dom-metadata.json';
-
-// Testnet: первый mint = 1_000_000 DOM.
-// 1_000_000 * 10^6 = 1_000_000_000_000
-export const FIRST_MINT_AMOUNT = 1_000_000_000_000n;
-
-// Пауза нужна после manager -> contract forwarding,
-// чтобы внутреннее сообщение успело дойти до целевого контракта.
-export const FORWARDED_MESSAGE_WAIT_MS = 15_000;
-
-export const DEPLOY_VALUES = {
-  treasuryManager: '0.05',
-  treasuryPool: '0.2',
-  gasPool: '1',
-
-  giverManager: '0.05',
-  minterManager: '0.05',
-  giver: '0.2',
-  minter: '0.05',
-  master: '0.05',
-
-  roleConfig: '0.05',
-  treasuryConfig: '0.05',
-  gasPipeline: '0.08',
-  mint: '0.35',
-} as const;
-
-// Девять protocol-transfer при первом mint резервируют по 0.1 TON в GasPool.
-// Один дополнительный запас оставлен на storage, compute и forwarding fees.
-export const MIN_GAS_POOL_BALANCE_FOR_FIRST_MINT = 1_000_000_000n;
+export {
+  DEPLOY_VALUES, FIRST_MINT_AMOUNT, FIRST_MINT_CONFIG,
+  FORWARDED_MESSAGE_WAIT_MS, METADATA_URL,
+  MIN_GAS_POOL_BALANCE_FOR_FIRST_MINT,
+} from './constants';
 
 export type DomSignerAddresses = {
-  master: Address;
-  treasuryPool: Address;
-  treasuryManager: Address;
-  minter: Address;
-  minterManager: Address;
-  giverManager: Address;
+  master: Address; treasuryPool: Address; treasuryManager: Address;
+  minter: Address; minterManager: Address; giverManager: Address;
 };
 
 export type DomDistributionAddresses = {
-  frsAllodium: Address;
-  allodiumFoundation: Address;
-  defiMarket: Address;
-  defiFoundry: Address;
-  defiTreasury: Address;
-  daoBank: Address;
-  daoFoundation: Address;
-  dominumBank: Address;
-  dominumFoundation: Address;
+  frsAllodium: Address; allodiumFoundation: Address; defiMarket: Address;
+  defiFoundry: Address; defiTreasury: Address; daoBank: Address;
+  daoFoundation: Address; dominumBank: Address; dominumFoundation: Address;
 };
 
 export type DomDeploymentAddresses = {
-  deployer: Address;
-  treasuryManager: Address;
-  treasuryPool: Address;
-  gasPool: Address;
-  giverManager: Address;
-  minterManager: Address;
-  minter: Address;
-  domMaster: Address;
-  giverAllodium: Address;
-  giverDefi: Address;
-  giverDao: Address;
-  giverDominum: Address;
+  deployer: Address; treasuryManager: Address; treasuryPool: Address;
+  gasPool: Address; giverManager: Address; minterManager: Address;
+  minter: Address; domMaster: Address; giverAllodium: Address;
+  giverDefi: Address; giverDao: Address; giverDominum: Address;
 };
 
 function readAddress(name: string): Address {
@@ -88,14 +44,14 @@ export function loadDomSignerAddresses(): DomSignerAddresses {
     giverManager: readAddress('DOM_GIVER_MANAGER_SIGNER_ADDRESS'),
   };
 
+  const signerValues = Object.values(signers);
+  const signerKeys = Object.keys(signers);
   const uniqueAddresses = new Set(
-    Object.values(signers).map((address) => address.toRawString())
+    signerValues.map((address) => address.toRawString())
   );
 
-  if (uniqueAddresses.size !== Object.keys(signers).length) {
-    throw new Error(
-      'DOM signer addresses must be different for the two-key architecture'
-    );
+  if (uniqueAddresses.size !== signerKeys.length) {
+    throw new Error('DOM signer addresses must be different');
   }
 
   return signers;
@@ -104,14 +60,16 @@ export function loadDomSignerAddresses(): DomSignerAddresses {
 export function loadDomDistributionAddresses(): DomDistributionAddresses {
   return {
     frsAllodium: readAddress('DOM_RECIPIENT_ALLODIUM_FRS_ADDRESS'),
-    allodiumFoundation: readAddress('DOM_RECIPIENT_ALLODIUM_FOUNDATION_ADDRESS'),
+    allodiumFoundation:
+      readAddress('DOM_RECIPIENT_ALLODIUM_FOUNDATION_ADDRESS'),
     defiMarket: readAddress('DOM_RECIPIENT_DEFI_MARKET_ADDRESS'),
     defiFoundry: readAddress('DOM_RECIPIENT_DEFI_FOUNDRY_ADDRESS'),
     defiTreasury: readAddress('DOM_RECIPIENT_DEFI_TREASURY_ADDRESS'),
     daoBank: readAddress('DOM_RECIPIENT_DAO_BANK_ADDRESS'),
     daoFoundation: readAddress('DOM_RECIPIENT_DAO_FOUNDATION_ADDRESS'),
     dominumBank: readAddress('DOM_RECIPIENT_DOMINUM_BANK_ADDRESS'),
-    dominumFoundation: readAddress('DOM_RECIPIENT_DOMINUM_FOUNDATION_ADDRESS'),
+    dominumFoundation:
+      readAddress('DOM_RECIPIENT_DOMINUM_FOUNDATION_ADDRESS'),
   };
 }
 
