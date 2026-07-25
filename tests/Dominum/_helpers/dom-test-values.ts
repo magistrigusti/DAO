@@ -29,6 +29,20 @@ export const DOM_COMPILE = {
   foundryLock: 'Dominum/invest/FoundryLock',
 } as const;
 
+export const DOM_FULL_MINT_ACCOUNT_NAMES = [
+  'deployer', 'masterOwner', 'treasuryOwner', 'treasuryManagerOwner',
+  'minterOwner', 'minterManagerOwner', 'giverManagerOwner',
+  'frsAllodium', 'allodiumFoundation', 'defiMarket', 'defiFoundry',
+  'defiTreasury', 'daoBank', 'daoFoundation', 'dominumBank',
+  'dominumFoundation',
+] as const;
+
+export const DOM_FULL_MINT_CODE_NAMES = [
+  'wallet', 'master', 'minter', 'treasuryPool', 'gasPool',
+  'treasuryManager', 'minterManager', 'giverManager',
+  'giverAllodium', 'giverDefi', 'giverDao', 'giverDominum',
+] as const;
+
 export const DOM_STATE = {
   emptySupply: 0n,
   emptyBalance: 0n,
@@ -53,6 +67,13 @@ export const DOM_CONTRACT = {
   shareDefi: 25n,
   shareDao: 25n,
   shareDominum: 25n,
+  percentBase: 100n,
+  allodiumTransfers: 2n,
+  defiTransfers: 3n,
+  daoTransfers: 2n,
+  dominumTransfers: 2n,
+  defiMarketShare: 20n,
+  defiFoundryShare: 40n,
 
   giverMaxFeeDom: 1_500_000n,
 
@@ -156,7 +177,20 @@ export function calculateFirstMintGasPoolFee(): bigint {
   return calculateGiverReserve(9n);
 }
 
-export function calculateFirstMintSingleRecipientAmount(): bigint {
+export type FirstMintRecipientAmounts = {
+  frsAllodium: bigint;
+  allodiumFoundation: bigint;
+  defiMarket: bigint;
+  defiFoundry: bigint;
+  defiTreasury: bigint;
+  daoBank: bigint;
+  daoFoundation: bigint;
+  dominumBank: bigint;
+  dominumFoundation: bigint;
+};
+
+export function calculateFirstMintRecipientAmounts():
+  FirstMintRecipientAmounts {
   const allodiumGross = calculateShare(
     DOM_FIXTURE.firstMintAmount,
     DOM_CONTRACT.shareAllodium
@@ -178,12 +212,47 @@ export function calculateFirstMintSingleRecipientAmount(): bigint {
     defiGross -
     daoGross;
 
-  return allodiumGross -
-    calculateGiverReserve(2n) +
+  const allodiumNet =
+    allodiumGross -
+    calculateGiverReserve(DOM_CONTRACT.allodiumTransfers);
+
+  const defiNet =
     defiGross -
-    calculateGiverReserve(3n) +
+    calculateGiverReserve(DOM_CONTRACT.defiTransfers);
+
+  const daoNet =
     daoGross -
-    calculateGiverReserve(2n) +
+    calculateGiverReserve(DOM_CONTRACT.daoTransfers);
+
+  const dominumNet =
     dominumGross -
-    calculateGiverReserve(2n);
+    calculateGiverReserve(DOM_CONTRACT.dominumTransfers);
+
+  const allodiumFirst =
+    allodiumNet / DOM_CONTRACT.allodiumTransfers;
+
+  const defiMarket =
+    defiNet *
+    DOM_CONTRACT.defiMarketShare /
+    DOM_CONTRACT.percentBase;
+
+  const defiFoundry =
+    defiNet *
+    DOM_CONTRACT.defiFoundryShare /
+    DOM_CONTRACT.percentBase;
+
+  const daoBank = daoNet / DOM_CONTRACT.daoTransfers;
+  const dominumBank = dominumNet / DOM_CONTRACT.dominumTransfers;
+
+  return {
+    frsAllodium: allodiumFirst,
+    allodiumFoundation: allodiumNet - allodiumFirst,
+    defiMarket,
+    defiFoundry,
+    defiTreasury: defiNet - defiMarket - defiFoundry,
+    daoBank,
+    daoFoundation: daoNet - daoBank,
+    dominumBank,
+    dominumFoundation: dominumNet - dominumBank,
+  };
 }

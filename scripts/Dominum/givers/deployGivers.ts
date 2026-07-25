@@ -16,9 +16,29 @@ export type DeployedGivers = {
   giverDominum: OpenedContract<GiverDominum>;
 };
 
-function assertAddress(label: string, actual: Address, expected: Address): void {
+function assertAddress(
+  label: string,
+  actual: Address,
+  expected: Address
+): void {
   if (!actual.equals(expected)) {
-    throw new Error(`${label}: expected ${expected.toString()}, received ${actual.toString()}`);
+    throw new Error(
+      `${label}: expected ${expected.toString()}, ` +
+      `received ${actual.toString()}`
+    );
+  }
+}
+
+function assertDistinctGiverAddresses(givers: DeployedGivers): void {
+  const entries = Object.entries(givers);
+  const uniqueAddresses = new Set(
+    entries.map(([, giver]) => giver.address.toRawString())
+  );
+
+  if (uniqueAddresses.size !== entries.length) {
+    throw new Error(
+      'Giver StateInit collision: all Giver addresses must be distinct'
+    );
   }
 }
 
@@ -47,9 +67,6 @@ export async function deployGivers(
     )
   );
 
-  await giverAllodium.sendDeploy(sender, toNano(DEPLOY_VALUES.giver));
-  await provider.waitForDeploy(giverAllodium.address);
-
   const giverDefi = provider.open(
     GiverDefi.createFromConfig(
       {
@@ -64,9 +81,6 @@ export async function deployGivers(
     )
   );
 
-  await giverDefi.sendDeploy(sender, toNano(DEPLOY_VALUES.giver));
-  await provider.waitForDeploy(giverDefi.address);
-
   const giverDao = provider.open(
     GiverDao.createFromConfig(
       {
@@ -79,9 +93,6 @@ export async function deployGivers(
       compiled.giverDaoCode
     )
   );
-
-  await giverDao.sendDeploy(sender, toNano(DEPLOY_VALUES.giver));
-  await provider.waitForDeploy(giverDao.address);
 
   const giverDominum = provider.open(
     GiverDominum.createFromConfig(
@@ -96,6 +107,21 @@ export async function deployGivers(
     )
   );
 
+  const givers = {
+    giverAllodium,
+    giverDefi,
+    giverDao,
+    giverDominum,
+  };
+
+  assertDistinctGiverAddresses(givers);
+
+  await giverAllodium.sendDeploy(sender, toNano(DEPLOY_VALUES.giver));
+  await provider.waitForDeploy(giverAllodium.address);
+  await giverDefi.sendDeploy(sender, toNano(DEPLOY_VALUES.giver));
+  await provider.waitForDeploy(giverDefi.address);
+  await giverDao.sendDeploy(sender, toNano(DEPLOY_VALUES.giver));
+  await provider.waitForDeploy(giverDao.address);
   await giverDominum.sendDeploy(sender, toNano(DEPLOY_VALUES.giver));
   await provider.waitForDeploy(giverDominum.address);
 
@@ -106,26 +132,91 @@ export async function deployGivers(
     giverDominum.getGiverData(),
   ]);
 
-  assertAddress('GiverAllodium master', allodiumData.masterAddress, masterAddress);
-  assertAddress('GiverAllodium treasury', allodiumData.treasuryPoolAddress, treasuryPoolAddress);
-  assertAddress('GiverAllodium FRS', allodiumData.frsAllodiumAddress, distribution.frsAllodium);
-  assertAddress('GiverAllodium Foundation', allodiumData.allodiumFoundationAddress, distribution.allodiumFoundation);
-
-  assertAddress('GiverDefi master', defiData.masterAddress, masterAddress);
-  assertAddress('GiverDefi treasury', defiData.treasuryPoolAddress, treasuryPoolAddress);
-  assertAddress('GiverDefi Market', defiData.marketAddress, distribution.defiMarket);
-  assertAddress('GiverDefi Foundry', defiData.foundryAddress, distribution.defiFoundry);
-  assertAddress('GiverDefi Treasury', defiData.defiTreasuryAddress, distribution.defiTreasury);
-
-  assertAddress('GiverDao master', daoData.masterAddress, masterAddress);
-  assertAddress('GiverDao treasury', daoData.treasuryPoolAddress, treasuryPoolAddress);
-  assertAddress('GiverDao Bank', daoData.bankDaoAddress, distribution.daoBank);
-  assertAddress('GiverDao Foundation', daoData.daoFoundationAddress, distribution.daoFoundation);
-
-  assertAddress('GiverDominum master', dominumData.masterAddress, masterAddress);
-  assertAddress('GiverDominum treasury', dominumData.treasuryPoolAddress, treasuryPoolAddress);
-  assertAddress('GiverDominum Bank', dominumData.bankDominumAddress, distribution.dominumBank);
-  assertAddress('GiverDominum Foundation', dominumData.dominumFoundationAddress, distribution.dominumFoundation);
+  assertAddress(
+    'GiverAllodium master',
+    allodiumData.masterAddress,
+    masterAddress
+  );
+  assertAddress(
+    'GiverAllodium treasury',
+    allodiumData.treasuryPoolAddress,
+    treasuryPoolAddress
+  );
+  assertAddress(
+    'GiverAllodium FRS',
+    allodiumData.frsAllodiumAddress,
+    distribution.frsAllodium
+  );
+  assertAddress(
+    'GiverAllodium Foundation',
+    allodiumData.allodiumFoundationAddress,
+    distribution.allodiumFoundation
+  );
+  assertAddress(
+    'GiverDefi master',
+    defiData.masterAddress,
+    masterAddress
+  );
+  assertAddress(
+    'GiverDefi treasury',
+    defiData.treasuryPoolAddress,
+    treasuryPoolAddress
+  );
+  assertAddress(
+    'GiverDefi Market',
+    defiData.marketAddress,
+    distribution.defiMarket
+  );
+  assertAddress(
+    'GiverDefi Foundry',
+    defiData.foundryAddress,
+    distribution.defiFoundry
+  );
+  assertAddress(
+    'GiverDefi Treasury',
+    defiData.defiTreasuryAddress,
+    distribution.defiTreasury
+  );
+  assertAddress(
+    'GiverDao master',
+    daoData.masterAddress,
+    masterAddress
+  );
+  assertAddress(
+    'GiverDao treasury',
+    daoData.treasuryPoolAddress,
+    treasuryPoolAddress
+  );
+  assertAddress(
+    'GiverDao Bank',
+    daoData.bankDaoAddress,
+    distribution.daoBank
+  );
+  assertAddress(
+    'GiverDao Foundation',
+    daoData.daoFoundationAddress,
+    distribution.daoFoundation
+  );
+  assertAddress(
+    'GiverDominum master',
+    dominumData.masterAddress,
+    masterAddress
+  );
+  assertAddress(
+    'GiverDominum treasury',
+    dominumData.treasuryPoolAddress,
+    treasuryPoolAddress
+  );
+  assertAddress(
+    'GiverDominum Bank',
+    dominumData.bankDominumAddress,
+    distribution.dominumBank
+  );
+  assertAddress(
+    'GiverDominum Foundation',
+    dominumData.dominumFoundationAddress,
+    distribution.dominumFoundation
+  );
 
   ui.write(`GiverAllodium: ${giverAllodium.address.toString()}`);
   ui.write(`GiverDefi: ${giverDefi.address.toString()}`);
@@ -133,10 +224,5 @@ export async function deployGivers(
   ui.write(`GiverDominum: ${giverDominum.address.toString()}`);
   ui.write('All Giver recipient addresses verified.');
 
-  return {
-    giverAllodium,
-    giverDefi,
-    giverDao,
-    giverDominum,
-  };
+  return givers;
 }

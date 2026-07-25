@@ -32,7 +32,7 @@ export async function assertFirstMintReady(
     infrastructure.gasPool.getGasPoolData(),
     infrastructure.treasuryPool.getTreasuryPoolData(),
     infrastructure.treasuryPool.getTreasuryPendingData(),
-    graph.domMaster.canMintNow(),
+    graph.domMaster.getCanMintNow(),
   ]);
 
   const config = FIRST_MINT_CONFIG;

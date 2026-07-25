@@ -94,14 +94,16 @@ export function buildExpectedDistribution(
 
     const wallets = Array.from(expected.values());
 
-    const recipientTotal = wallets.reduce(
+    const recipientTotal = wallets.reduce<bigint>(
         (total, wallet) => total + wallet.amount, config.emptyAmount
     );
 
     const feeTotal = config.giverFeeDom * config.totalTransferCount;
 
     if (recipientTotal + feeTotal !== config.amount) {
-        throw new Error('First mint distribution does not preserve total supply');
+        throw new Error(
+            'First mint distribution does not preserve total supply'
+        );
     }
 
     return wallets;

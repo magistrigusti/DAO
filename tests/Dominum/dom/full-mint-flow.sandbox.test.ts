@@ -1,37 +1,136 @@
 /// <reference types="jest" />
 
+import { Address } from '@ton/core';
+
+import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
 import {
-  DOM_FIXTURE, calculateFirstMintGasPoolFee,
-  calculateFirstMintSingleRecipientAmount,
+  createFullMintFlowFixture,
+} from '../_helpers/full-mint-flow.fixture';
+import {
+  DOM_FIXTURE,
+  DOM_QUERY,
+  DOM_VALUE,
+  calculateFirstMintGasPoolFee,
+  calculateFirstMintRecipientAmounts,
 } from '../_helpers/dom-test-values';
 
-import {
-  FULL_MINT_EXPECTED, createFullMintFlowFixture,
-  executeFullMint, readFullMintResult,
-} from '../_helpers/full-mint-flow.fixture';
+type FullMintFlowFixture =
+  Awaited<ReturnType<typeof createFullMintFlowFixture>>;
+
+const FULL_MINT_EXPECTED = {
+  totalExecutions: 9n,
+  nextRouteId: 10n,
+  emptyBalance: 0n,
+} as const;
+
+async function openOwnerWallet(
+  fixture: FullMintFlowFixture,
+  ownerAddress: Address
+) {
+  const walletAddress =
+    await fixture.domMaster.getWalletAddress(ownerAddress);
+
+  return fixture.blockchain.openContract(
+    DomWallet.createFromAddress(walletAddress)
+  );
+}
+
+async function readRecipientBalances(
+  fixture: FullMintFlowFixture
+) {
+  const entries = Object.entries(fixture.recipients);
+  const balances = await Promise.all(
+    entries.map(async ([, owner]) => {
+      const wallet = await openOwnerWallet(fixture, owner.address);
+      return (await wallet.getWalletData()).balance;
+    })
+  );
+
+  return Object.fromEntries(
+    entries.map(([name], index) => [name, balances[index]])
+  );
+}
 
 describe('DOM full first mint flow', () => {
-  it('configures contracts, mints DOM and distributes every share', async () => {
+  it(
+    'configures contracts, mints DOM and distributes every share',
+    async () => {
     const fixture = await createFullMintFlowFixture();
-    await executeFullMint(fixture);
-    const result = await readFullMintResult(fixture);
 
-    expect(result.rolesConfigured).toBe(true);
-    expect(result.gasConfigured).toBe(true);
-    expect(result.treasuryConfigured).toBe(true);
-    expect(result.masterStarted).toBe(true);
+    await fixture.minter.sendMint(
+      fixture.minterOwner.getSender(),
+      {
+        value: DOM_VALUE.mint,
+        amount: DOM_FIXTURE.firstMintAmount,
+        queryId: DOM_QUERY.e2eMint,
+      }
+    );
 
-    expect(result.totalSupply).toEqual(DOM_FIXTURE.firstMintAmount);
-    expect(result.recipientBalance)
-      .toEqual(calculateFirstMintSingleRecipientAmount());
-    expect(result.poolFeeBalance).toEqual(calculateFirstMintGasPoolFee());
-    expect(result.totalReceivedDom).toEqual(calculateFirstMintGasPoolFee());
-    expect(result.totalExecuted).toEqual(FULL_MINT_EXPECTED.totalExecutions);
-    expect(result.nextRouteId).toEqual(FULL_MINT_EXPECTED.nextRouteId);
+    const poolWalletAddress =
+      await fixture.gasPool.getPoolWalletAddress();
 
-    expect(result.giverBalances).toEqual([
-      FULL_MINT_EXPECTED.emptyBalance, FULL_MINT_EXPECTED.emptyBalance,
-      FULL_MINT_EXPECTED.emptyBalance, FULL_MINT_EXPECTED.emptyBalance,
+    const poolWallet = fixture.blockchain.openContract(
+      DomWallet.createFromAddress(poolWalletAddress)
+    );
+
+    const giverWallets = await Promise.all([
+      openOwnerWallet(fixture, fixture.giverAllodium.address),
+      openOwnerWallet(fixture, fixture.giverDefi.address),
+      openOwnerWallet(fixture, fixture.giverDao.address),
+      openOwnerWallet(fixture, fixture.giverDominum.address),
     ]);
-  });
+
+    const [
+      jetton,
+      master,
+      gas,
+      treasury,
+      poolData,
+      recipientBalances,
+      givers,
+    ] = await Promise.all([
+      fixture.domMaster.getJettonData(),
+      fixture.domMaster.getMasterData(),
+      fixture.gasPool.getGasPoolData(),
+      fixture.treasuryPool.getTreasuryPoolData(),
+      poolWallet.getWalletData(),
+      readRecipientBalances(fixture),
+      fixture.domMaster.getGiversData(),
+    ]);
+
+    const giverBalances = await Promise.all(
+      giverWallets.map(async (wallet) => {
+        return (await wallet.getWalletData()).balance;
+      })
+    );
+
+    const rolesConfigured =
+      master.minterAddress.equals(fixture.minter.address) &&
+      givers.giverAllodiumAddress.equals(fixture.giverAllodium.address) &&
+      givers.giverDefiAddress.equals(fixture.giverDefi.address) &&
+      givers.giverDaoAddress.equals(fixture.giverDao.address) &&
+      givers.giverDominumAddress.equals(fixture.giverDominum.address);
+
+    expect(rolesConfigured).toBe(true);
+    expect(gas.masterConfigured).toBe(true);
+    expect(treasury.walletConfigured).toBe(true);
+    expect(master.isStarted).toBe(true);
+    expect(jetton.totalSupply).toEqual(DOM_FIXTURE.firstMintAmount);
+    expect(recipientBalances)
+      .toEqual(calculateFirstMintRecipientAmounts());
+    expect(poolData.balance).toEqual(calculateFirstMintGasPoolFee());
+    expect(gas.totalReceivedDom)
+      .toEqual(calculateFirstMintGasPoolFee());
+    expect(gas.totalExecuted)
+      .toEqual(FULL_MINT_EXPECTED.totalExecutions);
+    expect(treasury.nextRouteId)
+      .toEqual(FULL_MINT_EXPECTED.nextRouteId);
+    expect(giverBalances).toEqual([
+      FULL_MINT_EXPECTED.emptyBalance,
+      FULL_MINT_EXPECTED.emptyBalance,
+      FULL_MINT_EXPECTED.emptyBalance,
+      FULL_MINT_EXPECTED.emptyBalance,
+    ]);
+    }
+  );
 });
