@@ -10,6 +10,7 @@ import {
 } from '@ton/core';
 import {
   OP_ADD_WHITELIST,
+  OP_INIT_WALLET_CONFIG,
   OP_REMOVE_WHITELIST,
   OP_SEND_JETTONS,
   OP_WITHDRAW,
@@ -19,6 +20,7 @@ import {
 export type BankDaoConfig = {
   ownerAddress: Address;
   walletAddress: Address;
+  walletConfigured?: boolean;
   whitelistCount?: number;
   totalReceived?: bigint;
   totalSent?: bigint;
@@ -39,13 +41,17 @@ export function bankDaoConfigToCell(config: BankDaoConfig): Cell {
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.walletAddress)
+    .storeBit(config.walletConfigured ?? false)
     .storeUint(config.whitelistCount ?? 0, 16)
     .storeRef(statsRef)
     .endCell();
 }
 
 export class BankDao implements Contract {
-  constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+  constructor(
+    readonly address: Address,
+    readonly init?: { code: Cell; data: Cell }
+  ) {}
 
   static createFromConfig(config: BankDaoConfig, code: Cell, workchain = 0) {
     const data = bankDaoConfigToCell(config);
@@ -61,10 +67,36 @@ export class BankDao implements Contract {
     await provider.internal(via, { value });
   }
 
+  async sendInitWalletConfig(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      walletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_WALLET_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.walletAddress)
+      .endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      body,
+    });
+  }
+
   async sendWithdrawTon(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW, 32)
@@ -79,7 +111,12 @@ export class BankDao implements Contract {
   async sendWithdrawJettons(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW_JETTONS, 32)
@@ -94,7 +131,13 @@ export class BankDao implements Contract {
   async sendCommand(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; toAddress: Address; tonAmount: bigint; payload: Cell; queryId?: bigint }
+    opts: {
+      value: bigint;
+      toAddress: Address;
+      tonAmount: bigint;
+      payload: Cell;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_SEND_JETTONS, 32)
@@ -141,6 +184,7 @@ export class BankDao implements Contract {
     return {
       ownerAddress: stack.readAddress(),
       walletAddress: stack.readAddress(),
+      walletConfigured: stack.readBoolean(),
       whitelistCount: stack.readBigNumber(),
       totalReceived: stack.readBigNumber(),
       totalSent: stack.readBigNumber(),

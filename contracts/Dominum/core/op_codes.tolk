@@ -29,6 +29,7 @@ const OP_REPLACE_GIVER: int = 0x42;
 // =====================================================
 // TREASURY / BANK
 // =====================================================
+const OP_INIT_WALLET_CONFIG: int = 0x41;
 const OP_WITHDRAW: int = 0x51;
 const OP_WITHDRAW_JETTONS: int = 0x52;
 

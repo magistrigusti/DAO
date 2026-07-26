@@ -1,8 +1,12 @@
 /// <reference types="jest" />
 
+import type { BlockchainTransaction } from '@ton/sandbox';
 import { Address } from '@ton/core';
 
 import { DomWallet } from '../../../wrappers/Dominum/dom/DomWallet';
+import {
+  OP_GAS_POOL_EXECUTE,
+} from '../../../wrappers/Dominum/core/op_code';
 import {
   createFullMintFlowFixture,
 } from '../_helpers/full-mint-flow.fixture';
@@ -51,13 +55,32 @@ async function readRecipientBalances(
   );
 }
 
+function expectSuccessfulGasPoolExecution(
+  transaction: BlockchainTransaction
+) {
+  const description = transaction.description;
+
+  expect(description.type).toBe('generic');
+
+  if (description.type !== 'generic') {
+    throw new Error('GasPool transaction is not generic');
+  }
+
+  expect(description.aborted).toBe(false);
+  expect(description.computePhase.type).toBe('vm');
+
+  if (description.computePhase.type === 'vm') {
+    expect(description.computePhase.exitCode).toBe(0);
+  }
+}
+
 describe('DOM full first mint flow', () => {
   it(
     'configures contracts, mints DOM and distributes every share',
     async () => {
     const fixture = await createFullMintFlowFixture();
 
-    await fixture.minter.sendMint(
+    const mintResult = await fixture.minter.sendMint(
       fixture.minterOwner.getSender(),
       {
         value: DOM_VALUE.mint,
@@ -65,6 +88,20 @@ describe('DOM full first mint flow', () => {
         queryId: DOM_QUERY.e2eMint,
       }
     );
+
+    const gasPoolTransactions = mintResult.transactions.filter(
+      (transaction) => {
+        const info = transaction.inMessage?.info;
+        return info?.type === 'internal' &&
+          info.dest.equals(fixture.gasPool.address) &&
+          transaction.inMessage!.body.beginParse().loadUintBig(32) ===
+            OP_GAS_POOL_EXECUTE;
+      }
+    );
+
+    expect(gasPoolTransactions)
+      .toHaveLength(Number(FULL_MINT_EXPECTED.totalExecutions));
+    gasPoolTransactions.forEach(expectSuccessfulGasPoolExecution);
 
     const poolWalletAddress =
       await fixture.gasPool.getPoolWalletAddress();

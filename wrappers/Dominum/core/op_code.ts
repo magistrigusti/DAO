@@ -9,7 +9,8 @@ export const OP_EXCESSES = 0xd53276dbn;
 
 export const OP_MINT = 0x15n;
 export const OP_CHANGE_WHITELIST = 0x40n;
-export const OP_SET_WALLET = 0x41n;
+export const OP_INIT_WALLET_CONFIG = 0x41n;
+export const OP_SET_WALLET = OP_INIT_WALLET_CONFIG;
 
 export const OP_WITHDRAW = 0x51n;
 export const OP_WITHDRAW_JETTONS = 0x52n;

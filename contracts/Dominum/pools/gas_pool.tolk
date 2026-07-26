@@ -2,6 +2,7 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 import "@stdlib/tvm-dicts";
+import "@stdlib/gas-payments";
 
 global treasuryPoolAddress: address;
 global masterAddress: address;
@@ -343,6 +344,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_GAS_POOL_EXECUTE) {
         requireTreasuryPool(senderAddress);
+        setGasLimitToMaximum();
 
         var senderWallet = msgBody.loadAddress();
         var jettonAmount = msgBody.loadCoins();
