@@ -17,7 +17,10 @@ import {
   ALLODIUM_VALUE,
   calculateAllodFromDom,
 } from '../_helpers/allodium-test-values';
-import { expectAddress } from '../../Dominum/core/dom-test-utils';
+import {
+  expectAddress,
+  ignoreFailure,
+} from '../../Dominum/core/dom-test-utils';
 
 describe('FrsAllodium', () => {
   let blockchain: Blockchain;
@@ -44,7 +47,10 @@ describe('FrsAllodium', () => {
     foundation = await blockchain.treasury('foundation');
   });
 
-  function openFrs() {
+  function openFrs(
+    giverConfigured = true,
+    walletConfigured = true
+  ) {
     return blockchain.openContract(
       FrsAllodium.createFromConfig(
         {
@@ -53,6 +59,8 @@ describe('FrsAllodium', () => {
           allodMasterAddress: allodMaster.address,
           giverAllodiumAddress: giverAllodium.address,
           allodiumFoundationAddress: foundation.address,
+          giverConfigured,
+          walletConfigured,
           lockedDom: ALLODIUM_STATE.emptyLockedDom,
         },
         frsCode
@@ -72,6 +80,8 @@ describe('FrsAllodium', () => {
 
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.domWalletAddress, domWallet.address);
+    expect(data.giverConfigured).toBe(true);
+    expect(data.walletConfigured).toBe(true);
 
     expect(data.lockedDom).toEqual(
       ALLODIUM_STATE.emptyLockedDom
@@ -111,5 +121,99 @@ describe('FrsAllodium', () => {
     expect(data.lockedDom).toEqual(
       ALLODIUM_STATE.emptyLockedDom
     );
+  });
+
+  it('should initialize Giver exactly once from owner', async () => {
+    const frs = openFrs(false);
+
+    await frs.sendDeploy(owner.getSender(), ALLODIUM_VALUE.deploySmall);
+
+    await ignoreFailure(
+      frs.sendInitGiver(
+        foundation.getSender(),
+        {
+          value: ALLODIUM_VALUE.config,
+          giverAddress: giverAllodium.address,
+          queryId: ALLODIUM_QUERY.rejected,
+        }
+      )
+    );
+
+    let data = await frs.getFrsData();
+    expect(data.giverConfigured).toBe(false);
+
+    await frs.sendInitGiver(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.config,
+        giverAddress: giverAllodium.address,
+        queryId: ALLODIUM_QUERY.domLocked,
+      }
+    );
+
+    data = await frs.getFrsData();
+    expect(data.giverConfigured).toBe(true);
+    expectAddress(data.giverAllodiumAddress, giverAllodium.address);
+
+    await ignoreFailure(
+      frs.sendInitGiver(
+        owner.getSender(),
+        {
+          value: ALLODIUM_VALUE.config,
+          giverAddress: foundation.address,
+          queryId: ALLODIUM_QUERY.allodBurned,
+        }
+      )
+    );
+
+    data = await frs.getFrsData();
+    expectAddress(data.giverAllodiumAddress, giverAllodium.address);
+  });
+
+  it('should initialize DOM wallet exactly once from owner', async () => {
+    const frs = openFrs(true, false);
+
+    await frs.sendDeploy(owner.getSender(), ALLODIUM_VALUE.deploySmall);
+
+    await ignoreFailure(
+      frs.sendInitWallet(
+        foundation.getSender(),
+        {
+          value: ALLODIUM_VALUE.config,
+          walletAddress: domWallet.address,
+          queryId: ALLODIUM_QUERY.rejected,
+        }
+      )
+    );
+
+    let data = await frs.getFrsData();
+    expect(data.walletConfigured).toBe(false);
+
+    await frs.sendInitWallet(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.config,
+        walletAddress: domWallet.address,
+        queryId: ALLODIUM_QUERY.domLocked,
+      }
+    );
+
+    data = await frs.getFrsData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.domWalletAddress, domWallet.address);
+
+    await ignoreFailure(
+      frs.sendInitWallet(
+        owner.getSender(),
+        {
+          value: ALLODIUM_VALUE.config,
+          walletAddress: foundation.address,
+          queryId: ALLODIUM_QUERY.allodBurned,
+        }
+      )
+    );
+
+    data = await frs.getFrsData();
+    expectAddress(data.domWalletAddress, domWallet.address);
   });
 });

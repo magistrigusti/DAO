@@ -16,6 +16,7 @@ import {
 } from '../_helpers/dom-test-values';
 import {
   expectAddress,
+  ignoreFailure,
 } from '../core/dom-test-utils';
 
 describe('MarketMaker', () => {
@@ -43,7 +44,10 @@ describe('MarketMaker', () => {
     outsider = await blockchain.treasury('outsider');
   });
 
-  async function deployMarketMaker() {
+  async function deployMarketMaker(
+    bankConfigured = true,
+    walletConfigured = true
+  ) {
     const marketMaker = blockchain.openContract(
       MarketMaker.createFromConfig(
         {
@@ -51,6 +55,8 @@ describe('MarketMaker', () => {
           walletAddress: wallet.address,
           defiBankAddress: defiBank.address,
           defiFoundationAddress: defiFoundation.address,
+          bankConfigured,
+          walletConfigured,
         },
         marketMakerCode
       )
@@ -72,6 +78,8 @@ describe('MarketMaker', () => {
     expectAddress(data.walletAddress, wallet.address);
     expectAddress(data.defiBankAddress, defiBank.address);
     expectAddress(data.defiFoundationAddress, defiFoundation.address);
+    expect(data.bankConfigured).toBe(true);
+    expect(data.walletConfigured).toBe(true);
 
     expect(data.totalReceived).toEqual(
       DOM_STATE.zeroCoins
@@ -96,5 +104,95 @@ describe('MarketMaker', () => {
     expect(
       await marketMaker.isAddressAllowed(outsider.address)
     ).toBe(false);
+  });
+
+  it('should initialize DeFi Bank exactly once from owner', async () => {
+    const marketMaker = await deployMarketMaker(false);
+
+    await ignoreFailure(
+      marketMaker.sendInitDefiBank(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          bankAddress: defiBank.address,
+          queryId: 1n,
+        }
+      )
+    );
+
+    let data = await marketMaker.getMarketData();
+    expect(data.bankConfigured).toBe(false);
+
+    await marketMaker.sendInitDefiBank(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        bankAddress: defiBank.address,
+        queryId: 2n,
+      }
+    );
+
+    data = await marketMaker.getMarketData();
+    expect(data.bankConfigured).toBe(true);
+    expectAddress(data.defiBankAddress, defiBank.address);
+
+    await ignoreFailure(
+      marketMaker.sendInitDefiBank(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          bankAddress: outsider.address,
+          queryId: 3n,
+        }
+      )
+    );
+
+    data = await marketMaker.getMarketData();
+    expectAddress(data.defiBankAddress, defiBank.address);
+  });
+
+  it('should initialize DOM wallet exactly once from owner', async () => {
+    const marketMaker = await deployMarketMaker(true, false);
+
+    await ignoreFailure(
+      marketMaker.sendInitWallet(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: wallet.address,
+          queryId: 4n,
+        }
+      )
+    );
+
+    let data = await marketMaker.getMarketData();
+    expect(data.walletConfigured).toBe(false);
+
+    await marketMaker.sendInitWallet(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        walletAddress: wallet.address,
+        queryId: 5n,
+      }
+    );
+
+    data = await marketMaker.getMarketData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.walletAddress, wallet.address);
+
+    await ignoreFailure(
+      marketMaker.sendInitWallet(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: outsider.address,
+          queryId: 6n,
+        }
+      )
+    );
+
+    data = await marketMaker.getMarketData();
+    expectAddress(data.walletAddress, wallet.address);
   });
 });

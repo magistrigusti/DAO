@@ -47,6 +47,16 @@ export type CompiledContracts = {
   giverDaoCode: Cell;
   giverDominumCode: Cell;
   giverManagerCode: Cell;
+
+  frsAllodiumCode: Cell;
+  allodiumFoundationCode: Cell;
+  marketMakerCode: Cell;
+  foundryLockCode: Cell;
+  bankDefiCode: Cell;
+  bankDaoCode: Cell;
+  daoFoundationCode: Cell;
+  bankDominumCode: Cell;
+  dominumFoundationCode: Cell;
 };
 
 export type InfrastructureContracts = {

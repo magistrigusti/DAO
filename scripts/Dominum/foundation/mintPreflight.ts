@@ -1,18 +1,26 @@
 import { NetworkProvider } from '@ton/blueprint';
 
 import {
-  DomDistributionAddresses, FIRST_MINT_CONFIG,
+  DomDistributionAddresses,
+  DomRecipientControls,
+  FIRST_MINT_CONFIG,
 } from '../core/config';
 
 import {
-  InfrastructureContracts, TokenGraphContracts,
+  CompiledContracts,
+  InfrastructureContracts,
+  TokenGraphContracts,
 } from '../core/types';
 
 import { assertAddress, assertGiverRouting } from './mintRouting';
+import {
+  assertRecipientContractsReady,
+} from './recipientPreflight';
 
 export async function assertFirstMintReady(
   provider: NetworkProvider, infrastructure: InfrastructureContracts,
-  graph: TokenGraphContracts, distribution: DomDistributionAddresses
+  graph: TokenGraphContracts, distribution: DomDistributionAddresses,
+  controls: DomRecipientControls, compiled: CompiledContracts
 ): Promise<void> {
   const senderAddress = provider.sender().address;
 
@@ -144,4 +152,13 @@ export async function assertFirstMintReady(
   }
 
   await assertGiverRouting(graph, infrastructure, distribution);
+
+  await assertRecipientContractsReady(
+    provider,
+    infrastructure,
+    graph,
+    distribution,
+    controls,
+    compiled
+  );
 }

@@ -188,6 +188,42 @@ fun clearMasterRequest() {
     pendingMasterNewAddress = null;
 }
 
+fun requireDistinctMasterRole(
+    candidate: address,
+    replacedAddress: address
+) {
+    assert(candidate != ownerAddress, ERROR_WRONG_TARGET);
+    assert(candidate != treasuryPoolAddress, ERROR_WRONG_TARGET);
+
+    if (minterAddress != replacedAddress) {
+        assert(candidate != minterAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (minterManagerAddress != replacedAddress) {
+        assert(candidate != minterManagerAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (giverManagerAddress != replacedAddress) {
+        assert(candidate != giverManagerAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (giverAllodiumAddress != replacedAddress) {
+        assert(candidate != giverAllodiumAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (giverDefiAddress != replacedAddress) {
+        assert(candidate != giverDefiAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (giverDaoAddress != replacedAddress) {
+        assert(candidate != giverDaoAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (giverDominumAddress != replacedAddress) {
+        assert(candidate != giverDominumAddress, ERROR_WRONG_TARGET);
+    }
+}
+
 fun createMasterRequest(
     requestKind: int,
     targetKind: int,
@@ -196,6 +232,7 @@ fun createMasterRequest(
 ) {
     assert(!hasPendingMasterRequest, ERROR_ALREADY_INITIALIZED);
     assert(oldAddress != newAddress, ERROR_INVALID_AMOUNT);
+    requireDistinctMasterRole(newAddress, oldAddress);
 
     hasPendingMasterRequest = true;
     pendingMasterRequestKind = requestKind;
@@ -244,6 +281,8 @@ fun applyMasterRequest() {
     var oldAddress = pendingMasterOldAddress!;
     var newAddress = pendingMasterNewAddress!;
 
+    requireDistinctMasterRole(newAddress, oldAddress);
+
     if (pendingMasterRequestKind == MASTER_REQUEST_MINTER) {
         assert(oldAddress == minterAddress, ERROR_NOT_MINTER);
         minterAddress = newAddress;
@@ -291,11 +330,7 @@ fun canMintInternal(): bool {
 }
 
 fun hasMintBlockingPendingRequest(): bool {
-    if (!hasPendingMasterRequest) {
-        return false;
-    }
-
-    return pendingMasterRequestKind == MASTER_REQUEST_MINTER;
+    return hasPendingMasterRequest;
 }
 
 fun isActiveGiverWallet(walletAddress: address): bool {

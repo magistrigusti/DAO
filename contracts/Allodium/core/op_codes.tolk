@@ -23,6 +23,8 @@ const OP_PROTOCOL_TRANSFER: int = 0x5A;
 // FRS Allodium.
 const OP_INCREASE_MINT_ALLOWANCE: int = 0x100;
 const OP_ALLOD_BURNED: int = 0x101;
+const OP_INIT_FRS_GIVER: int = 0x102;
+const OP_INIT_FRS_WALLET: int = 0x103;
 
 // AllodGasPool.
 // Wallet платит fee в ALLOD, pool оплачивает TON-сообщения.

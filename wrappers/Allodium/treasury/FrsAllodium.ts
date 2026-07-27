@@ -11,6 +11,8 @@ import {
 
 import {
     OP_ALLOD_BURNED,
+    OP_INIT_FRS_GIVER,
+    OP_INIT_FRS_WALLET,
     OP_TRANSFER_NOTIFICATION,
 } from '../core/op_code';
 
@@ -20,6 +22,8 @@ export type FrsAllodiumConfig = {
   allodMasterAddress: Address;
   giverAllodiumAddress: Address;
   allodiumFoundationAddress: Address;
+  giverConfigured?: boolean;
+  walletConfigured?: boolean;
   lockedDom?: bigint;
 };
 
@@ -34,6 +38,8 @@ export function frsAllodiumConfigToCell(
   const distributionAddresses = beginCell()
     .storeAddress(config.giverAllodiumAddress)
     .storeAddress(config.allodiumFoundationAddress)
+    .storeBit(config.giverConfigured ?? true)
+    .storeBit(config.walletConfigured ?? true)
     .endCell();
 
   return beginCell()
@@ -93,6 +99,42 @@ export class FrsAllodium implements Contract {
     await provider.internal(via, { value: opts.value, body });
   }
 
+  async sendInitGiver(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      giverAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_FRS_GIVER, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.giverAddress)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
+  async sendInitWallet(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      walletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_FRS_WALLET, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.walletAddress)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
   async sendAllodBurned(
     provider: ContractProvider,
     via: Sender,
@@ -121,6 +163,8 @@ export class FrsAllodium implements Contract {
       giverAllodiumAddress: stack.readAddress(),
       allodiumFoundationAddress: stack.readAddress(),
       lockedDom: stack.readBigNumber(),
+      giverConfigured: stack.readBoolean(),
+      walletConfigured: stack.readBoolean(),
     };
   }
 

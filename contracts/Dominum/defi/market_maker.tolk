@@ -13,6 +13,8 @@ global walletAddress: address;
 
 global defiBankAddress: address;
 global defiFoundationAddress: address;
+global bankConfigured: bool;
+global walletConfigured: bool;
 
 global totalReceived: int;
 global totalSent: int;
@@ -26,6 +28,8 @@ fun loadData() {
     var targets = ds.loadRef().beginParse();
     defiBankAddress = targets.loadAddress();
     defiFoundationAddress = targets.loadAddress();
+    bankConfigured = targets.loadBool();
+    walletConfigured = targets.loadBool();
 
     totalReceived = ds.loadCoins();
     totalSent = ds.loadCoins();
@@ -35,6 +39,8 @@ fun saveData() {
     var targets = beginCell()
         .storeAddress(defiBankAddress)
         .storeAddress(defiFoundationAddress)
+        .storeBool(bankConfigured)
+        .storeBool(walletConfigured)
         .endCell();
 
     contract.setData(
@@ -53,7 +59,7 @@ fun requireOwner(senderAddress: address) {
 }
 
 fun isAllowedTarget(candidate: address): bool {
-    if (candidate == defiBankAddress) {
+    if (bankConfigured & (candidate == defiBankAddress)) {
         return true;
     }
 
@@ -62,6 +68,38 @@ fun isAllowedTarget(candidate: address): bool {
     }
 
     return false;
+}
+
+fun initializeDefiBank(newBankAddress: address) {
+    assert(!bankConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceived == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSent == 0, ERROR_ALREADY_INITIALIZED);
+    assert(newBankAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(newBankAddress != walletAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        newBankAddress != defiFoundationAddress,
+        ERROR_INVALID_AMOUNT
+    );
+
+    defiBankAddress = newBankAddress;
+    bankConfigured = true;
+    saveData();
+}
+
+fun initializeWallet(newWalletAddress: address) {
+    assert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceived == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSent == 0, ERROR_ALREADY_INITIALIZED);
+    assert(newWalletAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(newWalletAddress != defiBankAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        newWalletAddress != defiFoundationAddress,
+        ERROR_INVALID_AMOUNT
+    );
+
+    walletAddress = newWalletAddress;
+    walletConfigured = true;
+    saveData();
 }
 
 fun sendDom(toAddress: address, amount: int, queryId: int) {
@@ -124,7 +162,20 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
+    if (op == OP_INIT_MARKET_BANK) {
+        requireOwner(senderAddress);
+        initializeDefiBank(msgBody.loadAddress());
+        return;
+    }
+
+    if (op == OP_INIT_MARKET_WALLET) {
+        requireOwner(senderAddress);
+        initializeWallet(msgBody.loadAddress());
+        return;
+    }
+
     if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
         assert(senderAddress == walletAddress, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
@@ -142,6 +193,8 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_WITHDRAW_JETTONS) {
         requireOwner(senderAddress);
+        assert(bankConfigured, ERROR_PROXY_NOT_CONFIGURED);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadAddress();
@@ -158,6 +211,8 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_WITHDRAW) {
         requireOwner(senderAddress);
+        assert(bankConfigured, ERROR_PROXY_NOT_CONFIGURED);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadAddress();
@@ -173,7 +228,7 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getMarketData(): (
-    address, address, address, address, int, int
+    address, address, address, address, int, int, bool, bool
 ) {
     loadData();
 
@@ -183,7 +238,9 @@ get fun getMarketData(): (
         defiBankAddress,
         defiFoundationAddress,
         totalReceived,
-        totalSent
+        totalSent,
+        bankConfigured,
+        walletConfigured
     );
 }
 

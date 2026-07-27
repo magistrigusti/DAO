@@ -35,6 +35,7 @@ import {
 import {
     loadDomDeploymentAddresses,
     loadDomDistributionAddresses,
+    loadDomRecipientControls,
 } from './Dominum/core/config';
 import {
     InfrastructureContracts,
@@ -43,6 +44,9 @@ import {
 import {
     mintAndReport,
 } from './Dominum/foundation/mintAndReport';
+import {
+    compileContracts,
+} from './Dominum/dom/compileContracts';
 import {
     createDomProvider,
 } from './runtime/toncenter-v3/DomProvider';
@@ -56,6 +60,12 @@ async function main(): Promise<void> {
 
     const distribution =
         loadDomDistributionAddresses();
+
+    const controls =
+        loadDomRecipientControls();
+
+    const compiled =
+        await compileContracts(provider);
 
     const infrastructure: InfrastructureContracts = {
         deployer: addresses.deployer,
@@ -133,7 +143,9 @@ async function main(): Promise<void> {
         provider,
         infrastructure,
         graph,
-        distribution
+        distribution,
+        controls,
+        compiled
     );
 }
 

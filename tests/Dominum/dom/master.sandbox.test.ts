@@ -171,7 +171,7 @@ describe('DomMaster', () => {
     );
   });
 
-  it('should allow mint while non-minter role request is pending', async () => {
+  it('should block mint while any role request is pending', async () => {
     const domMaster = openMaster();
     const newGiver = await blockchain.treasury('new-giver');
 
@@ -196,20 +196,48 @@ describe('DomMaster', () => {
 
     expect(pending.hasPending).toBe(true);
 
-    await domMaster.sendMint(
-      minter.getSender(),
-      {
-        value: DOM_VALUE.mint,
-        amount: DOM_FIXTURE.firstMintAmount,
-        queryId: DOM_QUERY.masterMint,
-      }
+    await ignoreFailure(
+      domMaster.sendMint(
+        minter.getSender(),
+        {
+          value: DOM_VALUE.mint,
+          amount: DOM_FIXTURE.firstMintAmount,
+          queryId: DOM_QUERY.masterMint,
+        }
+      )
     );
 
     const jettonData = await domMaster.getJettonData();
 
     expect(jettonData.totalSupply).toEqual(
-      DOM_FIXTURE.firstMintAmount
+      DOM_STATE.emptySupply
     );
+  });
+
+  it('should reject a role that intersects another active role', async () => {
+    const domMaster = openMaster();
+
+    await domMaster.sendDeploy(
+      owner.getSender(),
+      DOM_VALUE.deploySmall
+    );
+
+    await ignoreFailure(
+      domMaster.sendReplaceGiver(
+        giverManager.getSender(),
+        {
+          value: DOM_VALUE.config,
+          targetKind: GIVER_TARGET.defi,
+          oldGiverAddress: giverDefi.address,
+          newGiverAddress: minterManager.address,
+          queryId: DOM_QUERY.replaceGiverRejected,
+        }
+      )
+    );
+
+    const pending = await domMaster.getMasterPendingRequest();
+
+    expect(pending.hasPending).toBe(false);
   });
 
   it('should split minted supply between four givers', async () => {

@@ -2,11 +2,16 @@ import { Address, toNano } from '@ton/core';
 import { NetworkProvider } from '@ton/blueprint';
 
 import {
-  DEPLOY_VALUES, DomDistributionAddresses, FIRST_MINT_CONFIG,
+  DEPLOY_VALUES,
+  DomDistributionAddresses,
+  DomRecipientControls,
+  FIRST_MINT_CONFIG,
 } from '../core/config';
 
 import {
-  InfrastructureContracts, TokenGraphContracts,
+  CompiledContracts,
+  InfrastructureContracts,
+  TokenGraphContracts,
 } from '../core/types';
 
 import { buildExpectedDistribution } from './mintDistribution';
@@ -47,12 +52,18 @@ function reportContractAddresses(
 
 export async function mintAndReport(
   provider: NetworkProvider, infrastructure: InfrastructureContracts,
-  graph: TokenGraphContracts, distribution: DomDistributionAddresses
+  graph: TokenGraphContracts, distribution: DomDistributionAddresses,
+  controls: DomRecipientControls, compiled: CompiledContracts
 ): Promise<void> {
   const config = FIRST_MINT_CONFIG;
 
   await assertFirstMintReady(
-    provider, infrastructure, graph, distribution
+    provider,
+    infrastructure,
+    graph,
+    distribution,
+    controls,
+    compiled
   );
 
   const expectedDistribution = buildExpectedDistribution(distribution);

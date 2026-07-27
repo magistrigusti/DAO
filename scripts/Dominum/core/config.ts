@@ -17,6 +17,16 @@ export type DomDistributionAddresses = {
   daoFoundation: Address; dominumBank: Address; dominumFoundation: Address;
 };
 
+export type DomRecipientControls = {
+  frsOwner: Address; allodiumFoundationOwner: Address;
+  marketOwner: Address; foundryOwner: Address;
+  defiBankOwner: Address; daoBankOwner: Address;
+  daoFoundationOwner: Address; dominumBankOwner: Address;
+  dominumFoundationOwner: Address; allodMaster: Address;
+  defiFoundation: Address; foundryRelease: Address;
+  ownerCodeHash: Buffer;
+};
+
 export type DomDeploymentAddresses = {
   deployer: Address; treasuryManager: Address; treasuryPool: Address;
   gasPool: Address; giverManager: Address; minterManager: Address;
@@ -32,6 +42,30 @@ function readAddress(name: string): Address {
   }
 
   return Address.parse(value);
+}
+
+function readHash(name: string): Buffer {
+  const value = process.env[name];
+
+  if (!value || !/^[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(`${name} must be a 64-character hex hash`);
+  }
+
+  return Buffer.from(value, 'hex');
+}
+
+function requireUnique(
+  addresses: Record<string, Address>,
+  label: string
+): void {
+  const values = Object.values(addresses);
+  const unique = new Set(
+    values.map((address) => address.toRawString())
+  );
+
+  if (unique.size !== values.length) {
+    throw new Error(`${label} addresses must be different`);
+  }
 }
 
 export function loadDomSignerAddresses(): DomSignerAddresses {
@@ -58,7 +92,7 @@ export function loadDomSignerAddresses(): DomSignerAddresses {
 }
 
 export function loadDomDistributionAddresses(): DomDistributionAddresses {
-  return {
+  const distribution: DomDistributionAddresses = {
     frsAllodium: readAddress('DOM_RECIPIENT_ALLODIUM_FRS_ADDRESS'),
     allodiumFoundation:
       readAddress('DOM_RECIPIENT_ALLODIUM_FOUNDATION_ADDRESS'),
@@ -71,6 +105,55 @@ export function loadDomDistributionAddresses(): DomDistributionAddresses {
     dominumFoundation:
       readAddress('DOM_RECIPIENT_DOMINUM_FOUNDATION_ADDRESS'),
   };
+
+  requireUnique(distribution, 'DOM recipient');
+
+  return distribution;
+}
+
+export function loadDomRecipientControls(): DomRecipientControls {
+  const controls: DomRecipientControls = {
+    frsOwner: readAddress('DOM_RECIPIENT_ALLODIUM_FRS_OWNER_ADDRESS'),
+    allodiumFoundationOwner: readAddress(
+      'DOM_RECIPIENT_ALLODIUM_FOUNDATION_OWNER_ADDRESS'
+    ),
+    marketOwner: readAddress('DOM_RECIPIENT_DEFI_MARKET_OWNER_ADDRESS'),
+    foundryOwner: readAddress('DOM_RECIPIENT_DEFI_FOUNDRY_OWNER_ADDRESS'),
+    defiBankOwner: readAddress(
+      'DOM_RECIPIENT_DEFI_TREASURY_OWNER_ADDRESS'
+    ),
+    daoBankOwner: readAddress('DOM_RECIPIENT_DAO_BANK_OWNER_ADDRESS'),
+    daoFoundationOwner: readAddress(
+      'DOM_RECIPIENT_DAO_FOUNDATION_OWNER_ADDRESS'
+    ),
+    dominumBankOwner: readAddress(
+      'DOM_RECIPIENT_DOMINUM_BANK_OWNER_ADDRESS'
+    ),
+    dominumFoundationOwner: readAddress(
+      'DOM_RECIPIENT_DOMINUM_FOUNDATION_OWNER_ADDRESS'
+    ),
+    allodMaster: readAddress('ALLODIUM_MASTER_ADDRESS'),
+    defiFoundation: readAddress('DEFI_FOUNDATION_ADDRESS'),
+    foundryRelease: readAddress('DEFI_FOUNDRY_RELEASE_ADDRESS'),
+    ownerCodeHash: readHash('DOM_RECIPIENT_OWNER_CODE_HASH'),
+  };
+
+  requireUnique(
+    {
+      frsOwner: controls.frsOwner,
+      allodiumFoundationOwner: controls.allodiumFoundationOwner,
+      marketOwner: controls.marketOwner,
+      foundryOwner: controls.foundryOwner,
+      defiBankOwner: controls.defiBankOwner,
+      daoBankOwner: controls.daoBankOwner,
+      daoFoundationOwner: controls.daoFoundationOwner,
+      dominumBankOwner: controls.dominumBankOwner,
+      dominumFoundationOwner: controls.dominumFoundationOwner,
+    },
+    'DOM recipient owner'
+  );
+
+  return controls;
 }
 
 export function loadDomDeploymentAddresses(): DomDeploymentAddresses {

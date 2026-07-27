@@ -7,13 +7,20 @@ import {
   ContractProvider,
   Sender,
 } from '@ton/core';
-import { OP_WITHDRAW, OP_WITHDRAW_JETTONS } from '../core/op_code';
+import {
+  OP_INIT_MARKET_BANK,
+  OP_INIT_MARKET_WALLET,
+  OP_WITHDRAW,
+  OP_WITHDRAW_JETTONS,
+} from '../core/op_code';
 
 export type MarketMakerConfig = {
   ownerAddress: Address;
   walletAddress: Address;
   defiBankAddress: Address;
   defiFoundationAddress: Address;
+  bankConfigured?: boolean;
+  walletConfigured?: boolean;
   totalReceived?: bigint;
   totalSent?: bigint;
 };
@@ -22,6 +29,8 @@ export function marketMakerConfigToCell(config: MarketMakerConfig): Cell {
   const targets = beginCell()
     .storeAddress(config.defiBankAddress)
     .storeAddress(config.defiFoundationAddress)
+    .storeBit(config.bankConfigured ?? true)
+    .storeBit(config.walletConfigured ?? true)
     .endCell();
 
   return beginCell()
@@ -66,6 +75,42 @@ export class MarketMaker implements Contract {
     await provider.internal(via, { value: opts.value, body });
   }
 
+  async sendInitDefiBank(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      bankAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_MARKET_BANK, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.bankAddress)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
+  async sendInitWallet(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      walletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_MARKET_WALLET, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.walletAddress)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
   async sendWithdrawJettons(
     provider: ContractProvider,
     via: Sender,
@@ -91,6 +136,8 @@ export class MarketMaker implements Contract {
       defiFoundationAddress: stack.readAddress(),
       totalReceived: stack.readBigNumber(),
       totalSent: stack.readBigNumber(),
+      bankConfigured: stack.readBoolean(),
+      walletConfigured: stack.readBoolean(),
     };
   }
 

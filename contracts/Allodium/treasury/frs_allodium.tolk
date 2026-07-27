@@ -15,6 +15,8 @@ global domWalletAddress: address;
 global allodMasterAddress: address;
 global giverAllodiumAddress: address;
 global allodiumFoundationAddress: address;
+global giverConfigured: bool;
+global walletConfigured: bool;
 global lockedDom: int;
 
 fun loadData() {
@@ -30,6 +32,8 @@ fun loadData() {
     var distributionAddresses = ds.loadRef().beginParse();
     giverAllodiumAddress = distributionAddresses.loadAddress();
     allodiumFoundationAddress = distributionAddresses.loadAddress();
+    giverConfigured = distributionAddresses.loadBool();
+    walletConfigured = distributionAddresses.loadBool();
 }
 
 fun saveData() {
@@ -41,6 +45,8 @@ fun saveData() {
     var distributionAddresses = beginCell()
         .storeAddress(giverAllodiumAddress)
         .storeAddress(allodiumFoundationAddress)
+        .storeBool(giverConfigured)
+        .storeBool(walletConfigured)
         .endCell();
 
     contract.setData(
@@ -51,6 +57,42 @@ fun saveData() {
             .storeRef(distributionAddresses)
             .endCell()
     );
+}
+
+fun requireOwner(senderAddress: address) {
+    assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+}
+
+fun initializeGiver(newGiverAddress: address) {
+    assert(!giverConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(lockedDom == 0, ERROR_ALREADY_INITIALIZED);
+    assert(newGiverAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(newGiverAddress != domWalletAddress, ERROR_INVALID_AMOUNT);
+    assert(newGiverAddress != allodMasterAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        newGiverAddress != allodiumFoundationAddress,
+        ERROR_INVALID_AMOUNT
+    );
+
+    giverAllodiumAddress = newGiverAddress;
+    giverConfigured = true;
+    saveData();
+}
+
+fun initializeWallet(newWalletAddress: address) {
+    assert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(lockedDom == 0, ERROR_ALREADY_INITIALIZED);
+    assert(newWalletAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(newWalletAddress != allodMasterAddress, ERROR_INVALID_AMOUNT);
+    assert(newWalletAddress != giverAllodiumAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        newWalletAddress != allodiumFoundationAddress,
+        ERROR_INVALID_AMOUNT
+    );
+
+    domWalletAddress = newWalletAddress;
+    walletConfigured = true;
+    saveData();
 }
 
 fun sendMintAllowance(allowanceAmount: int, queryId: int) {
@@ -114,7 +156,21 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
+    if (op == OP_INIT_FRS_GIVER) {
+        requireOwner(senderAddress);
+        initializeGiver(msgBody.loadAddress());
+        return;
+    }
+
+    if (op == OP_INIT_FRS_WALLET) {
+        requireOwner(senderAddress);
+        initializeWallet(msgBody.loadAddress());
+        return;
+    }
+
     if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(giverConfigured, ERROR_PROXY_NOT_CONFIGURED);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
         assert(senderAddress == domWalletAddress, ERROR_NOT_VALID_WALLET);
 
         var domAmount = msgBody.loadCoins();
@@ -145,6 +201,7 @@ fun onInternalMessage(in: InMessage) {
     }
 
     if (op == OP_ALLOD_BURNED) {
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
         assert(senderAddress == allodMasterAddress, ERROR_NOT_MASTER);
 
         var burnedAllod = msgBody.loadCoins();
@@ -173,7 +230,7 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getFrsData(): (
-    address, address, address, address, address, int
+    address, address, address, address, address, int, bool, bool
 ) {
     loadData();
 
@@ -183,7 +240,9 @@ get fun getFrsData(): (
         allodMasterAddress,
         giverAllodiumAddress,
         allodiumFoundationAddress,
-        lockedDom
+        lockedDom,
+        giverConfigured,
+        walletConfigured
     );
 }
 

@@ -274,6 +274,31 @@ fun clearPending() {
     pendingNewValue = 0;
 }
 
+fun requireDistinctTreasuryTarget(
+    candidate: address,
+    replacedAddress: address
+) {
+    assert(candidate != ownerAddress, ERROR_WRONG_TARGET);
+    assert(candidate != treasuryManagerAddress, ERROR_WRONG_TARGET);
+    assert(candidate != jettonWalletAddress, ERROR_WRONG_TARGET);
+
+    if (bankDaoAddress != replacedAddress) {
+        assert(candidate != bankDaoAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (bankDefiAddress != replacedAddress) {
+        assert(candidate != bankDefiAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (bankDominumAddress != replacedAddress) {
+        assert(candidate != bankDominumAddress, ERROR_WRONG_TARGET);
+    }
+
+    if (gasPoolAddress != replacedAddress) {
+        assert(candidate != gasPoolAddress, ERROR_WRONG_TARGET);
+    }
+}
+
 fun createPendingRoute(
     walletAddress: address,
     walletQueryId: int
@@ -324,6 +349,7 @@ fun requestAddressChange(
         isExpectedTarget(targetKind, oldAddress),
         ERROR_WRONG_TARGET
     );
+    requireDistinctTreasuryTarget(newAddress, oldAddress);
 
     hasPending = true;
     pendingKind = PENDING_ADDRESS;
@@ -358,6 +384,8 @@ fun applyAddressChange(queryId: int) {
 
     var oldAddress = pendingOldAddress!;
     var newAddress = pendingNewAddress!;
+
+    requireDistinctTreasuryTarget(newAddress, oldAddress);
 
     if (pendingTargetKind == TREASURY_TARGET_BANK_DAO) {
         assert(oldAddress == bankDaoAddress, ERROR_NOT_IN_WHITELIST);
