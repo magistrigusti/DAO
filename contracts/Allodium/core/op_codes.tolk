@@ -28,7 +28,8 @@ const OP_INIT_FRS_GIVER: int = 0x102;
 const OP_INIT_FRS_WALLET: int = 0x103;
 
 // AllodGasPool.
-// Wallet платит fee в ALLOD, pool оплачивает TON-сообщения.
+// Wallet платит fee в ALLOD.
+// Pool оплачивает TON-сообщения.
 const OP_ALLOD_GAS_POOL_EXECUTE: int = 0xa110d001;
 const OP_INIT_ALLOD_MASTER_CONFIG: int = 0xa110d002;
 const OP_CHANGE_ALLOD_TRANSFER_FEE: int = 0xa110d003;

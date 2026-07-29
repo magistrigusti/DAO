@@ -217,6 +217,8 @@ export async function assertRecipientTopologyAndCode(
   assertDisjoint(recipients, core, 'Recipient intersects a core role');
   assertDisjoint(owners, core, 'Recipient owner intersects a core role');
   assertDisjoint(owners, dependencies, 'Owner intersects a dependency');
+  assertDisjoint(recipients, dependencies, 'Recipient is a dependency');
+  assertDisjoint(core, dependencies, 'Core role is a dependency');
 
   const expectedWorkchain = graph.domMaster.address.workChain;
   const invalid = [...recipients, ...owners, ...dependencies].find(

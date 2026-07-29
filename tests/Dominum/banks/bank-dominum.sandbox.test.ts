@@ -5,7 +5,7 @@ import {
   SandboxContract,
   TreasuryContract,
 } from '@ton/sandbox';
-import { Cell } from '@ton/core';
+import { Address, Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
 import { BankDominum } from '../../../wrappers/Dominum/banks/BankDominum';
@@ -115,6 +115,24 @@ describe('BankDominum', () => {
 
     expect(
       await bankDominum.isAddressAllowed(futureInstrument.address)
+    ).toBe(true);
+
+    const otherWorkchainTarget =
+      new Address(-1, futureInstrument.address.hash);
+
+    await ignoreFailure(
+      bankDominum.sendRemoveWhitelist(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          address: otherWorkchainTarget,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
+    );
+
+    expect(
+      await bankDominum.isAddressWhitelisted(futureInstrument.address)
     ).toBe(true);
 
     await bankDominum.sendRemoveWhitelist(

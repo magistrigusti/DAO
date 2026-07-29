@@ -5,7 +5,7 @@ import {
   SandboxContract,
   TreasuryContract,
 } from '@ton/sandbox';
-import { Cell } from '@ton/core';
+import { Address, Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
 import {
@@ -160,6 +160,21 @@ describe('AllodiumFoundation', () => {
     expect(data.totalSent).toEqual(
       ALLODIUM_FIXTURE.lockedDomAmount
     );
+
+    const otherWorkchainDao = new Address(-1, dao.address.hash);
+
+    await ignoreFailure(
+      foundation.sendRemoveWhitelist(
+        owner.getSender(),
+        {
+          value: ALLODIUM_VALUE.service,
+          address: otherWorkchainDao,
+          queryId: ALLODIUM_QUERY.rejected,
+        }
+      )
+    );
+
+    expect(await foundation.isAddressWhitelisted(dao.address)).toBe(true);
 
     await foundation.sendRemoveWhitelist(
       owner.getSender(),
