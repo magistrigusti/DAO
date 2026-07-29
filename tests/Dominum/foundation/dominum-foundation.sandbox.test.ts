@@ -5,7 +5,7 @@ import {
   SandboxContract,
   TreasuryContract,
 } from '@ton/sandbox';
-import { Cell } from '@ton/core';
+import { Address, Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
 import {
@@ -100,6 +100,23 @@ describe('DominumFoundation', () => {
         address: member.address,
         queryId: DOM_QUERY.bankCommand,
       }
+    );
+
+    expect(
+      await dominumFoundation.isAddressWhitelisted(member.address)
+    ).toBe(true);
+
+    const otherWorkchainMember = new Address(-1, member.address.hash);
+
+    await ignoreFailure(
+      dominumFoundation.sendRemoveWhitelist(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          address: otherWorkchainMember,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
     );
 
     expect(

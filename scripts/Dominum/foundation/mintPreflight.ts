@@ -1,3 +1,4 @@
+import { Address } from '@ton/core';
 import { NetworkProvider } from '@ton/blueprint';
 
 import {
@@ -17,6 +18,16 @@ import {
   assertRecipientContractsReady,
 } from './recipientPreflight';
 
+function assertIndependentRoleAddresses(roles: Address[]): void {
+  const unique = new Set(
+    roles.map((address) => address.toRawString())
+  );
+
+  if (unique.size !== roles.length) {
+    throw new Error('DOM control or contract roles intersect');
+  }
+}
+
 export async function assertFirstMintReady(
   provider: NetworkProvider, infrastructure: InfrastructureContracts,
   graph: TokenGraphContracts, distribution: DomDistributionAddresses,
@@ -30,7 +41,8 @@ export async function assertFirstMintReady(
 
   const [
     jetton, master, masterPending, minter, givers,
-    gas, treasury, treasuryPending, canMint,
+    gas, treasury, treasuryPending, canMint, gasTransferFee,
+    treasuryManagerOwner, minterManagerOwner, giverManagerOwner,
   ] = await Promise.all([
     graph.domMaster.getJettonData(),
     graph.domMaster.getMasterData(),
@@ -41,9 +53,39 @@ export async function assertFirstMintReady(
     infrastructure.treasuryPool.getTreasuryPoolData(),
     infrastructure.treasuryPool.getTreasuryPendingData(),
     graph.domMaster.getCanMintNow(),
+    infrastructure.gasPool.getDomTransferFee(),
+    infrastructure.treasuryManager.getTreasuryManagerData(),
+    graph.minterManager.getMinterManagerData(),
+    graph.giverManager.getManagerData(),
   ]);
 
   const config = FIRST_MINT_CONFIG;
+
+  if (!jetton.jettonWalletCode.hash().equals(compiled.walletCode.hash())) {
+    throw new Error('DomMaster wallet code hash mismatch');
+  }
+
+  assertIndependentRoleAddresses([
+    master.ownerAddress, treasury.ownerAddress, minter.ownerAddress,
+    treasuryManagerOwner, minterManagerOwner, giverManagerOwner,
+    controls.frsOwner, controls.allodiumFoundationOwner,
+    controls.marketOwner, controls.foundryOwner,
+    controls.defiBankOwner, controls.daoBankOwner,
+    controls.daoFoundationOwner, controls.dominumBankOwner,
+    controls.dominumFoundationOwner, infrastructure.deployer,
+    infrastructure.treasuryManager.address,
+    infrastructure.treasuryPool.address, infrastructure.gasPool.address,
+    graph.giverManager.address, graph.minterManager.address,
+    graph.minter.address, graph.domMaster.address,
+    graph.giverAllodium.address, graph.giverDefi.address,
+    graph.giverDao.address, graph.giverDominum.address,
+    distribution.frsAllodium, distribution.allodiumFoundation,
+    distribution.defiMarket, distribution.defiFoundry,
+    distribution.defiTreasury, distribution.daoBank,
+    distribution.daoFoundation, distribution.dominumBank,
+    distribution.dominumFoundation, controls.allodMaster,
+    controls.defiFoundation, controls.foundryRelease,
+  ]);
 
   if (jetton.totalSupply !== config.emptyAmount) {
     throw new Error('First mint requires zero total supply');
@@ -135,13 +177,34 @@ export async function assertFirstMintReady(
     'TreasuryPool GasPool'
   );
 
-  const treasuryWallet = await graph.domMaster.getWalletAddress(
-    infrastructure.treasuryPool.address
+  assertAddress(
+    treasury.treasuryManagerAddress,
+    infrastructure.treasuryManager.address,
+    'TreasuryPool TreasuryManager'
   );
+
+  if (treasury.taxMultiplier !== gas.taxMultiplier) {
+    throw new Error('TreasuryPool and GasPool tax mismatch');
+  }
+
+  if (gasTransferFee !== config.giverFeeDom) {
+    throw new Error('GasPool transfer fee is incompatible with Givers');
+  }
+
+  const [treasuryWallet, poolWallet, poolWalletFromGas] =
+    await Promise.all([
+      graph.domMaster.getWalletAddress(
+        infrastructure.treasuryPool.address
+      ),
+      graph.domMaster.getWalletAddress(infrastructure.gasPool.address),
+      infrastructure.gasPool.getPoolWalletAddress(),
+    ]);
 
   assertAddress(
     treasury.jettonWalletAddress, treasuryWallet, 'TreasuryPool DOM wallet'
   );
+
+  assertAddress(poolWalletFromGas, poolWallet, 'GasPool DOM wallet');
 
   if (treasury.nextRouteId !== config.initialRouteId) {
     throw new Error('TreasuryPool routing state is not empty');

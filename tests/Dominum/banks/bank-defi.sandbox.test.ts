@@ -5,7 +5,7 @@ import {
   SandboxContract,
   TreasuryContract,
 } from '@ton/sandbox';
-import { Cell } from '@ton/core';
+import { Address, Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
 import { BankDefi } from '../../../wrappers/Dominum/banks/BankDefi';
@@ -116,43 +116,61 @@ describe('BankDefi', () => {
     async () => {
       const bankDefi = await deployBank();
 
-    await bankDefi.sendAddWhitelist(
-      owner.getSender(),
-      {
-        value: DOM_VALUE.config,
-        address: futureDefiTool.address,
-        queryId: DOM_QUERY.bankCommand,
-      }
-    );
+      await bankDefi.sendAddWhitelist(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          address: futureDefiTool.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      );
 
-    let data = await bankDefi.getDefiBankData();
+      let data = await bankDefi.getDefiBankData();
 
-    expect(data.whitelistCount).toEqual(
-      DOM_STATE.oneCount
-    );
+      expect(data.whitelistCount).toEqual(
+        DOM_STATE.oneCount
+      );
 
-    expect(
-      await bankDefi.isAddressWhitelisted(futureDefiTool.address)
-    ).toBe(true);
+      expect(
+        await bankDefi.isAddressWhitelisted(futureDefiTool.address)
+      ).toBe(true);
 
-    expect(
-      await bankDefi.isAddressAllowed(futureDefiTool.address)
-    ).toBe(true);
+      expect(
+        await bankDefi.isAddressAllowed(futureDefiTool.address)
+      ).toBe(true);
 
-    await bankDefi.sendRemoveWhitelist(
-      owner.getSender(),
-      {
-        value: DOM_VALUE.config,
-        address: futureDefiTool.address,
-        queryId: DOM_QUERY.bankCommand,
-      }
-    );
+      const otherWorkchainTarget =
+        new Address(-1, futureDefiTool.address.hash);
 
-    data = await bankDefi.getDefiBankData();
+      await ignoreFailure(
+        bankDefi.sendRemoveWhitelist(
+          owner.getSender(),
+          {
+            value: DOM_VALUE.config,
+            address: otherWorkchainTarget,
+            queryId: DOM_QUERY.bankCommand,
+          }
+        )
+      );
 
-    expect(data.whitelistCount).toEqual(
-      DOM_STATE.zeroCount
-    );
+      expect(
+        await bankDefi.isAddressWhitelisted(futureDefiTool.address)
+      ).toBe(true);
+
+      await bankDefi.sendRemoveWhitelist(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          address: futureDefiTool.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      );
+
+      data = await bankDefi.getDefiBankData();
+
+      expect(data.whitelistCount).toEqual(
+        DOM_STATE.zeroCount
+      );
 
       expect(
         await bankDefi.isAddressAllowed(futureDefiTool.address)

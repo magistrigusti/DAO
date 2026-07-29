@@ -29,7 +29,7 @@ const CONTRACTS = {
   foundryLock: 'Dominum/invest/FoundryLock',
   bankDefi: 'Dominum/banks/BankDefi',
   bankDao: 'Dominum/banks/BankDao',
-  daoFoundation: 'Dominum/foundation/DaoFoundation',
+  daoFoundation: 'Dominum/dao/DaoFoundation',
   bankDominum: 'Dominum/banks/BankDominum',
   dominumFoundation: 'Dominum/foundation/DominumFoundation',
 } as const;

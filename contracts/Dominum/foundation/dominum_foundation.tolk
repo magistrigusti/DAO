@@ -83,7 +83,6 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
 fun requireOwner(senderAddress: address) {
     assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 }
-
 fun requireSameWorkchain(candidate: address) {
     assert(
         candidate.getWorkchain() == contract.getAddress().getWorkchain(),
