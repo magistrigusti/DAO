@@ -10,6 +10,7 @@ export const OP_BURN_NOTIFICATION = 0x7bdd97den;
 
 export const OP_MINT = 0x15n;
 
+export const OP_INIT_WALLET_CONFIG = 0x41n;
 export const OP_WITHDRAW = 0x51n;
 export const OP_WITHDRAW_JETTONS = 0x52n;
 export const OP_ADD_WHITELIST = 0xe0n;

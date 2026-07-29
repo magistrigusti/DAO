@@ -45,12 +45,15 @@ describe('FoundryLock', () => {
     outsider = await blockchain.treasury('outsider');
   });
 
-  async function deployFoundryLock() {
+  async function deployFoundryLock(walletConfigured = true) {
     const foundryLock = blockchain.openContract(
       FoundryLock.createFromConfig(
         {
           ownerAddress: owner.address,
-          walletAddress: wallet.address,
+          walletAddress: walletConfigured
+            ? wallet.address
+            : outsider.address,
+          walletConfigured,
           releaseAddress: release.address,
         },
         foundryLockCode
@@ -72,6 +75,7 @@ describe('FoundryLock', () => {
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.walletAddress, wallet.address);
     expectAddress(data.releaseAddress, release.address);
+    expect(data.walletConfigured).toBe(true);
 
     expect(data.totalReceived).toEqual(
       DOM_STATE.zeroCoins
@@ -137,5 +141,51 @@ describe('FoundryLock', () => {
     data = await foundryLock.getFoundryLockData();
 
     expectAddress(data.releaseAddress, newRelease.address);
+  });
+
+  it('should initialize DOM wallet once from owner', async () => {
+    const foundryLock = await deployFoundryLock(false);
+
+    await ignoreFailure(
+      foundryLock.sendInitWallet(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: wallet.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
+    );
+
+    let data = await foundryLock.getFoundryLockData();
+    expect(data.walletConfigured).toBe(false);
+    expectAddress(data.walletAddress, outsider.address);
+
+    await foundryLock.sendInitWallet(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        walletAddress: wallet.address,
+        queryId: DOM_QUERY.bankCommand + 1n,
+      }
+    );
+
+    data = await foundryLock.getFoundryLockData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.walletAddress, wallet.address);
+
+    await ignoreFailure(
+      foundryLock.sendInitWallet(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: outsider.address,
+          queryId: DOM_QUERY.bankCommand + 2n,
+        }
+      )
+    );
+
+    data = await foundryLock.getFoundryLockData();
+    expectAddress(data.walletAddress, wallet.address);
   });
 });

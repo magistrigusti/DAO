@@ -8,7 +8,9 @@ import {
 import { Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
-import { DominumFoundation } from '../../../wrappers/Dominum/foundation/DominumFoundation';
+import {
+  DominumFoundation,
+} from '../../../wrappers/Dominum/foundation/DominumFoundation';
 
 import {
   DOM_QUERY,
@@ -45,12 +47,15 @@ describe('DominumFoundation', () => {
     outsider = await blockchain.treasury('outsider');
   });
 
-  async function deployFoundation() {
+  async function deployFoundation(walletConfigured = true) {
     const dominumFoundation = blockchain.openContract(
       DominumFoundation.createFromConfig(
         {
           ownerAddress: owner.address,
-          walletAddress: wallet.address,
+          walletAddress: walletConfigured
+            ? wallet.address
+            : outsider.address,
+          walletConfigured,
         },
         dominumFoundationCode
       )
@@ -70,6 +75,7 @@ describe('DominumFoundation', () => {
 
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.walletAddress, wallet.address);
+    expect(data.walletConfigured).toBe(true);
 
     expect(data.whitelistCount).toEqual(
       DOM_STATE.zeroCount
@@ -131,5 +137,51 @@ describe('DominumFoundation', () => {
     expect(
       await dominumFoundation.isAddressWhitelisted(member.address)
     ).toBe(false);
+  });
+
+  it('should initialize DOM wallet once from owner', async () => {
+    const dominumFoundation = await deployFoundation(false);
+
+    await ignoreFailure(
+      dominumFoundation.sendInitWallet(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: wallet.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
+    );
+
+    let data = await dominumFoundation.getFoundationData();
+    expect(data.walletConfigured).toBe(false);
+    expectAddress(data.walletAddress, outsider.address);
+
+    await dominumFoundation.sendInitWallet(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        walletAddress: wallet.address,
+        queryId: DOM_QUERY.bankCommand + 1n,
+      }
+    );
+
+    data = await dominumFoundation.getFoundationData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.walletAddress, wallet.address);
+
+    await ignoreFailure(
+      dominumFoundation.sendInitWallet(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: outsider.address,
+          queryId: DOM_QUERY.bankCommand + 2n,
+        }
+      )
+    );
+
+    data = await dominumFoundation.getFoundationData();
+    expectAddress(data.walletAddress, wallet.address);
   });
 });

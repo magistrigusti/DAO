@@ -8,11 +8,16 @@ import {
   Dictionary,
   Sender,
 } from '@ton/core';
-import { OP_SET_RELEASE, OP_UNLOCK_MONTH } from '../core/op_code';
+import {
+  OP_INIT_WALLET_CONFIG,
+  OP_SET_RELEASE,
+  OP_UNLOCK_MONTH,
+} from '../core/op_code';
 
 export type FoundryLockConfig = {
   ownerAddress: Address;
   walletAddress: Address;
+  walletConfigured: boolean;
   releaseAddress: Address;
   totalReceived?: bigint;
   totalLocked?: bigint;
@@ -39,15 +44,23 @@ export function foundryLockConfigToCell(config: FoundryLockConfig): Cell {
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.walletAddress)
+    .storeBit(config.walletConfigured)
     .storeAddress(config.releaseAddress)
     .storeRef(stats)
     .endCell();
 }
 
 export class FoundryLock implements Contract {
-  constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+  constructor(
+    readonly address: Address,
+    readonly init?: { code: Cell; data: Cell }
+  ) {}
 
-  static createFromConfig(config: FoundryLockConfig, code: Cell, workchain = 0) {
+  static createFromConfig(
+    config: FoundryLockConfig,
+    code: Cell,
+    workchain = 0
+  ) {
     const data = foundryLockConfigToCell(config);
     const init = { code, data };
 
@@ -71,6 +84,24 @@ export class FoundryLock implements Contract {
       .storeUint(OP_UNLOCK_MONTH, 32)
       .storeUint(opts.queryId ?? 0n, 64)
       .storeUint(opts.month, 64)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
+  async sendInitWallet(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      walletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_WALLET_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.walletAddress)
       .endCell();
 
     await provider.internal(via, { value: opts.value, body });
@@ -103,6 +134,7 @@ export class FoundryLock implements Contract {
       totalFeePaid: stack.readBigNumber(),
       totalReturnedFee: stack.readBigNumber(),
       currentMonth: stack.readBigNumber(),
+      walletConfigured: stack.readBoolean(),
     };
   }
 

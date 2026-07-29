@@ -8,7 +8,9 @@ import {
 import { Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
-import { AllodiumFoundation } from '../../../wrappers/Allodium/foundation/AllodiumFoundation';
+import {
+  AllodiumFoundation,
+} from '../../../wrappers/Allodium/foundation/AllodiumFoundation';
 import {
   ALLODIUM_COMPILE,
   ALLODIUM_FIXTURE,
@@ -48,12 +50,15 @@ describe('AllodiumFoundation', () => {
     giverAllodium = await blockchain.treasury('giver-allodium');
   });
 
-  function openFoundation() {
+  function openFoundation(walletConfigured = true) {
     return blockchain.openContract(
       AllodiumFoundation.createFromConfig(
         {
           ownerAddress: owner.address,
-          domWalletAddress: domWallet.address,
+          domWalletAddress: walletConfigured
+            ? domWallet.address
+            : outsider.address,
+          walletConfigured,
           totalReceived: ALLODIUM_STATE.emptyCounter,
           totalSent: ALLODIUM_STATE.emptyCounter,
         },
@@ -74,6 +79,7 @@ describe('AllodiumFoundation', () => {
 
     expectAddress(initialData.ownerAddress, owner.address);
     expectAddress(initialData.domWalletAddress, domWallet.address);
+    expect(initialData.walletConfigured).toBe(true);
 
     expect(initialData.whitelistCount).toEqual(
       ALLODIUM_STATE.emptyCounter
@@ -186,5 +192,71 @@ describe('AllodiumFoundation', () => {
     expect(data.totalSent).toEqual(
       ALLODIUM_FIXTURE.lockedDomAmount
     );
+  });
+
+  it('should initialize DOM wallet once from owner', async () => {
+    const foundation = openFoundation(false);
+
+    await foundation.sendDeploy(
+      owner.getSender(),
+      ALLODIUM_VALUE.deploySmall
+    );
+
+    await ignoreFailure(
+      foundation.sendInitWallet(
+        outsider.getSender(),
+        {
+          value: ALLODIUM_VALUE.service,
+          walletAddress: domWallet.address,
+          queryId: ALLODIUM_QUERY.rejected,
+        }
+      )
+    );
+
+    let data = await foundation.getFoundationData();
+    expect(data.walletConfigured).toBe(false);
+    expectAddress(data.domWalletAddress, outsider.address);
+
+    await ignoreFailure(
+      foundation.sendDomTransferNotification(
+        domWallet.getSender(),
+        {
+          value: ALLODIUM_VALUE.service,
+          amount: ALLODIUM_FIXTURE.lockedDomAmount,
+          fromAddress: giverAllodium.address,
+          queryId: ALLODIUM_QUERY.rejected,
+        }
+      )
+    );
+
+    data = await foundation.getFoundationData();
+    expect(data.totalReceived).toEqual(ALLODIUM_STATE.emptyCounter);
+
+    await foundation.sendInitWallet(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.service,
+        walletAddress: domWallet.address,
+        queryId: ALLODIUM_QUERY.domLocked,
+      }
+    );
+
+    data = await foundation.getFoundationData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.domWalletAddress, domWallet.address);
+
+    await ignoreFailure(
+      foundation.sendInitWallet(
+        owner.getSender(),
+        {
+          value: ALLODIUM_VALUE.service,
+          walletAddress: outsider.address,
+          queryId: ALLODIUM_QUERY.rejected,
+        }
+      )
+    );
+
+    data = await foundation.getFoundationData();
+    expectAddress(data.domWalletAddress, domWallet.address);
   });
 });

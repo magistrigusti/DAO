@@ -8,7 +8,9 @@ import {
 import { Cell } from '@ton/core';
 import { compile } from '@ton/blueprint';
 
-import { DaoFoundation } from '../../../wrappers/Dominum/foundation/DaoFoundation';
+import {
+  DaoFoundation,
+} from '../../../wrappers/Dominum/foundation/DaoFoundation';
 
 import {
   DOM_COMPILE,
@@ -44,12 +46,15 @@ describe('DaoFoundation', () => {
     outsider = await blockchain.treasury('outsider');
   });
 
-  async function deployFoundation() {
+  async function deployFoundation(walletConfigured = true) {
     const daoFoundation = blockchain.openContract(
       DaoFoundation.createFromConfig(
         {
           ownerAddress: owner.address,
-          walletAddress: wallet.address,
+          walletAddress: walletConfigured
+            ? wallet.address
+            : outsider.address,
+          walletConfigured,
         },
         daoFoundationCode
       )
@@ -69,6 +74,7 @@ describe('DaoFoundation', () => {
 
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.walletAddress, wallet.address);
+    expect(data.walletConfigured).toBe(true);
 
     expect(data.whitelistCount).toEqual(
       DOM_STATE.zeroCount
@@ -130,5 +136,51 @@ describe('DaoFoundation', () => {
     expect(
       await daoFoundation.isAddressWhitelisted(member.address)
     ).toBe(false);
+  });
+
+  it('should initialize DOM wallet once from owner', async () => {
+    const daoFoundation = await deployFoundation(false);
+
+    await ignoreFailure(
+      daoFoundation.sendInitWallet(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: wallet.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
+    );
+
+    let data = await daoFoundation.getFoundationData();
+    expect(data.walletConfigured).toBe(false);
+    expectAddress(data.walletAddress, outsider.address);
+
+    await daoFoundation.sendInitWallet(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        walletAddress: wallet.address,
+        queryId: DOM_QUERY.bankCommand + 1n,
+      }
+    );
+
+    data = await daoFoundation.getFoundationData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.walletAddress, wallet.address);
+
+    await ignoreFailure(
+      daoFoundation.sendInitWallet(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: outsider.address,
+          queryId: DOM_QUERY.bankCommand + 2n,
+        }
+      )
+    );
+
+    data = await daoFoundation.getFoundationData();
+    expectAddress(data.walletAddress, wallet.address);
   });
 });

@@ -48,13 +48,16 @@ describe('BankDominum', () => {
     futureInstrument = await blockchain.treasury('future-instrument');
   });
 
-  async function deployBank() {
+  async function deployBank(walletConfigured = true) {
     const bankDominum = blockchain.openContract(
       BankDominum.createFromConfig(
         {
           ownerAddress: owner.address,
           gasPoolAddress: gasPool.address,
-          domWalletAddress: domWallet.address,
+          domWalletAddress: walletConfigured
+            ? domWallet.address
+            : outsider.address,
+          walletConfigured,
         },
         bankDominumCode
       )
@@ -75,6 +78,7 @@ describe('BankDominum', () => {
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.gasPoolAddress, gasPool.address);
     expectAddress(data.domWalletAddress, domWallet.address);
+    expect(data.walletConfigured).toBe(true);
 
     expect(data.whitelistCount).toEqual(
       DOM_STATE.zeroCount
@@ -154,8 +158,10 @@ describe('BankDominum', () => {
     );
   });
 
-  it('should keep gas pool address unchanged for unsupported update command', async () => {
-    const bankDominum = await deployBank();
+  it(
+    'should keep gas pool address unchanged for unsupported update command',
+    async () => {
+      const bankDominum = await deployBank();
 
     await ignoreFailure(
       bankDominum.sendUpdateGasPool(
@@ -185,6 +191,53 @@ describe('BankDominum', () => {
 
     data = await bankDominum.getBankDominumData();
 
-    expectAddress(data.gasPoolAddress, gasPool.address);
+      expectAddress(data.gasPoolAddress, gasPool.address);
+    }
+  );
+
+  it('should initialize DOM wallet once from owner', async () => {
+    const bankDominum = await deployBank(false);
+
+    await ignoreFailure(
+      bankDominum.sendInitWallet(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: domWallet.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
+    );
+
+    let data = await bankDominum.getBankDominumData();
+    expect(data.walletConfigured).toBe(false);
+    expectAddress(data.domWalletAddress, outsider.address);
+
+    await bankDominum.sendInitWallet(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        walletAddress: domWallet.address,
+        queryId: DOM_QUERY.bankCommand + 1n,
+      }
+    );
+
+    data = await bankDominum.getBankDominumData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.domWalletAddress, domWallet.address);
+
+    await ignoreFailure(
+      bankDominum.sendInitWallet(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: outsider.address,
+          queryId: DOM_QUERY.bankCommand + 2n,
+        }
+      )
+    );
+
+    data = await bankDominum.getBankDominumData();
+    expectAddress(data.domWalletAddress, domWallet.address);
   });
 });

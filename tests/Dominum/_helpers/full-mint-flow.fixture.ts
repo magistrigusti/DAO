@@ -293,8 +293,8 @@ export async function createFullMintFlowFixture() {
     );
   }
   return {
-    blockchain, minterOwner: account.minterOwner, recipients,
-    domMaster, minter, treasuryPool, gasPool,
+    blockchain, account, code, minterOwner: account.minterOwner, recipients,
+    domMaster, minter, treasuryPool, gasPool, treasuryManager, giverManager,
     giverAllodium, giverDefi, giverDao, giverDominum,
   };
 }

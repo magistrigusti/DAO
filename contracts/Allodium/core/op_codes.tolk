@@ -14,6 +14,7 @@ const OP_EXCESSES: int = 0xd53276db;
 const OP_MINT: int = 0x15;
 
 // Allodium Foundation.
+const OP_INIT_WALLET_CONFIG: int = 0x41;
 const OP_WITHDRAW: int = 0x51;
 const OP_WITHDRAW_JETTONS: int = 0x52;
 const OP_ADD_WHITELIST: int = 0xe0;

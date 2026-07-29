@@ -2,46 +2,19 @@ import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 import "@stdlib/tvm-dicts";
-
-// ========== TOLK MIGRATION v2 ==========
-// DOMINUM FOUNDATION v2 — КОРЕНЬ ЭКОСИСТЕМЫ
-// =========================================
-// Принимает: DOM от Giver Dominum (50% split)
-// Хранит: DOM на своём jetton wallet
-// Управляет: дочерними контрактами через whitelist (dict)
-//
-// Owner зашит при деплое, не меняется.
-// Отправлять можно ТОЛЬКО на whitelist-адреса.
-// Whitelist динамический — owner добавляет/убирает.
-//
-// Все ветки экосистемы растут отсюда.
-// =========================================
-
-// -----------------------------------------------------
-// STORAGE
-// -----------------------------------------------------
 global ownerAddress: address;
 global walletAddress: address;
+global walletConfigured: bool;
 global whitelistDict: dict;
 global whitelistCount: int;
-
-// Статистика (только для getter'ов)
 global totalReceived: int;
 global totalSent: int;
-
-// -----------------------------------------------------
-// LOAD / SAVE
-// -----------------------------------------------------
-// Stats и whitelist упакованы в отдельный ref-cell
-// чтобы основная data-cell не переполнялась битами.
-// -----------------------------------------------------
 fun loadData() {
     var ds = contract.getData().beginParse();
-
     ownerAddress = ds.loadAddress();
     walletAddress = ds.loadAddress();
+    walletConfigured = ds.loadBool();
     whitelistCount = ds.loadUint(16);
-
     var statsRef = ds.loadRef().beginParse();
     totalReceived = statsRef.loadCoins();
     totalSent = statsRef.loadCoins();
@@ -54,47 +27,41 @@ fun saveData() {
         .storeCoins(totalSent)
         .storeDict(whitelistDict)
         .endCell();
-
     contract.setData(
         beginCell()
             .storeAddress(ownerAddress)
             .storeAddress(walletAddress)
+            .storeBool(walletConfigured)
             .storeUint(whitelistCount, 16)
             .storeRef(statsRef)
             .endCell()
     );
 }
 
-// -----------------------------------------------------
-// WHITELIST HELPERS
-// -----------------------------------------------------
-// Хеш адреса используем как ключ словаря.
-// Само значение — сериализованный адрес (чтобы можно
-// было потом получить обратно через getter).
-// -----------------------------------------------------
 fun getAddrHash(addr: address): int {
     var (_, hash) = addr.getWorkchainAndHash();
     return hash;
 }
 
 fun isWhitelisted(addr: address): bool {
+    if (
+        addr.getWorkchain() !=
+        contract.getAddress().getWorkchain()
+    ) {
+        return false;
+    }
     var hash = getAddrHash(addr);
     var (_, found) = whitelistDict.uDictGet(256, hash);
-
     if (found) {
         return true;
     }
     return false;
 }
 
-// -----------------------------------------------------
-// ОТПРАВКА DOM — через свой jetton wallet (формат v2)
-// -----------------------------------------------------
 fun sendDom(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
-
     var msgBody = beginCell()
         .storeUint(OP_PROTOCOL_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -103,7 +70,6 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
         .storeAddress(contract.getAddress())
         .storeCoins(GIVER_MAX_FEE_DOM)
         .endCell();
-
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(walletAddress)
@@ -111,23 +77,50 @@ fun sendDom(toAddress: address, amount: int, queryId: int) {
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(msgBody)
         .endCell();
-
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// ОТПРАВКА GRAM
-// -----------------------------------------------------
+fun requireOwner(senderAddress: address) {
+    assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+}
+
+fun requireSameWorkchain(candidate: address) {
+    assert(
+        candidate.getWorkchain() == contract.getAddress().getWorkchain(),
+        ERROR_WRONG_TARGET
+    );
+}
+
+fun initializeWallet(newWalletAddress: address) {
+    assert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceived == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSent == 0, ERROR_ALREADY_INITIALIZED);
+    assert(whitelistCount == 0, ERROR_ALREADY_INITIALIZED);
+    assert(whitelistDict.dictIsEmpty(), ERROR_ALREADY_INITIALIZED);
+    assert(newWalletAddress != walletAddress, ERROR_INVALID_AMOUNT);
+    assert(newWalletAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        newWalletAddress != contract.getAddress(),
+        ERROR_INVALID_AMOUNT
+    );
+    assert(
+        newWalletAddress.getWorkchain() ==
+        contract.getAddress().getWorkchain(),
+        ERROR_WRONG_TARGET
+    );
+    walletAddress = newWalletAddress;
+    walletConfigured = true;
+    saveData();
+}
+
 fun sendGrams(toAddress: address, amount: int, queryId: int) {
     if (amount <= 0) {
         return;
     }
-
     var body = beginCell()
         .storeUint(OP_EXCESSES, 32)
         .storeUint(queryId, 64)
         .endCell();
-
     var msg = beginCell()
         .storeUint(0x10, 6)
         .storeAddress(toAddress)
@@ -135,13 +128,9 @@ fun sendGrams(toAddress: address, amount: int, queryId: int) {
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
-
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// ОТПРАВКА ПРОИЗВОЛЬНОЙ КОМАНДЫ (для управления детьми)
-// -----------------------------------------------------
 fun sendCommand(
     toAddress: address,
     gramsAmount: int,
@@ -158,9 +147,6 @@ fun sendCommand(
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// MAIN
-// -----------------------------------------------------
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
     if (msgBody.isEmpty()) {
@@ -174,11 +160,14 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // =====================================================
-    // OP_TRANSFER_NOTIFICATION — получили DOM
-    // Только от нашего jetton wallet.
-    // =====================================================
+    if (op == OP_INIT_WALLET_CONFIG) {
+        requireOwner(senderAddress);
+        initializeWallet(msgBody.loadAddress());
+        return;
+    }
+
     if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
         assert(
             senderAddress == walletAddress,
             ERROR_NOT_VALID_WALLET
@@ -190,18 +179,14 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_WITHDRAW_JETTONS — отправить DOM (owner, whitelist)
-    // =====================================================
     if (op == OP_WITHDRAW_JETTONS) {
-        assert(
-            senderAddress == ownerAddress,
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadAddress();
 
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(
             isWhitelisted(toAddress),
             ERROR_NOT_IN_WHITELIST
@@ -214,18 +199,14 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_WITHDRAW — отправить GRAM (owner, whitelist)
-    // =====================================================
     if (op == OP_WITHDRAW) {
-        assert(
-            senderAddress == ownerAddress,
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadAddress();
 
+        assert(amount > 0, ERROR_INVALID_AMOUNT);
         assert(
             isWhitelisted(toAddress),
             ERROR_NOT_IN_WHITELIST
@@ -235,16 +216,9 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_SEND_JETTONS — произвольная команда (owner, whitelist)
-    // Используется для управления дочерними контрактами.
-    // body: toAddress | gramsAmount | payload(ref)
-    // =====================================================
     if (op == OP_SEND_JETTONS) {
-        assert(
-            senderAddress == ownerAddress,
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var toAddress = msgBody.loadAddress();
         var gramsAmount = msgBody.loadCoins();
@@ -259,16 +233,12 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_ADD_WHITELIST — добавить адрес (owner only)
-    // =====================================================
     if (op == OP_ADD_WHITELIST) {
-        assert(
-            senderAddress == ownerAddress,
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var newAddress = msgBody.loadAddress();
+        requireSameWorkchain(newAddress);
         var hash = getAddrHash(newAddress);
 
         var (_, exists) = whitelistDict.uDictGet(256, hash);
@@ -290,16 +260,12 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_REMOVE_WHITELIST — убрать адрес (owner only)
-    // =====================================================
     if (op == OP_REMOVE_WHITELIST) {
-        assert(
-            senderAddress == ownerAddress,
-            ERROR_NOT_OWNER
-        );
+        requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var removeAddress = msgBody.loadAddress();
+        requireSameWorkchain(removeAddress);
         var hash = getAddrHash(removeAddress);
 
         var deleted = whitelistDict.uDictDelete(256, hash);
@@ -314,11 +280,8 @@ fun onInternalMessage(in: InMessage) {
     throw(0xffff);
 }
 
-// -----------------------------------------------------
-// GETTERS
-// -----------------------------------------------------
 get fun getFoundationData(): (
-    address, address, int, int, int
+    address, address, int, int, int, bool
 ) {
     loadData();
 
@@ -327,7 +290,8 @@ get fun getFoundationData(): (
         walletAddress,
         whitelistCount,
         totalReceived,
-        totalSent
+        totalSent,
+        walletConfigured
     );
 }
 

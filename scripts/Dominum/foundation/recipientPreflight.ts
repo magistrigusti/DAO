@@ -244,14 +244,15 @@ export async function assertRecipientContractsReady(
       'TreasuryPool Dominum Bank',
     ],
   ]);
-  if (!frsData.giverConfigured || !frsData.walletConfigured) {
-    throw new Error('FRS one-shot configuration is incomplete');
-  }
-  if (!marketData.bankConfigured || !marketData.walletConfigured) {
-    throw new Error('Market one-shot configuration is incomplete');
-  }
-  if (!daoBankData.walletConfigured) {
-    throw new Error('DAO Bank wallet is not configured');
+  if (![
+    frsData.giverConfigured, frsData.walletConfigured,
+    allodiumData.walletConfigured, marketData.bankConfigured,
+    marketData.walletConfigured, foundryData.walletConfigured,
+    defiBankData.walletConfigured, daoBankData.walletConfigured,
+    daoFoundationData.walletConfigured, dominumBankData.walletConfigured,
+    dominumFoundationData.walletConfigured,
+  ].every(Boolean)) {
+    throw new Error('Recipient one-shot configuration is incomplete');
   }
   checkEmpty(
     [

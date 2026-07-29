@@ -12,6 +12,7 @@ import {
 
 import {
     OP_ADD_WHITELIST,
+    OP_INIT_WALLET_CONFIG,
     OP_REMOVE_WHITELIST,
     OP_TRANSFER_NOTIFICATION,
     OP_WITHDRAW,
@@ -21,6 +22,7 @@ import {
 export type AllodiumFoundationConfig = {
   ownerAddress: Address;
   domWalletAddress: Address;
+  walletConfigured: boolean;
   whitelistCount?: number;
   totalReceived?: bigint;
   totalSent?: bigint;
@@ -43,6 +45,7 @@ export function allodiumFoundationConfigToCell(
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.domWalletAddress)
+    .storeBit(config.walletConfigured)
     .storeUint(config.whitelistCount ?? 0, 16)
     .storeRef(statsRef)
     .endCell();
@@ -140,6 +143,24 @@ export class AllodiumFoundation implements Contract {
     await provider.internal(via, { value: opts.value, body });
   }
 
+  async sendInitWallet(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      walletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_WALLET_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.walletAddress)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
   async sendAddWhitelist(
     provider: ContractProvider,
     via: Sender,
@@ -185,6 +206,7 @@ export class AllodiumFoundation implements Contract {
       whitelistCount: stack.readBigNumber(),
       totalReceived: stack.readBigNumber(),
       totalSent: stack.readBigNumber(),
+      walletConfigured: stack.readBoolean(),
     };
   }
 

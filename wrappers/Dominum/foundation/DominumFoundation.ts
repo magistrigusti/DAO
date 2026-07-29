@@ -10,6 +10,7 @@ import {
 } from '@ton/core';
 import {
   OP_ADD_WHITELIST,
+  OP_INIT_WALLET_CONFIG,
   OP_REMOVE_WHITELIST,
   OP_SEND_JETTONS,
   OP_WITHDRAW,
@@ -19,13 +20,16 @@ import {
 export type DominumFoundationConfig = {
   ownerAddress: Address;
   walletAddress: Address;
+  walletConfigured: boolean;
   whitelistCount?: number;
   totalReceived?: bigint;
   totalSent?: bigint;
   whitelistDict?: Dictionary<bigint, Cell> | null;
 };
 
-export function dominumFoundationConfigToCell(config: DominumFoundationConfig): Cell {
+export function dominumFoundationConfigToCell(
+  config: DominumFoundationConfig
+): Cell {
   const whitelistDict =
     config.whitelistDict ??
     Dictionary.empty(Dictionary.Keys.BigUint(256), Dictionary.Values.Cell());
@@ -39,15 +43,23 @@ export function dominumFoundationConfigToCell(config: DominumFoundationConfig): 
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.walletAddress)
+    .storeBit(config.walletConfigured)
     .storeUint(config.whitelistCount ?? 0, 16)
     .storeRef(statsRef)
     .endCell();
 }
 
 export class DominumFoundation implements Contract {
-  constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+  constructor(
+    readonly address: Address,
+    readonly init?: { code: Cell; data: Cell }
+  ) {}
 
-  static createFromConfig(config: DominumFoundationConfig, code: Cell, workchain = 0) {
+  static createFromConfig(
+    config: DominumFoundationConfig,
+    code: Cell,
+    workchain = 0
+  ) {
     const data = dominumFoundationConfigToCell(config);
     const init = { code, data };
 
@@ -62,10 +74,33 @@ export class DominumFoundation implements Contract {
     await provider.internal(via, { value });
   }
 
+  async sendInitWallet(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      walletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_WALLET_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.walletAddress)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
   async sendWithdrawTon(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW, 32)
@@ -80,7 +115,12 @@ export class DominumFoundation implements Contract {
   async sendWithdrawJettons(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW_JETTONS, 32)
@@ -95,7 +135,13 @@ export class DominumFoundation implements Contract {
   async sendCommand(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; toAddress: Address; tonAmount: bigint; payload: Cell; queryId?: bigint }
+    opts: {
+      value: bigint;
+      toAddress: Address;
+      tonAmount: bigint;
+      payload: Cell;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_SEND_JETTONS, 32)
@@ -145,6 +191,7 @@ export class DominumFoundation implements Contract {
       whitelistCount: stack.readBigNumber(),
       totalReceived: stack.readBigNumber(),
       totalSent: stack.readBigNumber(),
+      walletConfigured: stack.readBoolean(),
     };
   }
 

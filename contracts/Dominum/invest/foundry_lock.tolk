@@ -3,20 +3,9 @@ import "../core/errors.tolk";
 import "../core/constants.tolk";
 import "@stdlib/tvm-dicts";
 
-// ========== FOUNDRY LOCK ==========
-// Контракт принимает DOM на свой jetton wallet.
-//
-// Каждый входящий mint блокируется отдельно по месяцу
-// будущей разблокировки:
-//
-// unlockMonth = currentMonth() + LOCK_MONTHS
-//
-// Владелец может разблокировать bucket только после срока.
-// Если попытаться раньше, контракт упадет с ERROR_TOO_EARLY.
-// ==================================
-
 global ownerAddress: address;
 global walletAddress: address;
+global walletConfigured: bool;
 global releaseAddress: address;
 
 global totalReceived: int;
@@ -27,24 +16,18 @@ global totalReturnedFee: int;
 
 global lockBuckets: dict;
 
-// -----------------------------------------------------
-// LOAD / SAVE
-// -----------------------------------------------------
 fun loadData() {
     var ds = contract.getData().beginParse();
-
     ownerAddress = ds.loadAddress();
     walletAddress = ds.loadAddress();
+    walletConfigured = ds.loadBool();
     releaseAddress = ds.loadAddress();
-
     var stats = ds.loadRef().beginParse();
-
     totalReceived = stats.loadCoins();
     totalLocked = stats.loadCoins();
     totalUnlocked = stats.loadCoins();
     totalFeePaid = stats.loadCoins();
     totalReturnedFee = stats.loadCoins();
-
     lockBuckets = stats.loadDict();
 }
 
@@ -57,27 +40,46 @@ fun saveData() {
         .storeCoins(totalReturnedFee)
         .storeDict(lockBuckets)
         .endCell();
-
     contract.setData(
         beginCell()
             .storeAddress(ownerAddress)
             .storeAddress(walletAddress)
+            .storeBool(walletConfigured)
             .storeAddress(releaseAddress)
             .storeRef(stats)
             .endCell()
     );
 }
 
-// -----------------------------------------------------
-// ACCESS
-// -----------------------------------------------------
 fun requireOwner(senderAddress: address) {
     assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 }
 
-// -----------------------------------------------------
-// TIME
-// -----------------------------------------------------
+fun initializeWallet(newWalletAddress: address) {
+    assert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceived == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalLocked == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalUnlocked == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalFeePaid == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalReturnedFee == 0, ERROR_ALREADY_INITIALIZED);
+    assert(lockBuckets.dictIsEmpty(), ERROR_ALREADY_INITIALIZED);
+    assert(newWalletAddress != walletAddress, ERROR_INVALID_AMOUNT);
+    assert(newWalletAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(newWalletAddress != releaseAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        newWalletAddress != contract.getAddress(),
+        ERROR_INVALID_AMOUNT
+    );
+    assert(
+        newWalletAddress.getWorkchain() ==
+        contract.getAddress().getWorkchain(),
+        ERROR_WRONG_TARGET
+    );
+    walletAddress = newWalletAddress;
+    walletConfigured = true;
+    saveData();
+}
+
 fun currentMonth(): int {
     return blockchain.now() / SECONDS_PER_MONTH;
 }
@@ -86,18 +88,12 @@ fun getUnlockMonth(): int {
     return currentMonth() + LOCK_MONTHS;
 }
 
-// -----------------------------------------------------
-// BUCKETS
-// -----------------------------------------------------
 fun readBucket(month: int): (int, bool) {
     var (value, found) = lockBuckets.uDictGet(64, month);
-
     if (!found) {
         return (0, false);
     }
-
     var valueSlice = value!;
-
     return (valueSlice.loadCoins(), true);
 }
 
@@ -106,7 +102,6 @@ fun setBucket(month: int, amount: int) {
         .storeCoins(amount)
         .endCell()
         .beginParse();
-
     lockBuckets.uDictSet(64, month, value);
 }
 
@@ -114,45 +109,29 @@ fun deleteBucket(month: int) {
     lockBuckets.uDictDelete(64, month);
 }
 
-// -----------------------------------------------------
-// LOCK
-// -----------------------------------------------------
 fun lockIncoming(amount: int) {
     if (amount <= 0) {
         return;
     }
-
     var unlockMonth = getUnlockMonth();
     var (oldAmount, _) = readBucket(unlockMonth);
-
     setBucket(unlockMonth, oldAmount + amount);
-
     totalReceived = totalReceived + amount;
     totalLocked = totalLocked + amount;
-
     saveData();
 }
 
-// -----------------------------------------------------
-// RETURNED FEE
-// -----------------------------------------------------
 fun acceptReturnedFee(amount: int) {
     if (amount <= 0) {
         return;
     }
-
     totalReturnedFee = totalReturnedFee + amount;
-
     if (totalFeePaid >= amount) {
         totalFeePaid = totalFeePaid - amount;
     }
-
     saveData();
 }
 
-// -----------------------------------------------------
-// SEND DOM
-// -----------------------------------------------------
 fun sendDom(
     toAddress: address,
     amount: int,
@@ -161,7 +140,6 @@ fun sendDom(
     if (amount <= 0) {
         return;
     }
-
     var body = beginCell()
         .storeUint(OP_PROTOCOL_TRANSFER, 32)
         .storeUint(queryId, 64)
@@ -182,9 +160,6 @@ fun sendDom(
     sendRawMessage(msg, 1);
 }
 
-// -----------------------------------------------------
-// UNLOCK
-// -----------------------------------------------------
 fun unlockMonth(
     month: int,
     queryId: int
@@ -213,9 +188,6 @@ fun unlockMonth(
     );
 }
 
-// -----------------------------------------------------
-// MAIN
-// -----------------------------------------------------
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -235,7 +207,14 @@ fun onInternalMessage(in: InMessage) {
 
     var queryId = msgBody.loadUint(64);
 
+    if (op == OP_INIT_WALLET_CONFIG) {
+        requireOwner(senderAddress);
+        initializeWallet(msgBody.loadAddress());
+        return;
+    }
+
     if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
         assert(senderAddress == walletAddress, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
@@ -252,6 +231,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_UNLOCK_MONTH) {
         requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var month = msgBody.loadUint(64);
 
@@ -265,6 +245,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_SET_RELEASE) {
         requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         releaseAddress = msgBody.loadAddress();
 
@@ -275,9 +256,6 @@ fun onInternalMessage(in: InMessage) {
     throw(0xffff);
 }
 
-// -----------------------------------------------------
-// GETTERS
-// -----------------------------------------------------
 get fun getFoundryLockData(): (
     address,
     address,
@@ -287,7 +265,8 @@ get fun getFoundryLockData(): (
     int,
     int,
     int,
-    int
+    int,
+    bool
 ) {
     loadData();
 
@@ -300,7 +279,8 @@ get fun getFoundryLockData(): (
         totalUnlocked,
         totalFeePaid,
         totalReturnedFee,
-        currentMonth()
+        currentMonth(),
+        walletConfigured
     );
 }
 

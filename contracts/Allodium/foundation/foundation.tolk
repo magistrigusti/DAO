@@ -14,6 +14,7 @@ const DOM_TRANSFER_MAX_FEE: int = 3000000;
 
 global ownerAddress: address;
 global domWalletAddress: address;
+global walletConfigured: bool;
 global whitelistDict: dict;
 global whitelistCount: int;
 global totalReceived: int;
@@ -24,6 +25,7 @@ fun loadData() {
 
     ownerAddress = ds.loadAddress();
     domWalletAddress = ds.loadAddress();
+    walletConfigured = ds.loadBool();
     whitelistCount = ds.loadUint(16);
 
     var statsRef = ds.loadRef().beginParse();
@@ -43,6 +45,7 @@ fun saveData() {
         beginCell()
             .storeAddress(ownerAddress)
             .storeAddress(domWalletAddress)
+            .storeBool(walletConfigured)
             .storeUint(whitelistCount, 16)
             .storeRef(statsRef)
             .endCell()
@@ -53,12 +56,49 @@ fun requireOwner(senderAddress: address) {
     assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
 }
 
+fun requireSameWorkchain(candidate: address) {
+    assert(
+        candidate.getWorkchain() == contract.getAddress().getWorkchain(),
+        ERROR_INVALID_AMOUNT
+    );
+}
+
+fun initializeWallet(newWalletAddress: address) {
+    assert(!walletConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalReceived == 0, ERROR_ALREADY_INITIALIZED);
+    assert(totalSent == 0, ERROR_ALREADY_INITIALIZED);
+    assert(whitelistCount == 0, ERROR_ALREADY_INITIALIZED);
+    assert(whitelistDict.dictIsEmpty(), ERROR_ALREADY_INITIALIZED);
+    assert(newWalletAddress != domWalletAddress, ERROR_INVALID_AMOUNT);
+    assert(newWalletAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(
+        newWalletAddress.getWorkchain() ==
+        contract.getAddress().getWorkchain(),
+        ERROR_INVALID_AMOUNT
+    );
+    assert(
+        newWalletAddress != contract.getAddress(),
+        ERROR_INVALID_AMOUNT
+    );
+
+    domWalletAddress = newWalletAddress;
+    walletConfigured = true;
+    saveData();
+}
+
 fun getAddrHash(addr: address): int {
     var (_, hash) = addr.getWorkchainAndHash();
     return hash;
 }
 
 fun isWhitelisted(addr: address): bool {
+    if (
+        addr.getWorkchain() !=
+        contract.getAddress().getWorkchain()
+    ) {
+        return false;
+    }
+
     var hash = getAddrHash(addr);
     var (_, found) = whitelistDict.uDictGet(256, hash);
 
@@ -129,7 +169,14 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
+    if (op == OP_INIT_WALLET_CONFIG) {
+        requireOwner(senderAddress);
+        initializeWallet(msgBody.loadAddress());
+        return;
+    }
+
     if (op == OP_TRANSFER_NOTIFICATION) {
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
         assert(senderAddress == domWalletAddress, ERROR_NOT_VALID_WALLET);
 
         var amount = msgBody.loadCoins();
@@ -147,6 +194,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_WITHDRAW_JETTONS) {
         requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadAddress();
@@ -163,6 +211,7 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_WITHDRAW) {
         requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var amount = msgBody.loadCoins();
         var toAddress = msgBody.loadAddress();
@@ -176,8 +225,10 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_ADD_WHITELIST) {
         requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var newAddress = msgBody.loadAddress();
+        requireSameWorkchain(newAddress);
         var hash = getAddrHash(newAddress);
 
         var (_, exists) = whitelistDict.uDictGet(256, hash);
@@ -203,8 +254,10 @@ fun onInternalMessage(in: InMessage) {
 
     if (op == OP_REMOVE_WHITELIST) {
         requireOwner(senderAddress);
+        assert(walletConfigured, ERROR_PROXY_NOT_CONFIGURED);
 
         var removeAddress = msgBody.loadAddress();
+        requireSameWorkchain(removeAddress);
         var hash = getAddrHash(removeAddress);
 
         var deleted = whitelistDict.uDictDelete(256, hash);
@@ -221,7 +274,7 @@ fun onInternalMessage(in: InMessage) {
 }
 
 get fun getFoundationData(): (
-    address, address, int, int, int
+    address, address, int, int, int, bool
 ) {
     loadData();
 
@@ -230,7 +283,8 @@ get fun getFoundationData(): (
         domWalletAddress,
         whitelistCount,
         totalReceived,
-        totalSent
+        totalSent,
+        walletConfigured
     );
 }
 

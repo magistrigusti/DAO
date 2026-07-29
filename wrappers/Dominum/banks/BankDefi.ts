@@ -10,6 +10,7 @@ import {
 } from '@ton/core';
 import {
   OP_ADD_WHITELIST,
+  OP_INIT_WALLET_CONFIG,
   OP_REMOVE_WHITELIST,
   OP_WITHDRAW,
   OP_WITHDRAW_JETTONS,
@@ -18,6 +19,7 @@ import {
 export type BankDefiConfig = {
   ownerAddress: Address;
   walletAddress: Address;
+  walletConfigured: boolean;
   defiFoundationAddress: Address;
   marketMakerAddress: Address;
   whitelistCount?: number;
@@ -46,13 +48,17 @@ export function bankDefiConfigToCell(config: BankDefiConfig): Cell {
   return beginCell()
     .storeAddress(config.ownerAddress)
     .storeAddress(config.walletAddress)
+    .storeBit(config.walletConfigured)
     .storeRef(targets)
     .storeRef(statsRef)
     .endCell();
 }
 
 export class BankDefi implements Contract {
-  constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+  constructor(
+    readonly address: Address,
+    readonly init?: { code: Cell; data: Cell }
+  ) {}
 
   static createFromConfig(config: BankDefiConfig, code: Cell, workchain = 0) {
     const data = bankDefiConfigToCell(config);
@@ -68,10 +74,33 @@ export class BankDefi implements Contract {
     await provider.internal(via, { value });
   }
 
+  async sendInitWallet(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      walletAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_WALLET_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.walletAddress)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
   async sendWithdrawTon(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW, 32)
@@ -86,7 +115,12 @@ export class BankDefi implements Contract {
   async sendWithdrawJettons(
     provider: ContractProvider,
     via: Sender,
-    opts: { value: bigint; amount: bigint; toAddress: Address; queryId?: bigint }
+    opts: {
+      value: bigint;
+      amount: bigint;
+      toAddress: Address;
+      queryId?: bigint;
+    }
   ) {
     const body = beginCell()
       .storeUint(OP_WITHDRAW_JETTONS, 32)
@@ -137,6 +171,7 @@ export class BankDefi implements Contract {
       whitelistCount: stack.readBigNumber(),
       totalReceived: stack.readBigNumber(),
       totalSent: stack.readBigNumber(),
+      walletConfigured: stack.readBoolean(),
     };
   }
 

@@ -48,12 +48,15 @@ describe('BankDefi', () => {
     futureDefiTool = await blockchain.treasury('future-defi-tool');
   });
 
-  async function deployBank() {
+  async function deployBank(walletConfigured = true) {
     const bankDefi = blockchain.openContract(
       BankDefi.createFromConfig(
         {
           ownerAddress: owner.address,
-          walletAddress: wallet.address,
+          walletAddress: walletConfigured
+            ? wallet.address
+            : outsider.address,
+          walletConfigured,
           defiFoundationAddress: defiFoundation.address,
           marketMakerAddress: marketMaker.address,
         },
@@ -77,6 +80,7 @@ describe('BankDefi', () => {
     expectAddress(data.walletAddress, wallet.address);
     expectAddress(data.defiFoundationAddress, defiFoundation.address);
     expectAddress(data.marketMakerAddress, marketMaker.address);
+    expect(data.walletConfigured).toBe(true);
 
     expect(data.whitelistCount).toEqual(
       DOM_STATE.zeroCount
@@ -107,8 +111,10 @@ describe('BankDefi', () => {
     ).toBe(false);
   });
 
-  it('should add and remove future DeFi targets through dynamic whitelist', async () => {
-    const bankDefi = await deployBank();
+  it(
+    'should add and remove future DeFi targets through dynamic whitelist',
+    async () => {
+      const bankDefi = await deployBank();
 
     await bankDefi.sendAddWhitelist(
       owner.getSender(),
@@ -148,10 +154,11 @@ describe('BankDefi', () => {
       DOM_STATE.zeroCount
     );
 
-    expect(
-      await bankDefi.isAddressAllowed(futureDefiTool.address)
-    ).toBe(false);
-  });
+      expect(
+        await bankDefi.isAddressAllowed(futureDefiTool.address)
+      ).toBe(false);
+    }
+  );
 
   it('should reject whitelist changes from non-owner', async () => {
     const bankDefi = await deployBank();
@@ -172,5 +179,51 @@ describe('BankDefi', () => {
     expect(data.whitelistCount).toEqual(
       DOM_STATE.zeroCount
     );
+  });
+
+  it('should initialize DOM wallet once from owner', async () => {
+    const bankDefi = await deployBank(false);
+
+    await ignoreFailure(
+      bankDefi.sendInitWallet(
+        outsider.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: wallet.address,
+          queryId: DOM_QUERY.bankCommand,
+        }
+      )
+    );
+
+    let data = await bankDefi.getDefiBankData();
+    expect(data.walletConfigured).toBe(false);
+    expectAddress(data.walletAddress, outsider.address);
+
+    await bankDefi.sendInitWallet(
+      owner.getSender(),
+      {
+        value: DOM_VALUE.config,
+        walletAddress: wallet.address,
+        queryId: DOM_QUERY.bankCommand + 1n,
+      }
+    );
+
+    data = await bankDefi.getDefiBankData();
+    expect(data.walletConfigured).toBe(true);
+    expectAddress(data.walletAddress, wallet.address);
+
+    await ignoreFailure(
+      bankDefi.sendInitWallet(
+        owner.getSender(),
+        {
+          value: DOM_VALUE.config,
+          walletAddress: outsider.address,
+          queryId: DOM_QUERY.bankCommand + 2n,
+        }
+      )
+    );
+
+    data = await bankDefi.getDefiBankData();
+    expectAddress(data.walletAddress, wallet.address);
   });
 });
