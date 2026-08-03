@@ -56,6 +56,19 @@ const OP_TREASURY_FAILED: int = 0xAC;
 const OP_TREASURY_DELIVER: int = 0xAE;
 
 // =====================================================
+// TWO-PHASE DOM SETTLEMENT
+// =====================================================
+const OP_GAS_POOL_READY: int = 0xDA000001;
+const OP_GAS_POOL_REJECT: int = 0xDA000002;
+const OP_PROTOCOL_DELIVERY: int = 0xDA000003;
+const OP_PROTOCOL_DELIVERY_ACK: int = 0xDA000004;
+const OP_GAS_POOL_COMMIT: int = 0xDA000005;
+const OP_GAS_POOL_COMMITTED: int = 0xDA000006;
+const OP_PROTOCOL_SOURCE_ACK: int = 0xDA000007;
+const OP_PROTOCOL_FINALIZE: int = 0xDA000008;
+const OP_PROTOCOL_RETRY: int = 0xDA000009;
+
+// =====================================================
 // treasury_pool
 // =====================================================
 const OP_REQUEST_CHANGE_POOL: int = 0xB0;

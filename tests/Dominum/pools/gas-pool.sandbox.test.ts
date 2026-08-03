@@ -230,7 +230,7 @@ describe('GasPool', () => {
       }
     );
 
-    await senderWallet.sendProtocolTransfer(
+    const protocolResult = await senderWallet.sendProtocolTransfer(
       owner.getSender(),
       {
         value: DOM_VALUE.deploySmall,
@@ -240,6 +240,29 @@ describe('GasPool', () => {
         responseDestination: owner.address,
         queryId: DOM_QUERY.gasTransfer,
       }
+    );
+
+    console.log(
+      protocolResult.transactions.map((transaction) => {
+        const description = transaction.description;
+        const info = transaction.inMessage?.info;
+        const body = transaction.inMessage?.body.beginParse();
+        const op = body && body.remainingBits >= 32
+          ? body.loadUintBig(32)
+          : null;
+        return {
+          dest: info?.type === 'internal' ? info.dest.toString() : null,
+          op,
+          aborted: description.type === 'generic' && description.aborted,
+          exit: description.type === 'generic' &&
+            description.computePhase.type === 'vm'
+            ? description.computePhase.exitCode
+            : null,
+          action: description.type === 'generic'
+            ? description.actionPhase?.resultCode
+            : null,
+        };
+      })
     );
 
     const receiverWallet = blockchain.openContract(

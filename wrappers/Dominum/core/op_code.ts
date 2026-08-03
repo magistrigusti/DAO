@@ -71,6 +71,15 @@ export const OP_TREASURY_EXECUTE = 0xa9n;
 export const OP_TREASURY_SETTLE = 0xabn;
 export const OP_TREASURY_FAILED = 0xacn;
 export const OP_TREASURY_DELIVER = 0xaen;
+export const OP_GAS_POOL_READY = 0xda000001n;
+export const OP_GAS_POOL_REJECT = 0xda000002n;
+export const OP_PROTOCOL_DELIVERY = 0xda000003n;
+export const OP_PROTOCOL_DELIVERY_ACK = 0xda000004n;
+export const OP_GAS_POOL_COMMIT = 0xda000005n;
+export const OP_GAS_POOL_COMMITTED = 0xda000006n;
+export const OP_PROTOCOL_SOURCE_ACK = 0xda000007n;
+export const OP_PROTOCOL_FINALIZE = 0xda000008n;
+export const OP_PROTOCOL_RETRY = 0xda000009n;
 
 export const OP_UNLOCK_MONTH = 0xf0n;
 export const OP_SET_RELEASE = 0xf1n;

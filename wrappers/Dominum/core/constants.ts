@@ -30,3 +30,26 @@ export const MANAGER_TARGET = {
   minter: 1,
   giver: 2,
 } as const;
+
+export const PROTOCOL_LEG = {
+  recipient: 0,
+  fee: 1,
+} as const;
+
+export const PROTOCOL_ACK = {
+  recipient: 1,
+  fee: 2,
+  all: 3,
+} as const;
+
+export const PROTOCOL_ROUTE_STATE = {
+  waitGas: 1,
+  delivering: 2,
+  waitCommit: 3,
+  waitSourceAck: 4,
+} as const;
+
+export const PROTOCOL_EXECUTION_STATE = {
+  ready: 1,
+  committed: 2,
+} as const;
