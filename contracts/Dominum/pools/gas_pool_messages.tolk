@@ -36,7 +36,12 @@ fun gasPoolSendReject(routeId: int) {
 }
 
 fun gasPoolSendCommitted(routeId: int) {
-    gasPoolSendResponse(OP_GAS_POOL_COMMITTED, routeId, 0, 64);
+    gasPoolSendResponse(
+        OP_GAS_POOL_COMMITTED,
+        routeId,
+        BASE_GRAMS_COST,
+        1
+    );
 }
 
 fun gasPoolSendDomFromPoolWallet(

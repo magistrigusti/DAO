@@ -134,11 +134,11 @@ fun treasurySendGasCommit(routeId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(gasPoolAddress)
-        .storeCoins(0)
+        .storeCoins(BASE_GRAMS_COST)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
-    sendRawMessage(msg, 64);
+    sendRawMessage(msg, 1);
 }
 
 fun treasurySendWalletDelivery(
@@ -186,7 +186,7 @@ fun treasurySendSourceResult(
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(sourceWallet)
-        .storeCoins(0)
+        .storeCoins(PROTOCOL_CONTROL_GRAMS)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -210,7 +210,7 @@ fun treasurySendFinalization(
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
-    sendRawMessage(msg, 1);
+    sendRawMessage(msg, 3);
 }
 
 fun treasuryHandleFinance(
