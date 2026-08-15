@@ -57,6 +57,7 @@ fun gasPoolCommitRoute(routeId: int) {
         );
         totalReceivedDom += fee;
         totalExecuted += 1;
+        totalSpentNanograms += PROTOCOL_COMMIT_GRAMS;
         gasPoolSaveData();
         gasPoolSendCommitted(routeId);
         return;
@@ -65,6 +66,8 @@ fun gasPoolCommitRoute(routeId: int) {
         state == PROTOCOL_EXECUTION_COMMITTED,
         ERROR_PROTOCOL_STATE
     );
+    totalSpentNanograms += PROTOCOL_COMMIT_GRAMS;
+    gasPoolSaveData();
     gasPoolSendCommitted(routeId);
 }
 

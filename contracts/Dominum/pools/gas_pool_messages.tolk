@@ -39,7 +39,7 @@ fun gasPoolSendCommitted(routeId: int) {
     gasPoolSendResponse(
         OP_GAS_POOL_COMMITTED,
         routeId,
-        BASE_GRAMS_COST,
+        PROTOCOL_COMMIT_GRAMS,
         1
     );
 }

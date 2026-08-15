@@ -70,7 +70,13 @@ fun walletHandleProtocolDelivery(
     balance += amount;
     walletStoreDelivery(routeId, leg, amount, fromOwner);
     walletSaveData();
-    walletSendProtocolNotification(amount, fromOwner, routeId);
+    walletSendProtocolNotification(
+        amount,
+        fromOwner,
+        routeId,
+        MIN_GRAMS_FOR_STORAGE,
+        1
+    );
     walletSendDeliveryAck(routeId, leg, amount, fromOwner);
 }
 

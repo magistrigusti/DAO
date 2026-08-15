@@ -1,242 +1,216 @@
 import {
-    Address,
-    beginCell,
-    Cell,
-    Contract,
-    contractAddress,
-    ContractProvider,
-    Dictionary,
-    Sender,
+  Address,
+  Cell,
+  Contract,
+  contractAddress,
+  ContractProvider,
+  Sender,
 } from '@ton/core';
 import {
-    OP_BURN,
-    OP_CLEAR_PENDING_TRANSFER,
-    OP_INTERNAL_TRANSFER,
-    OP_PROTOCOL_TRANSFER,
-    OP_TRANSFER,
-} from '../core/op_code';
+  DomWalletConfig,
+  domWalletConfigToCell,
+} from './DomWalletConfig';
+import {
+  buildClearPendingBody,
+  buildDomBurnBody,
+  buildDomInternalTransferBody,
+  buildDomProtocolTransferBody,
+  buildDomTransferBody,
+  buildProtocolDeliveryBody,
+  buildProtocolSourceResultBody,
+  DomInternalTransferOptions,
+  DomProtocolTransferOptions,
+  DomTransferOptions,
+} from './DomWalletMessages';
 
-export type DomWalletConfig = {
-    balance: bigint;
-    ownerAddress: Address;
-    masterAddress: Address;
-    treasuryPoolAddress: Address;
-    jettonWalletCode: Cell;
-    pendingTransfers?: Dictionary<bigint, Cell> | null;
-};
-
-export function domWalletConfigToCell(config: DomWalletConfig): Cell {
-    const builder = beginCell()
-        .storeCoins(config.balance)
-        .storeAddress(config.ownerAddress)
-        .storeAddress(config.masterAddress)
-        .storeAddress(config.treasuryPoolAddress)
-        .storeRef(config.jettonWalletCode);
-
-    if (config.pendingTransfers) {
-        builder.storeDict(config.pendingTransfers);
-    }
-
-    return builder.endCell();
-}
+export {
+  DomWalletConfig,
+  domWalletConfigToCell,
+} from './DomWalletConfig';
+export * from './DomWalletMessages';
 
 export class DomWallet implements Contract {
-    constructor(
-        readonly address: Address,
-        readonly init?: { code: Cell; data: Cell }
-    ) {}
+  constructor(
+    readonly address: Address,
+    readonly init?: { code: Cell; data: Cell }
+  ) {}
 
-    static createFromConfig(config: DomWalletConfig, code: Cell, workchain = 0) {
-        const data = domWalletConfigToCell(config);
-        const init = { code, data };
-        return new DomWallet(contractAddress(workchain, init), init);
+  static createFromConfig(
+    config: DomWalletConfig,
+    code: Cell,
+    workchain = 0
+  ) {
+    const data = domWalletConfigToCell(config);
+    const init = { code, data };
+    return new DomWallet(contractAddress(workchain, init), init);
+  }
+
+  static createFromAddress(address: Address) {
+    return new DomWallet(address);
+  }
+
+  async sendDeploy(
+    provider: ContractProvider,
+    via: Sender,
+    value: bigint
+  ) {
+    await provider.internal(via, { value });
+  }
+
+  async sendTransfer(
+    provider: ContractProvider,
+    via: Sender,
+    opts: DomTransferOptions & { value: bigint }
+  ) {
+    await provider.internal(via, {
+      value: opts.value,
+      body: buildDomTransferBody(opts),
+    });
+  }
+
+  async sendProtocolTransfer(
+    provider: ContractProvider,
+    via: Sender,
+    opts: DomProtocolTransferOptions & { value: bigint }
+  ) {
+    return provider.internal(via, {
+      value: opts.value,
+      body: buildDomProtocolTransferBody(opts),
+    });
+  }
+
+  async sendInternalTransfer(
+    provider: ContractProvider,
+    via: Sender,
+    opts: DomInternalTransferOptions & { value: bigint }
+  ) {
+    await provider.internal(via, {
+      value: opts.value,
+      body: buildDomInternalTransferBody(opts),
+    });
+  }
+
+  async sendBurn(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      amount: bigint;
+      responseDestination?: Address | null;
+      customPayload?: Cell | null;
+      queryId?: bigint;
     }
+  ) {
+    await provider.internal(via, {
+      value: opts.value,
+      body: buildDomBurnBody(opts),
+    });
+  }
 
-    static createFromAddress(address: Address) {
-        return new DomWallet(address);
+  async sendClearPendingTransfer(
+    provider: ContractProvider,
+    via: Sender,
+    opts: { value: bigint; queryId: bigint }
+  ) {
+    await provider.internal(via, {
+      value: opts.value,
+      body: buildClearPendingBody(opts.queryId),
+    });
+  }
+
+  async sendProtocolDelivery(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      routeId: bigint;
+      leg: number;
+      amount: bigint;
+      fromOwner: Address;
     }
+  ) {
+    await provider.internal(via, {
+      value: opts.value,
+      body: buildProtocolDeliveryBody(opts),
+    });
+  }
 
-    async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
-        await provider.internal(via, { value });
+  async sendProtocolSourceResult(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      routeId: bigint;
+      sourceQueryId: bigint;
+      success: boolean;
     }
+  ) {
+    return provider.internal(via, {
+      value: opts.value,
+      body: buildProtocolSourceResultBody(opts),
+    });
+  }
 
-    async sendTransfer(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            value: bigint;
-            amount: bigint;
-            destination: Address;
-            responseDestination?: Address | null;
-            customPayload?: Cell | null;
-            forwardTonAmount?: bigint;
-            forwardPayload?: Cell | null;
-            queryId?: bigint;
-        }
-    ) {
-        const body = beginCell()
-            .storeUint(OP_TRANSFER, 32)
-            .storeUint(opts.queryId ?? 0n, 64)
-            .storeCoins(opts.amount)
-            .storeAddress(opts.destination)
-            .storeAddress(opts.responseDestination ?? null)
-            .storeMaybeRef(opts.customPayload ?? null)
-            .storeCoins(opts.forwardTonAmount ?? 0n);
+  async getWalletData(provider: ContractProvider) {
+    const { stack } = await provider.get('get_wallet_data', []);
+    return {
+      balance: stack.readBigNumber(),
+      ownerAddress: stack.readAddress(),
+      masterAddress: stack.readAddress(),
+      jettonWalletCode: stack.readCell(),
+    };
+  }
 
-        if (opts.forwardPayload) {
-            body
-                .storeBit(true)
-                .storeRef(opts.forwardPayload);
-        } else {
-            body.storeBit(false);
-        }
+  async getProtocolData(provider: ContractProvider) {
+    const { stack } = await provider.get('get_protocol_data', []);
+    return { treasuryPoolAddress: stack.readAddress() };
+  }
 
-        await provider.internal(via, {
-            value: opts.value,
-            body: body.endCell(),
-        });
-    }
+  async getPendingTransfer(
+    provider: ContractProvider,
+    queryId: bigint
+  ) {
+    const { stack } = await provider.get('getPendingTransfer', [
+      { type: 'int', value: queryId },
+    ]);
+    return {
+      totalSpend: stack.readBigNumber(),
+      found: stack.readBoolean(),
+    };
+  }
 
-    async sendProtocolTransfer(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            value: bigint;
-            jettonAmount: bigint;
-            toOwner: Address;
-            paidFeeDom?: bigint;
-            maxFeeDom?: bigint;
-            responseDestination?: Address | null;
-            queryId?: bigint;
-        }
-    ) {
-        const paidFeeDom = opts.paidFeeDom ?? opts.maxFeeDom;
+  async getProtocolReplayData(provider: ContractProvider) {
+    const { stack } = await provider.get('getProtocolReplayData', []);
+    return stack.readBigNumber();
+  }
 
-        if (paidFeeDom === undefined) {
-            throw new Error('paidFeeDom is required');
-        }
+  async getProcessedDelivery(
+    provider: ContractProvider,
+    routeId: bigint,
+    leg: number
+  ) {
+    const { stack } = await provider.get('getProcessedDelivery', [
+      { type: 'int', value: routeId },
+      { type: 'int', value: BigInt(leg) },
+    ]);
+    return {
+      amount: stack.readBigNumber(),
+      fromOwner: stack.readAddressOpt(),
+      found: stack.readBoolean(),
+    };
+  }
 
-        const body = beginCell()
-            .storeUint(OP_PROTOCOL_TRANSFER, 32)
-            .storeUint(opts.queryId ?? 0n, 64)
-            .storeCoins(opts.jettonAmount)
-            .storeAddress(opts.toOwner)
-            .storeAddress(opts.responseDestination ?? null)
-            .storeCoins(paidFeeDom)
-            .endCell();
-
-        await provider.internal(via, {
-            value: opts.value,
-            body,
-        });
-    }
-
-    async sendInternalTransfer(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            value: bigint;
-            amount: bigint;
-            fromOwner: Address;
-            responseDestination?: Address | null;
-            forwardTonAmount?: bigint;
-            forwardPayload?: Cell | null;
-            queryId?: bigint;
-        }
-    ) {
-        const body = beginCell()
-            .storeUint(OP_INTERNAL_TRANSFER, 32)
-            .storeUint(opts.queryId ?? 0n, 64)
-            .storeCoins(opts.amount)
-            .storeAddress(opts.fromOwner)
-            .storeAddress(opts.responseDestination ?? null)
-            .storeCoins(opts.forwardTonAmount ?? 0n);
-
-        if (opts.forwardPayload) {
-            body
-                .storeBit(true)
-                .storeRef(opts.forwardPayload);
-        } else {
-            body.storeBit(false);
-        }
-
-        await provider.internal(via, {
-            value: opts.value,
-            body: body.endCell(),
-        });
-    }
-
-    async sendBurn(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            value: bigint;
-            amount: bigint;
-            responseDestination?: Address | null;
-            customPayload?: Cell | null;
-            queryId?: bigint;
-        }
-    ) {
-        const body = beginCell()
-            .storeUint(OP_BURN, 32)
-            .storeUint(opts.queryId ?? 0n, 64)
-            .storeCoins(opts.amount)
-            .storeAddress(opts.responseDestination ?? null)
-            .storeMaybeRef(opts.customPayload ?? null)
-            .endCell();
-
-        await provider.internal(via, {
-            value: opts.value,
-            body,
-        });
-    }
-
-    async sendClearPendingTransfer(
-        provider: ContractProvider,
-        via: Sender,
-        opts: {
-            value: bigint;
-            queryId: bigint;
-        }
-    ) {
-        const body = beginCell()
-            .storeUint(OP_CLEAR_PENDING_TRANSFER, 32)
-            .storeUint(opts.queryId, 64)
-            .endCell();
-
-        await provider.internal(via, {
-            value: opts.value,
-            body,
-        });
-    }
-
-    async getWalletData(provider: ContractProvider) {
-        const { stack } = await provider.get('get_wallet_data', []);
-
-        return {
-            balance: stack.readBigNumber(),
-            ownerAddress: stack.readAddress(),
-            masterAddress: stack.readAddress(),
-            jettonWalletCode: stack.readCell(),
-        };
-    }
-
-    async getProtocolData(provider: ContractProvider) {
-        const { stack } = await provider.get('get_protocol_data', []);
-
-        return {
-            treasuryPoolAddress: stack.readAddress(),
-        };
-    }
-
-    async getPendingTransfer(provider: ContractProvider, queryId: bigint) {
-        const { stack } = await provider.get('getPendingTransfer', [
-            { type: 'int', value: queryId },
-        ]);
-
-        return {
-            totalSpend: stack.readBigNumber(),
-            found: stack.readBoolean(),
-        };
-    }
+  async getSourceReceipt(
+    provider: ContractProvider,
+    routeId: bigint
+  ) {
+    const { stack } = await provider.get('getSourceReceipt', [
+      { type: 'int', value: routeId },
+    ]);
+    return {
+      sourceQueryId: stack.readBigNumber(),
+      success: stack.readBoolean(),
+      found: stack.readBoolean(),
+    };
+  }
 }

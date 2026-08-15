@@ -134,7 +134,7 @@ fun treasurySendGasCommit(routeId: int) {
     var msg = beginCell()
         .storeUint(0x18, 6)
         .storeAddress(gasPoolAddress)
-        .storeCoins(BASE_GRAMS_COST)
+        .storeCoins(PROTOCOL_CONTROL_GRAMS)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
@@ -206,7 +206,7 @@ fun treasurySendFinalization(
     var msg = beginCell()
         .storeUint(0x10, 6)
         .storeAddress(toAddress)
-        .storeCoins(0)
+        .storeCoins(PROTOCOL_CONTROL_GRAMS)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();

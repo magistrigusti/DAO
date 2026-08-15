@@ -30,7 +30,9 @@ fun walletSendTransferNotification(
 fun walletSendProtocolNotification(
     amount: int,
     fromOwner: address,
-    routeId: int
+    routeId: int,
+    value: int,
+    sendMode: int
 ) {
     var body = beginCell()
         .storeUint(OP_TRANSFER_NOTIFICATION, 32)
@@ -42,11 +44,11 @@ fun walletSendProtocolNotification(
     var msg = beginCell()
         .storeUint(0x10, 6)
         .storeAddress(ownerAddress)
-        .storeCoins(MIN_GRAMS_FOR_STORAGE)
+        .storeCoins(value)
         .storeUint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .storeRef(body)
         .endCell();
-    sendRawMessage(msg, 1);
+    sendRawMessage(msg, sendMode);
 }
 
 fun walletSendExcesses(

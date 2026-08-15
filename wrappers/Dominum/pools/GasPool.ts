@@ -5,53 +5,32 @@ import {
   Contract,
   contractAddress,
   ContractProvider,
-  Dictionary,
   Sender,
 } from '@ton/core';
-
 import {
-  OP_CHANGE_TAX,
-  OP_GAS_POOL_EXECUTE,
-  OP_INIT_MASTER_CONFIG,
-  OP_TOP_UP,
-  OP_WITHDRAW_DOM,
-} from '../core/op_code';
+  GasPoolConfig,
+  gasPoolConfigToCell,
+} from './GasPoolConfig';
+import {
+  buildGasChangeTaxBody,
+  buildGasCommitBody,
+  buildGasExecuteBody,
+  buildGasFinalizeBody,
+  buildGasInitMasterBody,
+  buildGasTopUpBody,
+  buildGasWithdrawDomBody,
+} from './GasPoolMessages';
 
-export type GasPoolConfig = {
-  treasuryPoolAddress: Address;
-  masterAddress: Address;
-  jettonWalletCode: Cell;
-  masterConfigured?: boolean;
-  taxMultiplier?: number;
-  totalReceivedDom?: bigint;
-  totalSpentTon?: bigint;
-  totalExecuted?: bigint;
-  pendingExecutions?: Dictionary<bigint, Cell> | null;
-};
-
-export function gasPoolConfigToCell(
-  config: GasPoolConfig
-): Cell {
-  return beginCell()
-    .storeAddress(config.treasuryPoolAddress)
-    .storeAddress(config.masterAddress)
-    .storeRef(config.jettonWalletCode)
-    .storeBit(config.masterConfigured ?? false)
-    .storeUint(config.taxMultiplier ?? 300, 16)
-    .storeCoins(config.totalReceivedDom ?? 0n)
-    .storeCoins(config.totalSpentTon ?? 0n)
-    .storeUint(config.totalExecuted ?? 0n, 64)
-    .storeDict(config.pendingExecutions ?? null)
-    .endCell();
-}
+export {
+  GasPoolConfig,
+  gasPoolConfigToCell,
+} from './GasPoolConfig';
+export * from './GasPoolMessages';
 
 export class GasPool implements Contract {
   constructor(
     readonly address: Address,
-    readonly init?: {
-      code: Cell;
-      data: Cell;
-    }
+    readonly init?: { code: Cell; data: Cell }
   ) {}
 
   static createFromConfig(
@@ -61,11 +40,7 @@ export class GasPool implements Contract {
   ) {
     const data = gasPoolConfigToCell(config);
     const init = { code, data };
-
-    return new GasPool(
-      contractAddress(workchain, init),
-      init
-    );
+    return new GasPool(contractAddress(workchain, init), init);
   }
 
   static createFromAddress(address: Address) {
@@ -90,16 +65,9 @@ export class GasPool implements Contract {
       queryId?: bigint;
     }
   ) {
-    const body = beginCell()
-      .storeUint(OP_INIT_MASTER_CONFIG, 32)
-      .storeUint(opts.queryId ?? 0n, 64)
-      .storeAddress(opts.masterAddress)
-      .storeRef(opts.jettonWalletCode)
-      .endCell();
-
     await provider.internal(via, {
       value: opts.value,
-      body,
+      body: buildGasInitMasterBody(opts),
     });
   }
 
@@ -108,34 +76,36 @@ export class GasPool implements Contract {
     via: Sender,
     opts: {
       value: bigint;
-      senderWalletAddress: Address;
-      jettonAmount: bigint;
-      toOwner: Address;
-      fromOwner: Address;
-      paidFeeDom?: bigint;
-      maxFeeDom?: bigint;
+      paidFeeDom: bigint;
+      routeId?: bigint;
       queryId?: bigint;
     }
   ) {
-    const paidFeeDom = opts.paidFeeDom ?? opts.maxFeeDom;
-
-    if (paidFeeDom === undefined) {
-      throw new Error('paidFeeDom is required');
-    }
-
-    const body = beginCell()
-      .storeUint(OP_GAS_POOL_EXECUTE, 32)
-      .storeUint(opts.queryId ?? 0n, 64)
-      .storeAddress(opts.senderWalletAddress)
-      .storeCoins(opts.jettonAmount)
-      .storeAddress(opts.toOwner)
-      .storeAddress(opts.fromOwner)
-      .storeCoins(paidFeeDom)
-      .endCell();
-
     await provider.internal(via, {
       value: opts.value,
-      body,
+      body: buildGasExecuteBody(opts),
+    });
+  }
+
+  async sendCommit(
+    provider: ContractProvider,
+    via: Sender,
+    opts: { value: bigint; routeId: bigint }
+  ) {
+    await provider.internal(via, {
+      value: opts.value,
+      body: buildGasCommitBody(opts.routeId),
+    });
+  }
+
+  async sendFinalize(
+    provider: ContractProvider,
+    via: Sender,
+    opts: { value: bigint; routeId: bigint }
+  ) {
+    await provider.internal(via, {
+      value: opts.value,
+      body: buildGasFinalizeBody(opts.routeId),
     });
   }
 
@@ -148,64 +118,36 @@ export class GasPool implements Contract {
       queryId?: bigint;
     }
   ) {
-    const body = beginCell()
-      .storeUint(OP_CHANGE_TAX, 32)
-      .storeUint(opts.queryId ?? 0n, 64)
-      .storeUint(opts.newTaxMultiplier, 16)
-      .endCell();
-
     await provider.internal(via, {
       value: opts.value,
-      body,
+      body: buildGasChangeTaxBody(opts),
     });
   }
 
   async sendTopUp(
     provider: ContractProvider,
     via: Sender,
-    opts: {
-      value: bigint;
-      queryId?: bigint;
-    }
+    opts: { value: bigint; queryId?: bigint }
   ) {
-    const body = beginCell()
-      .storeUint(OP_TOP_UP, 32)
-      .storeUint(opts.queryId ?? 0n, 64)
-      .endCell();
-
     await provider.internal(via, {
       value: opts.value,
-      body,
+      body: buildGasTopUpBody(opts.queryId),
     });
   }
 
   async sendWithdrawDom(
     provider: ContractProvider,
     via: Sender,
-    opts: {
-      value: bigint;
-      amount: bigint;
-      queryId?: bigint;
-    }
+    opts: { value: bigint; amount: bigint; queryId?: bigint }
   ) {
-    const body = beginCell()
-      .storeUint(OP_WITHDRAW_DOM, 32)
-      .storeUint(opts.queryId ?? 0n, 64)
-      .storeCoins(opts.amount)
-      .endCell();
-
     await provider.internal(via, {
       value: opts.value,
-      body,
+      body: buildGasWithdrawDomBody(opts),
     });
   }
 
   async getGasPoolData(provider: ContractProvider) {
-    const { stack } = await provider.get(
-      'getGasPoolData',
-      []
-    );
-
+    const { stack } = await provider.get('getGasPoolData', []);
     return {
       treasuryPoolAddress: stack.readAddress(),
       masterAddress: stack.readAddress(),
@@ -219,11 +161,7 @@ export class GasPool implements Contract {
   }
 
   async getPoolWalletAddress(provider: ContractProvider) {
-    const { stack } = await provider.get(
-      'getPoolWalletAddress',
-      []
-    );
-
+    const { stack } = await provider.get('getPoolWalletAddress', []);
     return stack.readAddress();
   }
 
@@ -231,27 +169,31 @@ export class GasPool implements Contract {
     provider: ContractProvider,
     ownerAddress: Address
   ) {
-    const { stack } = await provider.get(
-      'getWalletAddress',
-      [
-        {
-          type: 'slice',
-          cell: beginCell()
-            .storeAddress(ownerAddress)
-            .endCell(),
-        },
-      ]
-    );
-
+    const { stack } = await provider.get('getWalletAddress', [
+      {
+        type: 'slice',
+        cell: beginCell().storeAddress(ownerAddress).endCell(),
+      },
+    ]);
     return stack.readAddress();
   }
 
   async getDomTransferFee(provider: ContractProvider) {
-    const { stack } = await provider.get(
-      'getDomTransferFee',
-      []
-    );
-
+    const { stack } = await provider.get('getDomTransferFee', []);
     return stack.readBigNumber();
+  }
+
+  async getExecution(
+    provider: ContractProvider,
+    routeId: bigint
+  ) {
+    const { stack } = await provider.get('getGasPoolExecution', [
+      { type: 'int', value: routeId },
+    ]);
+    return {
+      fee: stack.readBigNumber(),
+      state: stack.readBigNumber(),
+      found: stack.readBoolean(),
+    };
   }
 }

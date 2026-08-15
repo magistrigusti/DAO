@@ -51,7 +51,13 @@ fun walletHandleInternalTransfer(
         (senderAddress == masterAddress) |
         (senderAddress == treasuryPoolAddress)
     ) {
-        walletSendProtocolNotification(amount, fromOwner, queryId);
+        walletSendProtocolNotification(
+            amount,
+            fromOwner,
+            queryId,
+            0,
+            64
+        );
         return;
     }
     walletSendExcesses(
