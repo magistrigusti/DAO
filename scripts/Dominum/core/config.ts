@@ -1,9 +1,10 @@
 import { Address } from '@ton/core';
 
 export {
-  DEPLOY_VALUES, FIRST_MINT_AMOUNT, FIRST_MINT_CONFIG,
+  DEPLOY_VALUES, DOM_METADATA, FIRST_MINT_AMOUNT, FIRST_MINT_CONFIG,
   FORWARDED_MESSAGE_WAIT_MS, METADATA_URL,
   MIN_GAS_POOL_BALANCE_FOR_FIRST_MINT,
+  RECIPIENT_PLACEHOLDER_NAMESPACE,
 } from './constants';
 
 export type DomSignerAddresses = {
@@ -17,13 +18,26 @@ export type DomDistributionAddresses = {
   daoFoundation: Address; dominumBank: Address; dominumFoundation: Address;
 };
 
-export type DomRecipientControls = {
+export type DomPreGraphDistributionAddresses = Omit<
+  DomDistributionAddresses,
+  'dominumBank'
+>;
+
+export type DomRecipientOwnerAddresses = {
   frsOwner: Address; allodiumFoundationOwner: Address;
   marketOwner: Address; foundryOwner: Address;
   defiBankOwner: Address; daoBankOwner: Address;
   daoFoundationOwner: Address; dominumBankOwner: Address;
-  dominumFoundationOwner: Address; allodMaster: Address;
-  defiFoundation: Address; foundryRelease: Address;
+  dominumFoundationOwner: Address;
+};
+
+export type DomRecipientDependencies = {
+  allodMaster: Address; defiFoundation: Address;
+  foundryRelease: Address;
+};
+
+export type DomRecipientControls = DomRecipientOwnerAddresses &
+DomRecipientDependencies & {
   ownerCodeHash: Buffer;
 };
 
@@ -111,8 +125,28 @@ export function loadDomDistributionAddresses(): DomDistributionAddresses {
   return distribution;
 }
 
-export function loadDomRecipientControls(): DomRecipientControls {
-  const controls: DomRecipientControls = {
+export function loadDomPreGraphDistributionAddresses():
+DomPreGraphDistributionAddresses {
+  const distribution: DomPreGraphDistributionAddresses = {
+    frsAllodium: readAddress('DOM_RECIPIENT_ALLODIUM_FRS_ADDRESS'),
+    allodiumFoundation:
+      readAddress('DOM_RECIPIENT_ALLODIUM_FOUNDATION_ADDRESS'),
+    defiMarket: readAddress('DOM_RECIPIENT_DEFI_MARKET_ADDRESS'),
+    defiFoundry: readAddress('DOM_RECIPIENT_DEFI_FOUNDRY_ADDRESS'),
+    defiTreasury: readAddress('DOM_RECIPIENT_DEFI_TREASURY_ADDRESS'),
+    daoBank: readAddress('DOM_RECIPIENT_DAO_BANK_ADDRESS'),
+    daoFoundation: readAddress('DOM_RECIPIENT_DAO_FOUNDATION_ADDRESS'),
+    dominumFoundation:
+      readAddress('DOM_RECIPIENT_DOMINUM_FOUNDATION_ADDRESS'),
+  };
+
+  requireUnique(distribution, 'DOM pre-graph recipient');
+  return distribution;
+}
+
+export function loadDomRecipientOwnerAddresses():
+DomRecipientOwnerAddresses {
+  const owners: DomRecipientOwnerAddresses = {
     frsOwner: readAddress('DOM_RECIPIENT_ALLODIUM_FRS_OWNER_ADDRESS'),
     allodiumFoundationOwner: readAddress(
       'DOM_RECIPIENT_ALLODIUM_FOUNDATION_OWNER_ADDRESS'
@@ -132,26 +166,32 @@ export function loadDomRecipientControls(): DomRecipientControls {
     dominumFoundationOwner: readAddress(
       'DOM_RECIPIENT_DOMINUM_FOUNDATION_OWNER_ADDRESS'
     ),
+  };
+
+  requireUnique(owners, 'DOM recipient owner');
+  return owners;
+}
+
+export function loadDomRecipientDependencies():
+DomRecipientDependencies {
+  const dependencies: DomRecipientDependencies = {
     allodMaster: readAddress('ALLODIUM_MASTER_ADDRESS'),
     defiFoundation: readAddress('DEFI_FOUNDATION_ADDRESS'),
     foundryRelease: readAddress('DEFI_FOUNDRY_RELEASE_ADDRESS'),
-    ownerCodeHash: readHash('DOM_RECIPIENT_OWNER_CODE_HASH'),
   };
 
-  requireUnique(
-    {
-      frsOwner: controls.frsOwner,
-      allodiumFoundationOwner: controls.allodiumFoundationOwner,
-      marketOwner: controls.marketOwner,
-      foundryOwner: controls.foundryOwner,
-      defiBankOwner: controls.defiBankOwner,
-      daoBankOwner: controls.daoBankOwner,
-      daoFoundationOwner: controls.daoFoundationOwner,
-      dominumBankOwner: controls.dominumBankOwner,
-      dominumFoundationOwner: controls.dominumFoundationOwner,
-    },
-    'DOM recipient owner'
-  );
+  requireUnique(dependencies, 'DOM recipient dependency');
+  return dependencies;
+}
+
+export function loadDomRecipientControls(): DomRecipientControls {
+  const owners = loadDomRecipientOwnerAddresses();
+  const dependencies = loadDomRecipientDependencies();
+  const controls: DomRecipientControls = {
+    ...owners,
+    ...dependencies,
+    ownerCodeHash: readHash('DOM_RECIPIENT_OWNER_CODE_HASH'),
+  };
 
   return controls;
 }

@@ -1,14 +1,22 @@
 export const METADATA_URL =
-    'https://raw.githubusercontent.com/magistrigusti/DAO/main/metadata/dom-metadata.json';
+    'https://raw.githubusercontent.com/magistrigusti/DAO/' +
+    'main/metadata/dom-metadata.json';
+
+export const DOM_METADATA = {
+    name: 'Dominum V1 Test', symbol: 'tDOMV1', decimals: '6',
+} as const;
 
 export const FORWARDED_MESSAGE_WAIT_MS = 15_000;
 
 export const DEPLOY_VALUES = {
     treasuryManager: '0.05', treasuryPool: '0.2', gasPool: '1',
     giverManager: '0.05', minterManager: '0.05', giver: '0.2',
-    minter: '0.05', master: '0.05', roleConfig: '0.05',
+    minter: '0.05', master: '0.05', recipient: '0.05',
+    roleConfig: '0.05', recipientConfig: '0.05',
     treasuryConfig: '0.05', gasPipeline: '0.08', mint: '0.35',
 } as const;
+
+export const RECIPIENT_PLACEHOLDER_NAMESPACE = 30;
 
 export const FIRST_MINT_CONFIG = {
     amount: 1_000_000_000_000n, queryId: 61n, giverFeeDom: 1_500_000n,

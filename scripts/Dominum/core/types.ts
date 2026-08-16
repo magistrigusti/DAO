@@ -30,6 +30,23 @@ import {
 import {
   TreasuryManager,
 } from '../../../wrappers/Dominum/management/TreasuryManager';
+import {
+  FrsAllodium,
+} from '../../../wrappers/Allodium/treasury/FrsAllodium';
+import {
+  AllodiumFoundation,
+} from '../../../wrappers/Allodium/foundation/AllodiumFoundation';
+import { MarketMaker } from '../../../wrappers/Dominum/defi/MarketMaker';
+import { FoundryLock } from '../../../wrappers/Dominum/invest/FoundryLock';
+import { BankDefi } from '../../../wrappers/Dominum/banks/BankDefi';
+import { BankDao } from '../../../wrappers/Dominum/banks/BankDao';
+import {
+  DaoFoundation,
+} from '../../../wrappers/Dominum/foundation/DaoFoundation';
+import { BankDominum } from '../../../wrappers/Dominum/banks/BankDominum';
+import {
+  DominumFoundation,
+} from '../../../wrappers/Dominum/foundation/DominumFoundation';
 
 export type CompiledContracts = {
   walletCode: Cell;
@@ -77,4 +94,19 @@ export type TokenGraphContracts = {
   giverDefi: OpenedContract<GiverDefi>;
   giverDao: OpenedContract<GiverDao>;
   giverDominum: OpenedContract<GiverDominum>;
+};
+
+export type PreGraphRecipientContracts = {
+  frsAllodium: OpenedContract<FrsAllodium>;
+  allodiumFoundation: OpenedContract<AllodiumFoundation>;
+  defiMarket: OpenedContract<MarketMaker>;
+  defiFoundry: OpenedContract<FoundryLock>;
+  defiTreasury: OpenedContract<BankDefi>;
+  daoBank: OpenedContract<BankDao>;
+  daoFoundation: OpenedContract<DaoFoundation>;
+  dominumFoundation: OpenedContract<DominumFoundation>;
+};
+
+export type DomRecipientContracts = PreGraphRecipientContracts & {
+  dominumBank: OpenedContract<BankDominum>;
 };

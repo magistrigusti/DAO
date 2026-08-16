@@ -17,6 +17,7 @@ import { assertAddress, assertGiverRouting } from './mintRouting';
 import {
   assertRecipientContractsReady,
 } from './recipientPreflight';
+import { assertDomMetadata } from './metadataPreflight';
 
 function assertIndependentRoleAddresses(roles: Address[]): void {
   const unique = new Set(
@@ -64,6 +65,8 @@ export async function assertFirstMintReady(
   if (!jetton.jettonWalletCode.hash().equals(compiled.walletCode.hash())) {
     throw new Error('DomMaster wallet code hash mismatch');
   }
+
+  await assertDomMetadata(jetton.content);
 
   assertIndependentRoleAddresses([
     master.ownerAddress, treasury.ownerAddress, minter.ownerAddress,

@@ -7,7 +7,8 @@ import {
 } from '@ton/blueprint';
 
 import {
-  loadDomDistributionAddresses,
+  loadDomPreGraphDistributionAddresses,
+  loadDomRecipientOwnerAddresses,
   loadDomSignerAddresses,
 } from '../core/config';
 
@@ -16,6 +17,7 @@ import {
   deployInfrastructure,
 } from '../foundation/deployInfrastructure';
 import { deployTokenGraph } from './deployTokenGraph';
+import { deployDominumBank } from '../foundation/deployRecipients';
 
 function writeAddress(
   ui: UIProvider,
@@ -53,8 +55,11 @@ export async function run(
   const signers =
     loadDomSignerAddresses();
 
-  const distribution =
-    loadDomDistributionAddresses();
+  const preGraphDistribution =
+    loadDomPreGraphDistributionAddresses();
+
+  const recipientOwners =
+    loadDomRecipientOwnerAddresses();
 
   const compiled =
     await compileContracts(provider);
@@ -67,6 +72,20 @@ export async function run(
       signers
     );
 
+  ui.write('--- Step 4: Deploy BankDominum recipient ---');
+
+  const dominumBank = await deployDominumBank(
+    provider,
+    compiled.bankDominumCode,
+    recipientOwners.dominumBankOwner,
+    infrastructure.gasPool.address
+  );
+
+  const distribution = {
+    ...preGraphDistribution,
+    dominumBank: dominumBank.address,
+  };
+
   const graph =
     await deployTokenGraph(
       provider,
@@ -78,6 +97,12 @@ export async function run(
 
   ui.write('');
   ui.write('DEPLOYED ADDRESS VARIABLES');
+
+  writeAddress(
+    ui,
+    'DOM_RECIPIENT_DOMINUM_BANK_ADDRESS',
+    dominumBank.address
+  );
 
   writeAddress(
     ui,

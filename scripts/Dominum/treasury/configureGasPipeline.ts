@@ -8,7 +8,6 @@ import {
   FORWARDED_MESSAGE_WAIT_MS,
 } from '../core/config';
 import {
-  buildTypedPlaceholderAddress,
   sleep,
 } from '../core/helpers';
 import {
@@ -19,6 +18,10 @@ import {
 import {
   TREASURY_TARGET,
 } from '../../../wrappers/Dominum/core/constants';
+import {
+  confirmTreasuryTargetReplacement,
+  requestTreasuryTargetReplacement,
+} from './configureTreasuryTargets';
 
 function requireSenderAddress(
   provider: NetworkProvider
@@ -37,33 +40,18 @@ export async function requestGasPoolReplacement(
   infrastructure: InfrastructureContracts
 ): Promise<void> {
   const ui = provider.ui();
-  const sender = provider.sender();
-  const senderAddress = requireSenderAddress(provider);
-  const managerOwner =
-    await infrastructure.treasuryManager.getTreasuryManagerData();
-
-  if (!senderAddress.equals(managerOwner)) {
-    throw new Error(
-      'GasPool replacement request must be signed by TreasuryManager owner'
-    );
-  }
-
-  await infrastructure.treasuryManager.sendReplaceTreasuryAddress(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.treasuryConfig),
-      treasuryPoolAddress: infrastructure.treasuryPool.address,
-      targetKind: TREASURY_TARGET.gasPool,
-      oldAddress: buildTypedPlaceholderAddress(1, 4),
-      newAddress: infrastructure.gasPool.address,
-      queryId: 51n,
-    }
+  await requestTreasuryTargetReplacement(
+    provider,
+    infrastructure,
+    TREASURY_TARGET.gasPool,
+    infrastructure.gasPool.address,
+    51n
   );
-
-  await provider.waitForLastTransaction();
   await sleep(FORWARDED_MESSAGE_WAIT_MS);
 
-  ui.write('TreasuryManager отправил запрос на замену GasPool.');
+  ui.write(
+    'TreasuryManager отправил запрос на замену GasPool.'
+  );
 }
 
 export async function confirmGasPoolReplacement(
@@ -71,26 +59,11 @@ export async function confirmGasPoolReplacement(
   infrastructure: InfrastructureContracts
 ): Promise<void> {
   const ui = provider.ui();
-  const sender = provider.sender();
-  const senderAddress = requireSenderAddress(provider);
-  const treasuryData =
-    await infrastructure.treasuryPool.getTreasuryPoolData();
-
-  if (!senderAddress.equals(treasuryData.ownerAddress)) {
-    throw new Error(
-      'GasPool replacement confirmation must be signed by TreasuryPool owner'
-    );
-  }
-
-  await infrastructure.treasuryPool.sendConfirmRequest(
-    sender,
-    {
-      value: toNano(DEPLOY_VALUES.treasuryConfig),
-      queryId: 52n,
-    }
+  await confirmTreasuryTargetReplacement(
+    provider,
+    infrastructure,
+    52n
   );
-
-  await provider.waitForLastTransaction();
 
   ui.write('TreasuryPool подтвердил новый GasPool.');
 }
@@ -119,7 +92,7 @@ export async function initializeGasPipeline(
     );
   }
 
-  // Инициализация Master и кошелька разрешена только после отдельного подтверждения GasPool.
+  // Master и кошелек разрешено связать только после подтверждения GasPool.
   await infrastructure.treasuryPool.sendInitMasterConfig(
     sender,
     {
@@ -150,6 +123,7 @@ export async function initializeGasPipeline(
   await provider.waitForLastTransaction();
 
   ui.write(
-    `Газовый конвейер настроен. TreasuryPool wallet: ${treasuryWalletAddress.toString()}`
+    'Газовый конвейер настроен. TreasuryPool wallet: ' +
+    treasuryWalletAddress.toString()
   );
 }

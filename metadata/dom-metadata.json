@@ -1,6 +1,6 @@
 {
-  "name": "Dominum Test",
-  "symbol": "tDOM",
+  "name": "Dominum V1 Test",
+  "symbol": "tDOMV1",
   "decimals": "6",
   "description": "Test token of the Dominum DAO ecosystem",
   "image": "https://raw.githubusercontent.com/magistrigusti/DAO/main/public/DOM.png"

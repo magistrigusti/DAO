@@ -14,11 +14,9 @@ import {
 } from '@ton/blueprint';
 import type { Explorer } from '@ton/blueprint/dist/network/Explorer';
 import type { Network } from '@ton/blueprint/dist/network/Network';
-
 import { ToncenterV3Client } from './ToncenterV3Client';
 import { ToncenterV3ContractProvider } from './ToncenterV3ContractProvider';
 import { QrSender } from './QrSender';
-
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -44,7 +42,6 @@ class ConsoleUiProvider implements UIProvider {
   async prompt(message: string): Promise<boolean> {
     throw new Error(`Interactive prompt is not implemented: ${message}`);
   }
-
   async inputAddress(message: string, fallback?: Address): Promise<Address> {
     if (fallback) {
       return fallback;
@@ -52,26 +49,26 @@ class ConsoleUiProvider implements UIProvider {
 
     throw new Error(`Interactive inputAddress is not implemented: ${message}`);
   }
-
   async input(message: string): Promise<string> {
     throw new Error(`Interactive input is not implemented: ${message}`);
   }
-
-  async choose<T>(message: string, choices: T[], _display: (v: T) => string): Promise<T> {
+  async choose<T>(
+    message: string,
+    choices: T[],
+    _display: (value: T) => string
+  ): Promise<T> {
     if (choices.length === 0) {
       throw new Error(`No choices provided: ${message}`);
     }
 
     return choices[0];
   }
-
   setActionPrompt(message: string): void {
     console.log(message);
   }
 
   clearActionPrompt(): void {}
 }
-
 export class DomProvider implements NetworkProvider {
   constructor(
     private readonly client: ToncenterV3Client,
@@ -109,14 +106,22 @@ export class DomProvider implements NetworkProvider {
     return this.provider(address).getState();
   }
 
-  async waitForDeploy(address: Address, attempts = 60, sleepDuration = 2_000): Promise<void> {
+  async waitForDeploy(
+    address: Address,
+    attempts = 60,
+    sleepDuration = 2_000
+  ): Promise<void> {
     for (let i = 1; i <= attempts; i++) {
-      this.uiImpl.setActionPrompt(`Awaiting deploy ${address.toString()} [${i}/${attempts}]`);
+      this.uiImpl.setActionPrompt(
+        `Awaiting deploy ${address.toString()} [${i}/${attempts}]`
+      );
 
       if (await this.isContractDeployed(address)) {
         this.uiImpl.clearActionPrompt();
         this.uiImpl.write(
-          `Contract deployed at ${address.toString({ testOnly: this.networkType === 'testnet' })}`
+          'Contract deployed at ' + address.toString({
+            testOnly: this.networkType === 'testnet',
+          })
         );
         return;
       }
@@ -128,12 +133,17 @@ export class DomProvider implements NetworkProvider {
     throw new Error(`Deploy timeout for ${address.toString()}`);
   }
 
-  async waitForLastTransaction(attempts = 60, sleepDuration = 2_000): Promise<void> {
+  async waitForLastTransaction(
+    attempts = 60,
+    sleepDuration = 2_000
+  ): Promise<void> {
     const marker = this.senderImpl.lastSendResult;
     const senderAddress = this.senderImpl.address;
 
     if (!marker) {
-      throw new Error('No last send result available for waitForLastTransaction');
+      throw new Error(
+        'No last send result available for waitForLastTransaction'
+      );
     }
 
     if (!senderAddress) {
@@ -166,13 +176,15 @@ export class DomProvider implements NetworkProvider {
 
           if (computePhase.success === false) {
             throw new Error(
-              `Wallet tx compute phase failed: exitCode=${computePhase.exit_code ?? 'unknown'}`
+              'Wallet tx compute phase failed: exitCode=' +
+              (computePhase.exit_code ?? 'unknown')
             );
           }
 
           if (actionPhase.success === false) {
             throw new Error(
-              `Wallet tx action phase failed: resultCode=${actionPhase.result_code ?? 'unknown'}`
+              'Wallet tx action phase failed: resultCode=' +
+              (actionPhase.result_code ?? 'unknown')
             );
           }
 
@@ -190,14 +202,21 @@ export class DomProvider implements NetworkProvider {
     }
 
     this.uiImpl.clearActionPrompt();
-    throw new Error('Transaction timeout while waiting for sender wallet update');
+    throw new Error(
+      'Transaction timeout while waiting for sender wallet update'
+    );
   }
 
   async getConfig(): Promise<any> {
     throw new Error('getConfig() is not implemented in DomProvider');
   }
 
-  async deploy(contract: Contract, value: bigint, body?: Cell, waitAttempts = 20): Promise<void> {
+  async deploy(
+    contract: Contract,
+    value: bigint,
+    body?: Cell,
+    waitAttempts = 20
+  ): Promise<void> {
     if (!('init' in contract) || !contract.init) {
       throw new Error('Contract init is required for deploy()');
     }
@@ -226,14 +245,46 @@ export class DomProvider implements NetworkProvider {
   }
 }
 
+export function assertTestnetEndpoint(endpoint: string): void {
+  let url: URL;
+
+  try {
+    url = new URL(endpoint);
+  } catch {
+    throw new Error('DOMINUM_TONCENTER_V3_URL must be a valid URL');
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const knownMainnet = hostname === 'toncenter.com'
+    || hostname === 'www.toncenter.com';
+  const customAllowed =
+    process.env.DOMINUM_ALLOW_CUSTOM_TESTNET_ENDPOINT === 'true';
+
+  if (knownMainnet) {
+    throw new Error('Mainnet Toncenter endpoint is forbidden by DOM scripts');
+  }
+
+  const knownTestnet = hostname === 'testnet.toncenter.com';
+
+  if (!knownTestnet && !customAllowed) {
+    throw new Error(
+      'Custom endpoint requires DOMINUM_ALLOW_CUSTOM_TESTNET_ENDPOINT=true'
+    );
+  }
+}
+
 export async function createDomProvider(): Promise<NetworkProvider> {
-  const apiKey = process.env.DOMINUM_TESTNET_API_KEY ?? process.env.TONCENTER_API_KEY ?? '';
-  const endpoint = process.env.DOMINUM_TONCENTER_V3_URL ?? 'https://testnet.toncenter.com/api/v3';
+  const apiKey = process.env.DOMINUM_TESTNET_API_KEY ??
+    process.env.TONCENTER_API_KEY ?? '';
+  const endpoint = process.env.DOMINUM_TONCENTER_V3_URL ??
+    'https://testnet.toncenter.com/api/v3';
   const manifestUrl = process.env.DOMINUM_TONCONNECT_MANIFEST_URL;
 
   if (!apiKey) {
     throw new Error('DOMINUM_TESTNET_API_KEY or TONCENTER_API_KEY is required');
   }
+
+  assertTestnetEndpoint(endpoint);
 
   const ui = new ConsoleUiProvider();
   const client = new ToncenterV3Client(endpoint, apiKey);
