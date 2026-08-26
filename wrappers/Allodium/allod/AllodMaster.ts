@@ -11,12 +11,14 @@ import {
 
 import {
     OP_INCREASE_MINT_ALLOWANCE,
+    OP_INIT_MASTER_FRS_CONFIG,
     OP_MINT,
 } from '../core/op_code';
 export type AllodMasterConfig = {
   totalSupply: bigint;
   ownerAddress: Address;
   frsAddress: Address;
+  frsConfigured: boolean;
   gasPoolAddress: Address;
   mintAllowancePool: bigint;
   content: Cell;
@@ -30,6 +32,7 @@ export function allodMasterConfigToCell(
     .storeCoins(config.totalSupply)
     .storeAddress(config.ownerAddress)
     .storeAddress(config.frsAddress)
+    .storeBit(config.frsConfigured)
     .storeAddress(config.gasPoolAddress)
     .storeCoins(config.mintAllowancePool)
     .storeRef(config.content)
@@ -84,6 +87,24 @@ export class AllodMaster implements Contract {
       .storeUint(opts.queryId ?? 0n, 64)
       .storeAddress(opts.toOwner)
       .storeCoins(opts.amount)
+      .endCell();
+
+    await provider.internal(via, { value: opts.value, body });
+  }
+
+  async sendInitFrs(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      value: bigint;
+      frsAddress: Address;
+      queryId?: bigint;
+    }
+  ) {
+    const body = beginCell()
+      .storeUint(OP_INIT_MASTER_FRS_CONFIG, 32)
+      .storeUint(opts.queryId ?? 0n, 64)
+      .storeAddress(opts.frsAddress)
       .endCell();
 
     await provider.internal(via, { value: opts.value, body });
@@ -144,6 +165,7 @@ export class AllodMaster implements Contract {
     return {
       ownerAddress: stack.readAddress(),
       frsAddress: stack.readAddress(),
+      frsConfigured: stack.readBoolean(),
       gasPoolAddress: stack.readAddress(),
       mintAllowancePool: stack.readBigNumber(),
       totalSupply: stack.readBigNumber(),

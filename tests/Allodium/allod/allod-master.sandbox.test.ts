@@ -49,13 +49,18 @@ describe('AllodMaster', () => {
     outsider = await blockchain.treasury('outsider');
   });
 
-  function openMaster() {
+  function openMaster(
+    frsConfigured: boolean = ALLODIUM_STATE.frsConfigured
+  ) {
     return blockchain.openContract(
       AllodMaster.createFromConfig(
         {
           totalSupply: ALLODIUM_STATE.emptySupply,
           ownerAddress: owner.address,
-          frsAddress: frs.address,
+          frsAddress: frsConfigured
+            ? frs.address
+            : outsider.address,
+          frsConfigured,
           gasPoolAddress: foundation.address,
           mintAllowancePool: ALLODIUM_STATE.emptyAllowance,
           content: beginCell().endCell(),
@@ -78,6 +83,7 @@ describe('AllodMaster', () => {
 
     expectAddress(data.ownerAddress, owner.address);
     expectAddress(data.frsAddress, frs.address);
+    expect(data.frsConfigured).toBe(true);
     expectAddress(data.gasPoolAddress, foundation.address);
 
     expect(data.mintAllowancePool).toEqual(
@@ -99,6 +105,70 @@ describe('AllodMaster', () => {
       await allodMaster.getWalletAddress(player.address),
       expectedWallet.address
     );
+  });
+
+  it('should initialize FRS once from owner before allowance', async () => {
+    const allodMaster = openMaster(
+      ALLODIUM_STATE.frsNotConfigured
+    );
+
+    await allodMaster.sendDeploy(
+      owner.getSender(),
+      ALLODIUM_VALUE.deploySmall
+    );
+
+    await ignoreFailure(
+      allodMaster.sendInitFrs(
+        outsider.getSender(),
+        {
+          value: ALLODIUM_VALUE.config,
+          frsAddress: frs.address,
+          queryId: ALLODIUM_QUERY.initFrsRejected,
+        }
+      )
+    );
+
+    await ignoreFailure(
+      allodMaster.sendIncreaseMintAllowance(
+        frs.getSender(),
+        {
+          value: ALLODIUM_VALUE.service,
+          amount: ALLODIUM_FIXTURE.mintAllowance,
+          queryId: ALLODIUM_QUERY.increaseAllowance,
+        }
+      )
+    );
+
+    let data = await allodMaster.getMasterData();
+    expect(data.frsConfigured).toBe(false);
+    expect(data.mintAllowancePool).toEqual(0n);
+
+    await allodMaster.sendInitFrs(
+      owner.getSender(),
+      {
+        value: ALLODIUM_VALUE.config,
+        frsAddress: frs.address,
+        queryId: ALLODIUM_QUERY.initFrs,
+      }
+    );
+
+    data = await allodMaster.getMasterData();
+    expect(data.frsConfigured).toBe(true);
+    expectAddress(data.frsAddress, frs.address);
+
+    await ignoreFailure(
+      allodMaster.sendInitFrs(
+        owner.getSender(),
+        {
+          value: ALLODIUM_VALUE.config,
+          frsAddress: outsider.address,
+          queryId: ALLODIUM_QUERY.initFrsRejected,
+        }
+      )
+    );
+
+    data = await allodMaster.getMasterData();
+    expectAddress(data.frsAddress, frs.address);
   });
 
   it('should mint only within FRS allowance', async () => {

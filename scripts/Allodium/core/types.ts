@@ -36,6 +36,16 @@ export type AllodiumTokenGraphContracts = {
   allodMaster: OpenedContract<AllodMaster>;
 };
 
+export type AllodiumBootstrapContracts = {
+  allodGasPool: OpenedContract<AllodGasPool>;
+  allodMaster: OpenedContract<AllodMaster>;
+};
+
+export type AllodiumBootstrapPlan = {
+  allodGasPool: AllodGasPool;
+  allodMaster: AllodMaster;
+};
+
 export type CompiledContracts = CompiledAllodiumContracts;
 export type InfrastructureContracts = AllodiumInfrastructureContracts;
 export type TokenGraphContracts = AllodiumTokenGraphContracts;

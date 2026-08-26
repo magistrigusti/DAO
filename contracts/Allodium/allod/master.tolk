@@ -1,32 +1,19 @@
-// =====================================================
-// MASTER ALLOD — Jetton Master с FRS allowance
-// =====================================================
-// 1) FRS увеличивает mintAllowancePool
-// 2) Owner минтит ALLOD только в рамках allowance
-// 3) Burn из wallet уменьшает supply и шлет OP_ALLOD_BURNED в FRS
-// =====================================================
-
 import "../core/op_codes.tolk";
 import "../core/errors.tolk";
 import "../core/constants.tolk";
 
-// =====================================================
-// STORAGE
-// =====================================================
 global totalSupply: int;
 
-global ownerAddress: address;        // кто вызывает OP_MINT
-global frsAddress: address;          // только FRS может increase allowance
-global gasPoolAddress: address;      // AllodGasPool исполняет переводы и принимает ALLOD fee
+global ownerAddress: address;
+global frsAddress: address;
+global frsConfigured: bool;
+global gasPoolAddress: address;
 
-global mintAllowancePool: int;     // доступный лимит минта ALLOD
+global mintAllowancePool: int;
 
 global content: cell;
 global jettonWalletCode: cell;
 
-// =====================================================
-// LOAD / SAVE
-// =====================================================
 fun loadData() {
     var ds = contract.getData().beginParse();
 
@@ -34,6 +21,7 @@ fun loadData() {
 
     ownerAddress = ds.loadAddress();
     frsAddress = ds.loadAddress();
+    frsConfigured = ds.loadBool();
     gasPoolAddress = ds.loadAddress();
 
     mintAllowancePool = ds.loadCoins();
@@ -48,6 +36,7 @@ fun saveData() {
             .storeCoins(totalSupply)
             .storeAddress(ownerAddress)
             .storeAddress(frsAddress)
+            .storeBool(frsConfigured)
             .storeAddress(gasPoolAddress)
             .storeCoins(mintAllowancePool)
             .storeRef(content)
@@ -56,9 +45,27 @@ fun saveData() {
     );
 }
 
-// =====================================================
-// WALLET ADDRESS
-// =====================================================
+fun requireFrsConfigured() {
+    assert(frsConfigured, ERROR_PROXY_NOT_CONFIGURED);
+}
+
+fun initializeFrs(newFrsAddress: address) {
+    assert(!frsConfigured, ERROR_ALREADY_INITIALIZED);
+    assert(totalSupply == 0, ERROR_ALREADY_INITIALIZED);
+    assert(mintAllowancePool == 0, ERROR_ALREADY_INITIALIZED);
+    assert(newFrsAddress != ownerAddress, ERROR_INVALID_AMOUNT);
+    assert(newFrsAddress != gasPoolAddress, ERROR_INVALID_AMOUNT);
+    assert(newFrsAddress != contract.getAddress(), ERROR_INVALID_AMOUNT);
+    assert(
+        newFrsAddress.getWorkchain() ==
+        contract.getAddress().getWorkchain(),
+        ERROR_INVALID_AMOUNT
+    );
+    frsAddress = newFrsAddress;
+    frsConfigured = true;
+    saveData();
+}
+
 fun calculateWalletData(owner: address): cell {
     return beginCell()
         .storeCoins(0)
@@ -89,9 +96,6 @@ fun calculateWalletAddress(stateInit: cell): address {
     );
 }
 
-// =====================================================
-// SEND MINT TO WALLET
-// =====================================================
 fun sendToWallet(
     toOwner: address,
     jettonAmount: int,
@@ -123,9 +127,6 @@ fun sendToWallet(
     sendRawMessage(msg, 1);
 }
 
-// =====================================================
-// SEND BURN NOTICE TO FRS
-// =====================================================
 fun sendAllodBurnedToFrs(burnAmount: int, queryId: int) {
     var body = beginCell()
         .storeUint(OP_ALLOD_BURNED, 32)
@@ -144,9 +145,6 @@ fun sendAllodBurnedToFrs(burnAmount: int, queryId: int) {
     sendRawMessage(msg, 64);
 }
 
-// =====================================================
-// MAIN
-// =====================================================
 fun onInternalMessage(in: InMessage) {
     var msgBody = in.body;
 
@@ -162,10 +160,14 @@ fun onInternalMessage(in: InMessage) {
     var op = msgBody.loadUint(32);
     var queryId = msgBody.loadUint(64);
 
-    // =====================================================
-    // OP_INCREASE_MINT_ALLOWANCE — только от FRS
-    // =====================================================
+    if (op == OP_INIT_MASTER_FRS_CONFIG) {
+        assert(senderAddress == ownerAddress, ERROR_NOT_OWNER);
+        initializeFrs(msgBody.loadAddress());
+        return;
+    }
+
     if (op == OP_INCREASE_MINT_ALLOWANCE) {
+        requireFrsConfigured();
         assert(
             senderAddress == frsAddress,
             ERROR_NOT_FRS
@@ -181,10 +183,8 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_MINT — минт в конкретный wallet (только owner)
-    // =====================================================
     if (op == OP_MINT) {
+        requireFrsConfigured();
         assert(
             senderAddress == ownerAddress,
             ERROR_NOT_OWNER
@@ -217,10 +217,8 @@ fun onInternalMessage(in: InMessage) {
         return;
     }
 
-    // =====================================================
-    // OP_BURN_NOTIFICATION — от wallet
-    // =====================================================
     if (op == OP_BURN_NOTIFICATION) {
+        requireFrsConfigured();
         var burnAmount = msgBody.loadCoins();
         var fromOwner = msgBody.loadAddress();
 
@@ -239,7 +237,6 @@ fun onInternalMessage(in: InMessage) {
         totalSupply = totalSupply - burnAmount;
         saveData();
 
-        // Уведомляем FRS для разблокировки DOM
         sendAllodBurnedToFrs(burnAmount, queryId);
 
         var responseAddress = msgBody.loadAddressOpt();
@@ -263,9 +260,6 @@ fun onInternalMessage(in: InMessage) {
     throw(0xffff);
 }
 
-// =====================================================
-// GETTERS
-// =====================================================
 get fun getJettonData(): (int, int, address, cell, cell) {
     loadData();
 
@@ -285,12 +279,13 @@ get fun getWalletAddress(ownerAddressValue: address): address {
     return calculateWalletAddress(stateInit);
 }
 
-get fun getMasterData(): (address, address, address, int, int) {
+get fun getMasterData(): (address, address, bool, address, int, int) {
     loadData();
 
     return (
         ownerAddress,
         frsAddress,
+        frsConfigured,
         gasPoolAddress,
         mintAllowancePool,
         totalSupply

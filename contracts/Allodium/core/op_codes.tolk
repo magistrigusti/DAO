@@ -26,6 +26,7 @@ const OP_INCREASE_MINT_ALLOWANCE: int = 0x100;
 const OP_ALLOD_BURNED: int = 0x101;
 const OP_INIT_FRS_GIVER: int = 0x102;
 const OP_INIT_FRS_WALLET: int = 0x103;
+const OP_INIT_MASTER_FRS_CONFIG: int = 0x104;
 
 // AllodGasPool.
 // Wallet платит fee в ALLOD.

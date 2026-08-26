@@ -14,6 +14,8 @@ export const ALLODIUM_STATE = {
   emptyAllowance: 0n,
   emptyLockedDom: 0n,
   emptyCounter: 0n,
+  frsNotConfigured: false,
+  frsConfigured: true,
   masterNotConfigured: false,
   masterConfigured: true,
 } as const;
@@ -45,6 +47,8 @@ export const ALLODIUM_VALUE = {
 } as const;
 
 export const ALLODIUM_QUERY = {
+  initFrsRejected: 9n,
+  initFrs: 10n,
   increaseAllowance: 11n,
   mint: 12n,
   walletFund: 13n,
