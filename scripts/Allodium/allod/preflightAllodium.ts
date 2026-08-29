@@ -7,11 +7,11 @@ import {
   AllodiumBootstrapConfig,
   AllodiumDeploymentAddresses,
 } from '../core/config';
-import { buildOffChainContent } from '../core/helpers';
 import {
   AllodiumBootstrapContracts,
   CompiledAllodiumContracts,
 } from '../core/types';
+import { assertAllodiumMetadata } from './metadataPreflight';
 
 async function assertCode(
   provider: NetworkProvider,
@@ -104,11 +104,7 @@ export async function assertAllodiumReady(
   )) {
     throw new Error('AllodMaster wallet code mismatch');
   }
-  if (!jetton.content.hash().equals(
-    buildOffChainContent(config.metadataUrl).hash()
-  )) {
-    throw new Error('AllodMaster metadata URL mismatch');
-  }
+  await assertAllodiumMetadata(jetton.content, config.metadataUrl);
   if (gas.transferFeeAllod !== ALLODIUM_DEFAULTS.transferFeeAllod) {
     throw new Error('AllodGasPool transfer fee mismatch');
   }

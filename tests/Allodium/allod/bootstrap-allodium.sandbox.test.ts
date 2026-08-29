@@ -10,8 +10,12 @@ import {
   FrsAllodium,
 } from '../../../wrappers/Allodium/treasury/FrsAllodium';
 import {
+  ALLODIUM_METADATA_URL,
   AllodiumBootstrapConfig,
 } from '../../../scripts/Allodium/core/config';
+import {
+  buildOffChainContent,
+} from '../../../scripts/Allodium/core/helpers';
 import {
   planAllodiumBootstrap,
 } from '../../../scripts/Allodium/allod/deployAllodium';
@@ -72,7 +76,7 @@ describe('Allodium bootstrap', () => {
     const config: AllodiumBootstrapConfig = {
       masterOwner: masterOwner.address,
       gasPoolAuthority: gasAuthority.address,
-      metadataUrl: 'https://example.test/allod-metadata.json',
+      metadataUrl: ALLODIUM_METADATA_URL,
     };
     const plan = planAllodiumBootstrap(compiled, config);
     const allodGasPool = blockchain.openContract(plan.allodGasPool);
@@ -122,7 +126,11 @@ describe('Allodium bootstrap', () => {
     );
 
     let masterData = await allodMaster.getMasterData();
+    const jettonData = await allodMaster.getJettonData();
     expect(masterData.frsConfigured).toBe(false);
+    expect(jettonData.content.hash().equals(
+      buildOffChainContent(ALLODIUM_METADATA_URL).hash()
+    )).toBe(true);
 
     await allodMaster.sendInitFrs(
       masterOwner.getSender(),

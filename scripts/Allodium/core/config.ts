@@ -4,6 +4,22 @@ export const FORWARDED_MESSAGE_WAIT_MS = 15_000;
 
 export const ALLODIUM_PLACEHOLDER_NAMESPACE = 40;
 
+export const ALLODIUM_METADATA_URL =
+  'https://raw.githubusercontent.com/magistrigusti/DAO/' +
+  'main/metadata/allod-metadata.json';
+
+export const ALLODIUM_IMAGE_URL =
+  'https://raw.githubusercontent.com/magistrigusti/DAO/' +
+  'main/public/ALLOD.jpg';
+
+export const ALLODIUM_METADATA = {
+  name: 'Allodium V1 Test',
+  symbol: 'tALLODV1',
+  decimals: '4',
+  description: 'Test token of the Allodium ecosystem',
+  image: ALLODIUM_IMAGE_URL,
+} as const;
+
 export const ALLODIUM_DEFAULTS = {
   transferFeeAllod: 100n,
 } as const;
@@ -43,8 +59,8 @@ function readAddress(name: string): Address {
   return Address.parse(value);
 }
 
-function readHttpsUrl(name: string): string {
-  const value = process.env[name];
+function readHttpsUrl(name: string, fallback?: string): string {
+  const value = process.env[name] || fallback;
 
   if (!value) {
     throw new Error(`${name} is required`);
@@ -75,7 +91,10 @@ AllodiumBootstrapConfig {
     gasPoolAuthority: readAddress(
       'ALLODIUM_GAS_POOL_AUTHORITY_ADDRESS'
     ),
-    metadataUrl: readHttpsUrl('ALLODIUM_METADATA_URL'),
+    metadataUrl: readHttpsUrl(
+      'ALLODIUM_METADATA_URL',
+      ALLODIUM_METADATA_URL
+    ),
   };
 }
 

@@ -12,9 +12,12 @@
     "configure:dom:recipients:testnet": "npx ts-node -r dotenv/config scripts/runConfigureDomRecipientsV3.ts",
     "preflight:dom:testnet": "npx ts-node -r dotenv/config scripts/runPreflightDomMintV3.ts",
     "mint:dom:testnet": "npx ts-node -r dotenv/config scripts/runMintDomV3.ts",
+    "deploy:allodium:testnet": "npx ts-node -r dotenv/config scripts/runDeployAllodiumV3.ts",
+    "configure:allodium:testnet": "npx ts-node -r dotenv/config scripts/runConfigureAllodiumV3.ts",
+    "preflight:allodium:testnet": "npx ts-node -r dotenv/config scripts/runPreflightAllodiumV3.ts",
     "test:dom:e2e": "jest --runInBand tests/Dominum/dom/full-mint-flow.sandbox.test.ts",
     "deploy": "npx blueprint run",
-    "test": "jest"
+    "test": "jest --testMatch \"**/*.test.ts\""
   },
   "keywords": [
     "ton",
