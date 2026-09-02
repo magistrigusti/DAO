@@ -87,12 +87,12 @@ export function buildAllodiumPlaceholderAddress(
 export function loadAllodiumBootstrapConfig():
 AllodiumBootstrapConfig {
   return {
-    masterOwner: readAddress('ALLODIUM_MASTER_OWNER_ADDRESS'),
+    masterOwner: readAddress('ALLOD_MASTER_OWNER_ADDRESS'), // Owner wallet
     gasPoolAuthority: readAddress(
-      'ALLODIUM_GAS_POOL_AUTHORITY_ADDRESS'
+      'ALLOD_GAS_POOL_AUTHORITY_ADDRESS' // Gas pool authority wallet
     ),
     metadataUrl: readHttpsUrl(
-      'ALLODIUM_METADATA_URL',
+      'ALLOD_METADATA_URL', // Metadata environment override URL
       ALLODIUM_METADATA_URL
     ),
   };

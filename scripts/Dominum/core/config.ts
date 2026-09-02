@@ -84,12 +84,12 @@ function requireUnique(
 
 export function loadDomSignerAddresses(): DomSignerAddresses {
   const signers: DomSignerAddresses = {
-    master: readAddress('DOM_MASTER_SIGNER_ADDRESS'),
-    treasuryPool: readAddress('DOM_TREASURY_POOL_SIGNER_ADDRESS'),
-    treasuryManager: readAddress('DOM_TREASURY_MANAGER_SIGNER_ADDRESS'),
-    minter: readAddress('DOM_MINTER_SIGNER_ADDRESS'),
-    minterManager: readAddress('DOM_MINTER_MANAGER_SIGNER_ADDRESS'),
-    giverManager: readAddress('DOM_GIVER_MANAGER_SIGNER_ADDRESS'),
+    master: readAddress('DOM_MASTER'), // Master wallet authority
+    treasuryPool: readAddress('DOM_TREASURY_POOL'), // Pool authority
+    treasuryManager: readAddress('DOM_TREASURY_MANAGER'), // Manager wallet
+    minter: readAddress('DOM_MINTER'), // Minter wallet authority
+    minterManager: readAddress('DOM_MINTER_MANAGER'), // Manager wallet
+    giverManager: readAddress('DOM_GIVER_MANAGER'), // Manager wallet
   };
 
   const signerValues = Object.values(signers);
@@ -147,24 +147,24 @@ DomPreGraphDistributionAddresses {
 export function loadDomRecipientOwnerAddresses():
 DomRecipientOwnerAddresses {
   const owners: DomRecipientOwnerAddresses = {
-    frsOwner: readAddress('DOM_RECIPIENT_ALLODIUM_FRS_OWNER_ADDRESS'),
+    frsOwner: readAddress('DOM_ALLODIUM_FRS'), // FRS wallet owner
     allodiumFoundationOwner: readAddress(
-      'DOM_RECIPIENT_ALLODIUM_FOUNDATION_OWNER_ADDRESS'
+      'DOM_ALLODIUM_FOUNDATION' // Foundation wallet owner address
     ),
-    marketOwner: readAddress('DOM_RECIPIENT_DEFI_MARKET_OWNER_ADDRESS'),
-    foundryOwner: readAddress('DOM_RECIPIENT_DEFI_FOUNDRY_OWNER_ADDRESS'),
+    marketOwner: readAddress('DOM_DEFI_MARKET'), // Market wallet owner
+    foundryOwner: readAddress('DOM_DEFI_FOUNDRY'), // Foundry wallet owner
     defiBankOwner: readAddress(
-      'DOM_RECIPIENT_DEFI_TREASURY_OWNER_ADDRESS'
+      'DOM_DEFI' // DeFi treasury wallet owner address target
     ),
-    daoBankOwner: readAddress('DOM_RECIPIENT_DAO_BANK_OWNER_ADDRESS'),
+    daoBankOwner: readAddress('DOM_DAO_BANK'), // DAO bank wallet owner
     daoFoundationOwner: readAddress(
-      'DOM_RECIPIENT_DAO_FOUNDATION_OWNER_ADDRESS'
+      'DOM_DAO_FOUNDATION' // DAO foundation wallet owner address
     ),
     dominumBankOwner: readAddress(
-      'DOM_RECIPIENT_DOMINUM_BANK_OWNER_ADDRESS'
+      'DOM_DOMINUM_BANK' // Dominum bank wallet owner address
     ),
     dominumFoundationOwner: readAddress(
-      'DOM_RECIPIENT_DOMINUM_FOUNDATION_OWNER_ADDRESS'
+      'DOM_DOMINUM_FOUNDATION' // Dominum foundation wallet owner
     ),
   };
 
